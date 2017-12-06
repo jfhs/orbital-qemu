@@ -928,6 +928,7 @@ bool e820_get_entry(int, uint32_t, uint64_t *, uint64_t *);
         .value = "off",\
     },
 
+#ifndef TARGET_PS4
 #define DEFINE_PC_MACHINE(suffix, namestr, initfn, optsfn) \
     static void pc_machine_##suffix##_class_init(ObjectClass *oc, void *data) \
     { \
@@ -945,6 +946,9 @@ bool e820_get_entry(int, uint32_t, uint64_t *, uint64_t *);
         type_register(&pc_machine_type_##suffix); \
     } \
     type_init(pc_machine_init_##suffix)
+#else
+#define DEFINE_PC_MACHINE(...)
+#endif
 
 extern void igd_passthrough_isa_bridge_create(PCIBus *bus, uint16_t gpu_dev_id);
 #endif
