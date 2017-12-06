@@ -42,8 +42,8 @@
 #include "hw/kvm/clock.h"
 #include "hw/xen/xen.h"
 #ifdef CONFIG_XEN
-#include <xen/hvm/hvm_info_table.h>
 #include "hw/xen/xen_pt.h"
+#include <xen/hvm/hvm_info_table.h>
 #endif
 
 /* Hardware initialization */
@@ -53,9 +53,9 @@ static const int ide_iobase[MAX_IDE_BUS] = { 0x1f0, 0x170 };
 static const int ide_iobase2[MAX_IDE_BUS] = { 0x3f6, 0x376 };
 static const int ide_irq[MAX_IDE_BUS] = { 14, 15 };
 
-static void pc_init1(MachineState *machine,
-                     const char *host_type, const char *pci_type)
+static void ps4_init(MachineState *machine)
 {
+    MachineClass *mc = MACHINE_GET_CLASS(machine);
     PCMachineState *pcms = PC_MACHINE(machine);
     PCMachineClass *pcmc = PC_MACHINE_GET_CLASS(pcms);
     MemoryRegion *system_memory = get_system_memory();
@@ -76,6 +76,7 @@ static void pc_init1(MachineState *machine,
     MemoryRegion *rom_memory;
     ram_addr_t lowmem;
 
+    info_report("Starting PlayStation 4...\n");
     /*
      * Calculate ram split, for memory below and above 4G.  It's a bit
      * complicated for backward compatibility reasons ...
@@ -107,34 +108,30 @@ static void pc_init1(MachineState *machine,
      *    qemu -M pc,max-ram-below-4g=2G -m 4G     -> 2048M low, 2048M high
      *    qemu -M pc,max-ram-below-4g=4G -m 3968M  -> 3968M low (=4G-128M)
      */
+
+    /* memory */
     if (xen_enabled()) {
         xen_hvm_init(pcms, &ram_memory);
     } else {
+        /* memory should be always the machine's default */
+        assert(machine->ram_size == mc->default_ram_size);
         if (!pcms->max_ram_below_4g) {
             pcms->max_ram_below_4g = 0xe0000000; /* default: 3.5G */
         }
         lowmem = pcms->max_ram_below_4g;
-        if (machine->ram_size >= pcms->max_ram_below_4g) {
-            if (pcmc->gigabyte_align) {
-                if (lowmem > 0xc0000000) {
-                    lowmem = 0xc0000000;
-                }
-                if (lowmem & ((1ULL << 30) - 1)) {
-                    warn_report("Large machine and max_ram_below_4g "
-                                "(%" PRIu64 ") not a multiple of 1G; "
-                                "possible bad performance.",
-                                pcms->max_ram_below_4g);
-                }
+        if (pcmc->gigabyte_align) {
+            if (lowmem > 0xc0000000) {
+                lowmem = 0xc0000000;
+            }
+            if (lowmem & ((1ULL << 30) - 1)) {
+                warn_report("Large machine and max_ram_below_4g "
+                            "(%" PRIu64 ") not a multiple of 1G; "
+                            "possible bad performance.",
+                            pcms->max_ram_below_4g);
             }
         }
-
-        if (machine->ram_size >= lowmem) {
-            pcms->above_4g_mem_size = machine->ram_size - lowmem;
-            pcms->below_4g_mem_size = lowmem;
-        } else {
-            pcms->above_4g_mem_size = 0;
-            pcms->below_4g_mem_size = machine->ram_size;
-        }
+        pcms->above_4g_mem_size = machine->ram_size - lowmem;
+        pcms->below_4g_mem_size = lowmem;
     }
 
     pc_cpus_init(pcms);
@@ -182,8 +179,8 @@ static void pc_init1(MachineState *machine,
     }
 
     if (pcmc->pci_enabled) {
-        pci_bus = i440fx_init(host_type,
-                              pci_type,
+        pci_bus = i440fx_init(TYPE_I440FX_PCI_HOST_BRIDGE,
+                              TYPE_I440FX_PCI_DEVICE,
                               &i440fx_state, &piix3_devfn, &isa_bus, pcms->gsi,
                               system_memory, system_io, machine->ram_size,
                               pcms->below_4g_mem_size,
@@ -293,12 +290,6 @@ static void pc_init1(MachineState *machine,
     }
 }
 
-static void ps4_init(MachineState *machine)
-{
-    printf("[QEMU] Starting PlayStation 4...\n");
-    pc_init1(machine, TYPE_I440FX_PCI_HOST_BRIDGE, TYPE_I440FX_PCI_DEVICE);
-}
-
 /* Machine type information */
 static void ps4_class_init(ObjectClass *oc, void *data)
 {
@@ -306,8 +297,9 @@ static void ps4_class_init(ObjectClass *oc, void *data)
 
     mc->desc = "Sony PlayStation 4";
     mc->family = NULL;
-    mc->default_machine_opts = "firmware=bios-256k.bin";
     mc->default_display = "std";
+    mc->default_machine_opts = "firmware=bios-256k.bin";
+    mc->default_ram_size = 0x200000000UL;
     mc->max_cpus = 8;
     mc->is_default = 1;
     mc->init = ps4_init;
