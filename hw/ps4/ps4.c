@@ -36,6 +36,7 @@
 #include "hw/i2c/smbus.h"
 #include "hw/i386/pc.h"
 #include "hw/smbios/smbios.h"
+#include "hw/sysbus.h"
 
 #include "kvm_i386.h"
 #include "sysemu/kvm.h"
@@ -76,7 +77,7 @@ static void ps4_init(MachineState *machine)
     MemoryRegion *rom_memory;
     ram_addr_t lowmem;
 
-    info_report("Starting PlayStation 4...\n");
+    info_report("Starting PlayStation 4...");
     /*
      * Calculate ram split, for memory below and above 4G.  It's a bit
      * complicated for backward compatibility reasons ...
@@ -254,6 +255,10 @@ static void ps4_init(MachineState *machine)
     }
 
     pc_cmos_init(pcms, idebus[0], idebus[1], rtc_state);
+
+    DeviceState *dev = qdev_create(NULL, "aeolia-uart");
+    qdev_init_nofail(dev);
+    sysbus_mmio_map_overlap(SYS_BUS_DEVICE(dev), 0, 0xD0340000, -1000);
 
     if (pcmc->pci_enabled && machine_usb(machine)) {
         pci_create_simple(pci_bus, piix3_devfn + 2, "piix3-usb-uhci");
