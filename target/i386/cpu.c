@@ -2051,6 +2051,43 @@ static X86CPUDefinition builtin_x86_defs[] = {
         .xlevel = 0x8000000A,
         .model_id = "AMD EPYC Processor (with IBPB)",
     },
+#ifdef TARGET_PS4
+    {
+        .name = "jaguar",
+        .level = 0xd,
+        .vendor = CPUID_VENDOR_AMD,
+        .family = 0x16,
+        .model = 0x11,
+        .stepping = 0x3,
+        .features[FEAT_1_EDX] =
+            CPUID_FP87 | CPUID_VME | CPUID_DE | CPUID_PSE | CPUID_TSC |
+            CPUID_MSR | CPUID_PAE | CPUID_MCE | CPUID_CX8 | CPUID_APIC |
+            CPUID_SEP | CPUID_MTRR | CPUID_PGE | CPUID_MCA | CPUID_CMOV |
+            CPUID_PAT | CPUID_PSE36| CPUID_CLFLUSH | CPUID_MMX | CPUID_FXSR |
+            CPUID_SSE | CPUID_SSE2 | CPUID_HT,
+        .features[FEAT_1_ECX] =
+            CPUID_EXT_SSE3 | CPUID_EXT_PCLMULQDQ | CPUID_EXT_MONITOR |
+            CPUID_EXT_SSSE3 | CPUID_EXT_CX16 | CPUID_EXT_SSE41 |
+            CPUID_EXT_SSE42 | CPUID_EXT_MOVBE | CPUID_EXT_POPCNT |
+            CPUID_EXT_AES | CPUID_EXT_XSAVE | CPUID_EXT_AVX |
+            CPUID_EXT_F16C,
+        .features[FEAT_8000_0001_EDX] =
+            CPUID_EXT2_SYSCALL | CPUID_EXT2_NX | CPUID_EXT2_MMXEXT |
+            CPUID_EXT2_FFXSR | CPUID_EXT2_PDPE1GB | CPUID_EXT2_RDTSCP |
+            CPUID_EXT2_LM,
+        .features[FEAT_8000_0001_ECX] =
+            CPUID_EXT3_LAHF_LM | CPUID_EXT3_CMP_LEG | CPUID_EXT3_EXTAPIC |
+            CPUID_EXT3_CR8LEG | CPUID_EXT3_ABM | CPUID_EXT3_SSE4A |
+            CPUID_EXT3_MISALIGNSSE | CPUID_EXT3_3DNOWPREFETCH |
+            CPUID_EXT3_OSVW |CPUID_EXT3_IBS | CPUID_EXT3_SKINIT |
+            CPUID_EXT3_WDT | CPUID_EXT3_NODEID | CPUID_EXT3_TOPOEXT |
+            CPUID_EXT3_PERFNB | (1U << 26) | (1U << 28),
+        .features[FEAT_7_0_EBX] =
+            CPUID_7_0_EBX_FSGSBASE | CPUID_7_0_EBX_BMI1 /* ??? */,
+        .xlevel = 0x8000000A,
+        .model_id = "DG1000FGF84HT",
+    },
+#endif
 };
 
 typedef struct PropValue {
