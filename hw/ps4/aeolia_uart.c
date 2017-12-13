@@ -18,12 +18,9 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library; if not, see <http://www.gnu.org/licenses/>.
- *
- *
- * Specification available at:
- *   http://www.latticesemi.com/documents/mico32uart.pdf
  */
 
+#include "aeolia.h"
 #include "qemu/osdep.h"
 #include "hw/hw.h"
 #include "hw/sysbus.h"
@@ -78,7 +75,6 @@
 #define MSR_RI    (1<<6)
 #define MSR_DCD   (1<<7)
 
-#define TYPE_AEOLIA_UART "aeolia-uart"
 #define AEOLIA_UART(obj) OBJECT_CHECK(AeoliaUartState, (obj), TYPE_AEOLIA_UART)
 
 struct AeoliaUartState {
