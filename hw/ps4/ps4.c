@@ -278,21 +278,6 @@ static void ps4_init(MachineState *machine)
     /* connect pm stuff to lpc */
     ich9_lpc_pm_init(lpc, pc_machine_is_smm_enabled(pcms));
 
-    if (pcms->sata) {
-        /* ahci and SATA device, for q35 1 ahci controller is built-in */
-        ahci = pci_create_simple_multifunction(pci_bus,
-                                               PCI_DEVFN(ICH9_SATA1_DEV,
-                                                         ICH9_SATA1_FUNC),
-                                               true, "ich9-ahci");
-        idebus[0] = qdev_get_child_bus(&ahci->qdev, "ide.0");
-        idebus[1] = qdev_get_child_bus(&ahci->qdev, "ide.1");
-        g_assert(MAX_SATA_PORTS == ahci_get_num_ports(ahci));
-        ide_drive_get(hd, ahci_get_num_ports(ahci));
-        ahci_ide_create_devs(ahci, hd);
-    } else {
-        idebus[0] = idebus[1] = NULL;
-    }
-
     if (machine_usb(machine)) {
         /* Should we create 6 UHCI according to ich9 spec? */
         ehci_create_ich9_with_companions(pci_bus, 0x1d);
@@ -305,8 +290,6 @@ static void ps4_init(MachineState *machine)
                                         0xb100),
                           8, NULL, 0);
     }
-
-    pc_cmos_init(pcms, idebus[0], idebus[1], rtc_state);
 
     DeviceState *dev;
     dev = qdev_create(NULL, TYPE_AEOLIA_UART);
@@ -350,10 +333,13 @@ static void ps4_init(MachineState *machine)
     qdev_prop_set_int32(dev, "addr", PCI_DEVFN(20, 1));
     qdev_init_nofail(dev);
 
-    dev = qdev_create(BUS(pci_bus), TYPE_AEOLIA_AHCI);
-    qdev_prop_set_bit(dev, "multifunction", true);
-    qdev_prop_set_int32(dev, "addr", PCI_DEVFN(20, 2));
-    qdev_init_nofail(dev);
+    ahci = pci_create_simple_multifunction(
+        pci_bus, PCI_DEVFN(0x14, 0x02), true, TYPE_AEOLIA_AHCI);
+    idebus[0] = qdev_get_child_bus(&ahci->qdev, "ide.0");
+    idebus[1] = qdev_get_child_bus(&ahci->qdev, "ide.1");
+    g_assert(MAX_SATA_PORTS == ahci_get_num_ports(ahci));
+    ide_drive_get(hd, ahci_get_num_ports(ahci));
+    ahci_ide_create_devs(ahci, hd);
 
     dev = qdev_create(BUS(pci_bus), TYPE_AEOLIA_SDHCI);
     qdev_prop_set_bit(dev, "multifunction", true);
@@ -379,6 +365,8 @@ static void ps4_init(MachineState *machine)
     qdev_prop_set_bit(dev, "multifunction", true);
     qdev_prop_set_int32(dev, "addr", PCI_DEVFN(20, 7));
     qdev_init_nofail(dev);
+
+    pc_cmos_init(pcms, idebus[0], idebus[1], rtc_state);
 
     /* the rest devices to which pci devfn is automatically assigned */
     pc_vga_init(isa_bus, pci_bus);
