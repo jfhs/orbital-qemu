@@ -1,2 +1,10 @@
+obj-y += aeolia_acpi.o
+obj-y += aeolia_ahci.o
+obj-y += aeolia_dmac.o
+obj-y += aeolia_gbe.o
+obj-y += aeolia_mem.o
+obj-y += aeolia_pcie.o
+obj-y += aeolia_sdhci.o
 obj-y += aeolia_uart.o
+obj-y += aeolia_xhci.o
 obj-y += ps4.o

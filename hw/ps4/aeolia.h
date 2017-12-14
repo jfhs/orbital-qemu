@@ -20,10 +20,20 @@
 #ifndef HW_PS4_AEOLIA_H
 #define HW_PS4_AEOLIA_H
 
-#define TYPE_AEOLIA_ACPI "aeolia-acpi"
-#define TYPE_AEOLIA_UART "aeolia-uart"
+// Aeolia devices
+#define TYPE_AEOLIA_ACPI  "aeolia-acpi"
+#define TYPE_AEOLIA_GBE   "aeolia-gbe"
+#define TYPE_AEOLIA_AHCI  "aeolia-ahci"
+#define TYPE_AEOLIA_SDHCI "aeolia-sdhci"
+#define TYPE_AEOLIA_PCIE  "aeolia-pcie"
+#define TYPE_AEOLIA_DMAC  "aeolia-dmac"
+#define TYPE_AEOLIA_MEM   "aeolia-mem"
+#define TYPE_AEOLIA_XHCI  "aeolia-xhci"
 
-// Addresses
+// Aeolia PCIe glue devices
+#define TYPE_AEOLIA_UART  "aeolia-uart"
+
+// Memory
 #define BASE_AEOLIA_UART_0 0xD0340000
 #define BASE_AEOLIA_UART_1 0xD0341000
 
