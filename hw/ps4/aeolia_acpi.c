@@ -22,6 +22,8 @@
 
 #include "aeolia.h"
 #include "qemu/osdep.h"
+#include "hw/hw.h"
+#include "hw/pci/msi.h"
 
 #define AEOLIA_ACPI(obj) OBJECT_CHECK(AeoliaACPIState, (obj), TYPE_AEOLIA_ACPI)
 
@@ -30,11 +32,27 @@ typedef struct AeoliaACPIState {
     PCIDevice parent_obj;
     /*< public >*/
     MemoryRegion iomem[3];
-} AeoliaAcpiState;
+} AeoliaACPIState;
+
+static uint64_t aeolia_ram_read(void *opaque, hwaddr addr,
+                              unsigned size)
+{
+}
+
+static void aeolia_ram_write(void *opaque, hwaddr addr,
+                           uint64_t value, unsigned size)
+{
+}
+
+static const MemoryRegionOps aeolia_ram_ops = {
+    .read = aeolia_ram_read,
+    .write = aeolia_ram_write,
+    .endianness = DEVICE_LITTLE_ENDIAN,
+};
 
 static int aeolia_acpi_init(PCIDevice *dev)
 {
-    AeoliaAcpiState *s = AEOLIA_ACPI(dev);
+    AeoliaACPIState *s = AEOLIA_ACPI(dev);
     uint8_t *pci_conf = dev->config;
 
     pci_set_word(pci_conf + PCI_COMMAND, PCI_COMMAND_IO | PCI_COMMAND_MEMORY |
@@ -54,7 +72,7 @@ static int aeolia_acpi_init(PCIDevice *dev)
     if (pci_is_express(dev)) {
         pcie_endpoint_cap_init(dev, 0xa0);
     }
-    msi_init(dev, 0x50, 1, true, false);
+    msi_init(dev, 0x50, 1, true, false, NULL);
 
     return 0;
 }
@@ -74,6 +92,13 @@ static void aeolia_acpi_class_init(ObjectClass *klass, void *data)
 static const TypeInfo aeolia_acpi_info = {
     .name          = TYPE_AEOLIA_ACPI,
     .parent        = TYPE_PCI_DEVICE,
-    .instance_size = sizeof(AeoliaAcpiState),
+    .instance_size = sizeof(AeoliaACPIState),
     .class_init    = aeolia_acpi_class_init,
 };
+
+static void aeolia_register_types(void)
+{
+    type_register_static(&aeolia_acpi_info);
+}
+
+type_init(aeolia_register_types)

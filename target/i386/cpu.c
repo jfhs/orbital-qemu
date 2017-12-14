@@ -2054,7 +2054,7 @@ static X86CPUDefinition builtin_x86_defs[] = {
 #ifdef TARGET_PS4
     {
         .name = "jaguar",
-        .level = 0xd,
+        .level = 0xD,
         .vendor = CPUID_VENDOR_AMD,
         .family = 0x16,
         .model = 0x11,
@@ -2083,7 +2083,7 @@ static X86CPUDefinition builtin_x86_defs[] = {
             CPUID_EXT3_WDT | CPUID_EXT3_NODEID | CPUID_EXT3_TOPOEXT |
             CPUID_EXT3_PERFNB | (1U << 26) | (1U << 28),
         .features[FEAT_7_0_EBX] =
-            CPUID_7_0_EBX_FSGSBASE | CPUID_7_0_EBX_BMI1 /* ??? */,
+            CPUID_7_0_EBX_FSGSBASE | CPUID_7_0_EBX_BMI1 /* TODO: ??? */,
         .xlevel = 0x8000000A,
         .model_id = "DG1000FGF84HT",
     },

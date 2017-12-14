@@ -29,14 +29,21 @@
 #include "qemu/error-report.h"
 #include "qapi/error.h"
 #include "hw/boards.h"
+#include "aeolia.h"
+#include "liverpool.h"
 
 #include "cpu.h"
 #include "hw/ide.h"
-#include "hw/acpi/acpi.h"
+#include "hw/usb.h"
+#include "hw/ide/ahci.h"
 #include "hw/i2c/smbus.h"
 #include "hw/i386/pc.h"
+#include "hw/i386/topology.h"
+#include "hw/i386/ich9.h"
+#include "hw/pci-host/q35.h"
 #include "hw/smbios/smbios.h"
 #include "hw/sysbus.h"
+#include "sysemu/cpus.h"
 
 #include "kvm_i386.h"
 #include "sysemu/kvm.h"
@@ -48,11 +55,79 @@
 #endif
 
 /* Hardware initialization */
-#define MAX_IDE_BUS 2
+#define MAX_SATA_PORTS 6
 
-static const int ide_iobase[MAX_IDE_BUS] = { 0x1f0, 0x170 };
-static const int ide_iobase2[MAX_IDE_BUS] = { 0x3f6, 0x376 };
-static const int ide_irq[MAX_IDE_BUS] = { 14, 15 };
+/* Calculates initial APIC ID for a specific CPU index
+ *
+ * Currently we need to be able to calculate the APIC ID from the CPU index
+ * alone (without requiring a CPU object), as the QEMU<->Seabios interfaces have
+ * no concept of "CPU index", and the NUMA tables on fw_cfg need the APIC ID of
+ * all CPUs up to max_cpus.
+ */
+static uint32_t x86_cpu_apic_id_from_index(unsigned int cpu_index)
+{
+    // No compatibility mode in PS4
+    return x86_apicid_from_cpu_idx(smp_cores, smp_threads, cpu_index);
+}
+
+static void ps4_new_cpu(const char *typename, int64_t apic_id, Error **errp)
+{
+    Object *cpu = NULL;
+    Error *local_err = NULL;
+
+    cpu = object_new(typename);
+
+    object_property_set_uint(cpu, apic_id, "apic-id", &local_err);
+    object_property_set_bool(cpu, true, "realized", &local_err);
+
+    object_unref(cpu);
+    error_propagate(errp, local_err);
+}
+
+static void ps4_cpus_init(PCMachineState *pcms)
+{
+    int i;
+    CPUClass *cc;
+    ObjectClass *oc;
+    const char *typename;
+    gchar **model_pieces;
+    const CPUArchIdList *possible_cpus;
+    MachineState *machine = MACHINE(pcms);
+    MachineClass *mc = MACHINE_GET_CLASS(pcms);
+
+    /* init CPUs */
+    if (machine->cpu_model == NULL) {
+        machine->cpu_model = "jaguar";
+    }
+
+    model_pieces = g_strsplit(machine->cpu_model, ",", 2);
+    if (!model_pieces[0]) {
+        error_report("Invalid/empty CPU model name");
+        exit(1);
+    }
+    oc = cpu_class_by_name(TYPE_X86_CPU, model_pieces[0]);
+    if (oc == NULL) {
+        error_report("Unable to find CPU definition: %s", model_pieces[0]);
+        exit(1);
+    }
+    typename = object_class_get_name(oc);
+    cc = CPU_CLASS(oc);
+    cc->parse_features(typename, model_pieces[1], &error_fatal);
+    g_strfreev(model_pieces);
+
+    /* Calculates the limit to CPU APIC ID values
+     *
+     * Limit for the APIC ID value, so that all
+     * CPU APIC IDs are < pcms->apic_id_limit.
+     *
+     * This is used for FW_CFG_MAX_CPUS. See comments on bochs_bios_init().
+     */
+    pcms->apic_id_limit = x86_cpu_apic_id_from_index(max_cpus - 1) + 1;
+    possible_cpus = mc->possible_cpu_arch_ids(machine);
+    for (i = 0; i < smp_cpus; i++) {
+        ps4_new_cpu(typename, possible_cpus->cpus[i].arch_id, &error_fatal);
+    }
+}
 
 static void ps4_init(MachineState *machine)
 {
@@ -64,13 +139,14 @@ static void ps4_init(MachineState *machine)
     int i;
     PCIBus *pci_bus;
     ISABus *isa_bus;
-    PCII440FXState *i440fx_state;
-    int piix3_devfn = -1;
+    PCIDevice *lpc;
+    PCIDevice *ahci;
+    DeviceState *lpc_dev;
+    ICH9LPCState *ich9_lpc;
     qemu_irq *i8259;
-    qemu_irq smi_irq;
     GSIState *gsi_state;
-    DriveInfo *hd[MAX_IDE_BUS * MAX_IDE_DEVS];
-    BusState *idebus[MAX_IDE_BUS];
+    DriveInfo *hd[MAX_SATA_PORTS];
+    BusState *idebus[MAX_SATA_PORTS];
     ISADevice *rtc_state;
     MemoryRegion *ram_memory;
     MemoryRegion *pci_memory;
@@ -78,84 +154,37 @@ static void ps4_init(MachineState *machine)
     ram_addr_t lowmem;
 
     info_report("Starting PlayStation 4...");
+    
     /*
-     * Calculate ram split, for memory below and above 4G.  It's a bit
-     * complicated for backward compatibility reasons ...
-     *
-     *  - Traditional split is 3.5G (lowmem = 0xe0000000).  This is the
-     *    default value for max_ram_below_4g now.
-     *
-     *  - Then, to gigabyte align the memory, we move the split to 3G
-     *    (lowmem = 0xc0000000).  But only in case we have to split in
-     *    the first place, i.e. ram_size is larger than (traditional)
-     *    lowmem.  And for new machine types (gigabyte_align = true)
-     *    only, for live migration compatibility reasons.
-     *
-     *  - Next the max-ram-below-4g option was added, which allowed to
-     *    reduce lowmem to a smaller value, to allow a larger PCI I/O
-     *    window below 4G.  qemu doesn't enforce gigabyte alignment here,
-     *    but prints a warning.
-     *
-     *  - Finally max-ram-below-4g got updated to also allow raising lowmem,
-     *    so legacy non-PAE guests can get as much memory as possible in
-     *    the 32bit address space below 4G.
-     *
-     *  - Note that Xen has its own ram setp code in xen_ram_init(),
-     *    called via xen_hvm_init().
-     *
-     * Examples:
-     *    qemu -M pc-1.7 -m 4G    (old default)    -> 3584M low,  512M high
-     *    qemu -M pc -m 4G        (new default)    -> 3072M low, 1024M high
-     *    qemu -M pc,max-ram-below-4g=2G -m 4G     -> 2048M low, 2048M high
-     *    qemu -M pc,max-ram-below-4g=4G -m 3968M  -> 3968M low (=4G-128M)
+     * Memory
+     * Calculate RAM split, assume gigabyte alignment backend by evidence
+     * found in memory maps logged by the kernel on a real device.
+     * This implies lowmem in range [0x0, 0x80000000].
      */
+    assert(machine->ram_size == mc->default_ram_size);
+    lowmem = 0x80000000;
+    pcms->above_4g_mem_size = machine->ram_size - lowmem;
+    pcms->below_4g_mem_size = lowmem;
 
-    /* memory */
     if (xen_enabled()) {
         xen_hvm_init(pcms, &ram_memory);
-    } else {
-        /* memory should be always the machine's default */
-        assert(machine->ram_size == mc->default_ram_size);
-        if (!pcms->max_ram_below_4g) {
-            pcms->max_ram_below_4g = 0xe0000000; /* default: 3.5G */
-        }
-        lowmem = pcms->max_ram_below_4g;
-        if (pcmc->gigabyte_align) {
-            if (lowmem > 0xc0000000) {
-                lowmem = 0xc0000000;
-            }
-            if (lowmem & ((1ULL << 30) - 1)) {
-                warn_report("Large machine and max_ram_below_4g "
-                            "(%" PRIu64 ") not a multiple of 1G; "
-                            "possible bad performance.",
-                            pcms->max_ram_below_4g);
-            }
-        }
-        pcms->above_4g_mem_size = machine->ram_size - lowmem;
-        pcms->below_4g_mem_size = lowmem;
     }
 
-    pc_cpus_init(pcms);
+    ps4_cpus_init(pcms);
 
     if (kvm_enabled() && pcmc->kvmclock_enabled) {
         kvmclock_create();
     }
 
-    if (pcmc->pci_enabled) {
-        pci_memory = g_new(MemoryRegion, 1);
-        memory_region_init(pci_memory, NULL, "pci", UINT64_MAX);
-        rom_memory = pci_memory;
-    } else {
-        pci_memory = NULL;
-        rom_memory = system_memory;
-    }
+    pci_memory = g_new(MemoryRegion, 1);
+    memory_region_init(pci_memory, NULL, "pci", UINT64_MAX);
+    rom_memory = pci_memory;
 
     pc_guest_info_init(pcms);
 
     if (pcmc->smbios_defaults) {
-        MachineClass *mc = MACHINE_GET_CLASS(machine);
         /* These values are guest ABI, do not change */
-        smbios_set_defaults("QEMU", "Standard PC (i440FX + PIIX, 1996)",
+        smbios_set_defaults("QEMU", "Standard PC (Q35 + ICH9, 2009)",
                             mc->name, pcmc->smbios_legacy_mode,
                             pcmc->smbios_uuid_encoded,
                             SMBIOS_ENTRY_POINT_21);
@@ -163,11 +192,7 @@ static void ps4_init(MachineState *machine)
 
     /* allocate ram and load rom/bios */
     if (!xen_enabled()) {
-        pc_memory_init(pcms, system_memory,
-                       rom_memory, &ram_memory);
-    } else if (machine->kernel_filename != NULL) {
-        /* For xen HVM direct kernel boot, load linux here */
-        xen_load_linux(pcms);
+        pc_memory_init(pcms, system_memory, rom_memory, &ram_memory);
     }
 
     gsi_state = g_malloc0(sizeof(*gsi_state));
@@ -179,23 +204,51 @@ static void ps4_init(MachineState *machine)
         pcms->gsi = qemu_allocate_irqs(gsi_handler, gsi_state, GSI_NUM_PINS);
     }
 
-    if (pcmc->pci_enabled) {
-        pci_bus = i440fx_init(TYPE_I440FX_PCI_HOST_BRIDGE,
-                              TYPE_I440FX_PCI_DEVICE,
-                              &i440fx_state, &piix3_devfn, &isa_bus, pcms->gsi,
-                              system_memory, system_io, machine->ram_size,
-                              pcms->below_4g_mem_size,
-                              pcms->above_4g_mem_size,
-                              pci_memory, ram_memory);
-        pcms->bus = pci_bus;
-    } else {
-        pci_bus = NULL;
-        i440fx_state = NULL;
-        isa_bus = isa_bus_new(NULL, get_system_memory(), system_io,
-                              &error_abort);
-        no_hpet = 1;
+
+    Q35PCIHost *q35_host;
+    q35_host = Q35_HOST_DEVICE(qdev_create(NULL, TYPE_Q35_HOST_DEVICE));
+
+    object_property_add_child(qdev_get_machine(), "q35", OBJECT(q35_host), NULL);
+    object_property_set_link(OBJECT(q35_host), OBJECT(ram_memory),
+                             MCH_HOST_PROP_RAM_MEM, NULL);
+    object_property_set_link(OBJECT(q35_host), OBJECT(pci_memory),
+                             MCH_HOST_PROP_PCI_MEM, NULL);
+    object_property_set_link(OBJECT(q35_host), OBJECT(system_memory),
+                             MCH_HOST_PROP_SYSTEM_MEM, NULL);
+    object_property_set_link(OBJECT(q35_host), OBJECT(system_io),
+                             MCH_HOST_PROP_IO_MEM, NULL);
+    object_property_set_int(OBJECT(q35_host), pcms->below_4g_mem_size,
+                            PCI_HOST_BELOW_4G_MEM_SIZE, NULL);
+    object_property_set_int(OBJECT(q35_host), pcms->above_4g_mem_size,
+                            PCI_HOST_ABOVE_4G_MEM_SIZE, NULL);
+    /* pci */
+    PCIHostState *phb;
+    qdev_init_nofail(DEVICE(q35_host));
+    phb = PCI_HOST_BRIDGE(q35_host);
+    pci_bus = phb->bus;
+
+   /* create ISA bus */
+    lpc = pci_create_simple_multifunction(pci_bus, PCI_DEVFN(ICH9_LPC_DEV,
+                                          ICH9_LPC_FUNC), true,
+                                          TYPE_ICH9_LPC_DEVICE);
+
+    object_property_add_link(OBJECT(machine), PC_MACHINE_ACPI_DEVICE_PROP,
+                             TYPE_HOTPLUG_HANDLER,
+                             (Object **)&pcms->acpi_dev,
+                             object_property_allow_set_link,
+                             OBJ_PROP_LINK_UNREF_ON_RELEASE, &error_abort);
+    object_property_set_link(OBJECT(machine), OBJECT(lpc),
+                             PC_MACHINE_ACPI_DEVICE_PROP, &error_abort);
+
+    ich9_lpc = ICH9_LPC_DEVICE(lpc);
+    lpc_dev = DEVICE(lpc);
+    for (i = 0; i < GSI_NUM_PINS; i++) {
+        qdev_connect_gpio_out_named(lpc_dev, ICH9_GPIO_GSI, i, pcms->gsi[i]);
     }
-    isa_bus_irqs(isa_bus, pcms->gsi);
+    pci_bus_irqs(pci_bus, ich9_lpc_set_irq, ich9_lpc_map_irq, ich9_lpc,
+                 ICH9_LPC_NB_PIRQS);
+    pci_bus_set_route_irq_fn(pci_bus, ich9_route_intx_pin_to_irq);
+    isa_bus = ich9_lpc->isa_bus;
 
     if (kvm_pic_in_kernel()) {
         i8259 = kvm_i8259_init(isa_bus);
@@ -209,13 +262,8 @@ static void ps4_init(MachineState *machine)
         gsi_state->i8259_irq[i] = i8259[i];
     }
     g_free(i8259);
-    if (pcmc->pci_enabled) {
-        ioapic_init_gsi(gsi_state, "i440fx");
-    }
 
     pc_register_ferr_irq(pcms->gsi[13]);
-
-    pc_vga_init(isa_bus, pcmc->pci_enabled ? pci_bus : NULL);
 
     assert(pcms->vmport != ON_OFF_AUTO__MAX);
     if (pcms->vmport == ON_OFF_AUTO_AUTO) {
@@ -223,71 +271,119 @@ static void ps4_init(MachineState *machine)
     }
 
     /* init basic PC hardware */
-    pc_basic_device_init(isa_bus, pcms->gsi, &rtc_state, true,
-                         (pcms->vmport != ON_OFF_AUTO_ON), pcms->pit, 0x4);
+    pc_basic_device_init(isa_bus, pcms->gsi, &rtc_state, !mc->no_floppy,
+                         (pcms->vmport != ON_OFF_AUTO_ON), pcms->pit,
+                         0xff0104);
 
-    pc_nic_init(isa_bus, pci_bus);
+    /* connect pm stuff to lpc */
+    ich9_lpc_pm_init(lpc, pc_machine_is_smm_enabled(pcms));
 
-    ide_drive_get(hd, ARRAY_SIZE(hd));
-    if (pcmc->pci_enabled) {
-        PCIDevice *dev;
-        if (xen_enabled()) {
-            dev = pci_piix3_xen_ide_init(pci_bus, hd, piix3_devfn + 1);
-        } else {
-            dev = pci_piix3_ide_init(pci_bus, hd, piix3_devfn + 1);
-        }
-        idebus[0] = qdev_get_child_bus(&dev->qdev, "ide.0");
-        idebus[1] = qdev_get_child_bus(&dev->qdev, "ide.1");
+    if (pcms->sata) {
+        /* ahci and SATA device, for q35 1 ahci controller is built-in */
+        ahci = pci_create_simple_multifunction(pci_bus,
+                                               PCI_DEVFN(ICH9_SATA1_DEV,
+                                                         ICH9_SATA1_FUNC),
+                                               true, "ich9-ahci");
+        idebus[0] = qdev_get_child_bus(&ahci->qdev, "ide.0");
+        idebus[1] = qdev_get_child_bus(&ahci->qdev, "ide.1");
+        g_assert(MAX_SATA_PORTS == ahci_get_num_ports(ahci));
+        ide_drive_get(hd, ahci_get_num_ports(ahci));
+        ahci_ide_create_devs(ahci, hd);
     } else {
-        for(i = 0; i < MAX_IDE_BUS; i++) {
-            ISADevice *dev;
-            char busname[] = "ide.0";
-            dev = isa_ide_init(isa_bus, ide_iobase[i], ide_iobase2[i],
-                               ide_irq[i],
-                               hd[MAX_IDE_DEVS * i], hd[MAX_IDE_DEVS * i + 1]);
-            /*
-             * The ide bus name is ide.0 for the first bus and ide.1 for the
-             * second one.
-             */
-            busname[4] = '0' + i;
-            idebus[i] = qdev_get_child_bus(DEVICE(dev), busname);
-        }
+        idebus[0] = idebus[1] = NULL;
+    }
+
+    if (machine_usb(machine)) {
+        /* Should we create 6 UHCI according to ich9 spec? */
+        ehci_create_ich9_with_companions(pci_bus, 0x1d);
+    }
+
+    if (pcms->smbus) {
+        /* TODO: Populate SPD eeprom data.  */
+        smbus_eeprom_init(ich9_smb_init(pci_bus,
+                                        PCI_DEVFN(ICH9_SMB_DEV, ICH9_SMB_FUNC),
+                                        0xb100),
+                          8, NULL, 0);
     }
 
     pc_cmos_init(pcms, idebus[0], idebus[1], rtc_state);
 
-    DeviceState *dev = qdev_create(NULL, "aeolia-uart");
+    DeviceState *dev;
+    dev = qdev_create(NULL, TYPE_AEOLIA_UART);
     qdev_init_nofail(dev);
-    sysbus_mmio_map_overlap(SYS_BUS_DEVICE(dev), 0, 0xD0340000, -1000);
+    sysbus_mmio_map_overlap(SYS_BUS_DEVICE(dev), 0, BASE_AEOLIA_UART_0, -1000);
 
-    if (pcmc->pci_enabled && machine_usb(machine)) {
-        pci_create_simple(pci_bus, piix3_devfn + 2, "piix3-usb-uhci");
-    }
+    // Liverpool
+    /*dev = qdev_create(BUS(pci_bus), TYPE_LIVERPOOL_ROOTC);
+    qdev_prop_set_bit(dev, "multifunction", true);
+    qdev_prop_set_int32(dev, "addr", PCI_DEVFN(0, 0));
+    qdev_init_nofail(dev);*/
 
-    if (pcmc->pci_enabled && acpi_enabled) {
-        DeviceState *piix4_pm;
-        I2CBus *smbus;
+    /*dev = qdev_create(BUS(pci_bus), TYPE_LIVERPOOL_IOMMU);
+    qdev_prop_set_bit(dev, "multifunction", true);
+    qdev_prop_set_int32(dev, "addr", PCI_DEVFN(0, 2));
+    qdev_init_nofail(dev);*/
 
-        smi_irq = qemu_allocate_irq(pc_acpi_smi_interrupt, first_cpu, 0);
-        /* TODO: Populate SPD eeprom data.  */
-        smbus = piix4_pm_init(pci_bus, piix3_devfn + 3, 0xb100,
-                              pcms->gsi[9], smi_irq,
-                              pc_machine_is_smm_enabled(pcms),
-                              &piix4_pm);
-        smbus_eeprom_init(smbus, 8, NULL, 0);
+    dev = qdev_create(BUS(pci_bus), TYPE_LIVERPOOL_GC);
+    qdev_prop_set_bit(dev, "multifunction", true);
+    qdev_prop_set_int32(dev, "addr", PCI_DEVFN(1, 0));
+    qdev_init_nofail(dev);
 
-        object_property_add_link(OBJECT(machine), PC_MACHINE_ACPI_DEVICE_PROP,
-                                 TYPE_HOTPLUG_HANDLER,
-                                 (Object **)&pcms->acpi_dev,
-                                 object_property_allow_set_link,
-                                 OBJ_PROP_LINK_UNREF_ON_RELEASE, &error_abort);
-        object_property_set_link(OBJECT(machine), OBJECT(piix4_pm),
-                                 PC_MACHINE_ACPI_DEVICE_PROP, &error_abort);
-    }
+    dev = qdev_create(BUS(pci_bus), TYPE_LIVERPOOL_HDAC);
+    qdev_prop_set_bit(dev, "multifunction", true);
+    qdev_prop_set_int32(dev, "addr", PCI_DEVFN(1, 1));
+    qdev_init_nofail(dev);
 
-    if (pcmc->pci_enabled) {
-        pc_pci_device_init(pci_bus);
-    }
+    dev = qdev_create(BUS(pci_bus), TYPE_LIVERPOOL_ROOTP);
+    qdev_prop_set_bit(dev, "multifunction", true);
+    qdev_prop_set_int32(dev, "addr", PCI_DEVFN(2, 0));
+    qdev_init_nofail(dev);
+
+    // Aeolia
+    dev = qdev_create(BUS(pci_bus), TYPE_AEOLIA_ACPI);
+    qdev_prop_set_bit(dev, "multifunction", true);
+    qdev_prop_set_int32(dev, "addr", PCI_DEVFN(20, 0));
+    qdev_init_nofail(dev);
+
+    dev = qdev_create(BUS(pci_bus), TYPE_AEOLIA_GBE);
+    qdev_prop_set_bit(dev, "multifunction", true);
+    qdev_prop_set_int32(dev, "addr", PCI_DEVFN(20, 1));
+    qdev_init_nofail(dev);
+
+    dev = qdev_create(BUS(pci_bus), TYPE_AEOLIA_AHCI);
+    qdev_prop_set_bit(dev, "multifunction", true);
+    qdev_prop_set_int32(dev, "addr", PCI_DEVFN(20, 2));
+    qdev_init_nofail(dev);
+
+    dev = qdev_create(BUS(pci_bus), TYPE_AEOLIA_SDHCI);
+    qdev_prop_set_bit(dev, "multifunction", true);
+    qdev_prop_set_int32(dev, "addr", PCI_DEVFN(20, 3));
+    qdev_init_nofail(dev);
+
+    dev = qdev_create(BUS(pci_bus), TYPE_AEOLIA_PCIE);
+    qdev_prop_set_bit(dev, "multifunction", true);
+    qdev_prop_set_int32(dev, "addr", PCI_DEVFN(20, 4));
+    qdev_init_nofail(dev);
+
+    dev = qdev_create(BUS(pci_bus), TYPE_AEOLIA_DMAC);
+    qdev_prop_set_bit(dev, "multifunction", true);
+    qdev_prop_set_int32(dev, "addr", PCI_DEVFN(20, 5));
+    qdev_init_nofail(dev);
+
+    dev = qdev_create(BUS(pci_bus), TYPE_AEOLIA_MEM);
+    qdev_prop_set_bit(dev, "multifunction", true);
+    qdev_prop_set_int32(dev, "addr", PCI_DEVFN(20, 6));
+    qdev_init_nofail(dev);
+
+    dev = qdev_create(BUS(pci_bus), TYPE_AEOLIA_XHCI);
+    qdev_prop_set_bit(dev, "multifunction", true);
+    qdev_prop_set_int32(dev, "addr", PCI_DEVFN(20, 7));
+    qdev_init_nofail(dev);
+
+    /* the rest devices to which pci devfn is automatically assigned */
+    pc_vga_init(isa_bus, pci_bus);
+    pc_nic_init(isa_bus, pci_bus);
+    pc_pci_device_init(pci_bus);
 
     if (pcms->acpi_nvdimm_state.is_enabled) {
         nvdimm_init_acpi_state(&pcms->acpi_nvdimm_state, system_io,

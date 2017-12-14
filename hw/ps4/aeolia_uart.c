@@ -131,11 +131,11 @@ static uint64_t uart_read(void *opaque, hwaddr addr,
         r = s->regs[addr];
         break;
     case REG_IER:
-    case REG_LCR:
+    case REG_MCR:
         warn_report("aeolia_uart: read access to unimplemented register 0x"
                 TARGET_FMT_plx, addr << 2);
         break;
-    case REG_MCR:
+    case REG_LCR:
         error_report("aeolia_uart: read access to write only register 0x"
                 TARGET_FMT_plx, addr << 2);
         break;
