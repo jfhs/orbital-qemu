@@ -278,19 +278,6 @@ static void ps4_init(MachineState *machine)
     /* connect pm stuff to lpc */
     ich9_lpc_pm_init(lpc, pc_machine_is_smm_enabled(pcms));
 
-    if (machine_usb(machine)) {
-        /* Should we create 6 UHCI according to ich9 spec? */
-        ehci_create_ich9_with_companions(pci_bus, 0x1d);
-    }
-
-    if (pcms->smbus) {
-        /* TODO: Populate SPD eeprom data.  */
-        smbus_eeprom_init(ich9_smb_init(pci_bus,
-                                        PCI_DEVFN(ICH9_SMB_DEV, ICH9_SMB_FUNC),
-                                        0xb100),
-                          8, NULL, 0);
-    }
-
     DeviceState *dev;
     dev = qdev_create(NULL, TYPE_AEOLIA_UART);
     qdev_init_nofail(dev);
@@ -370,7 +357,6 @@ static void ps4_init(MachineState *machine)
 
     /* the rest devices to which pci devfn is automatically assigned */
     pc_vga_init(isa_bus, pci_bus);
-    pc_nic_init(isa_bus, pci_bus);
     pc_pci_device_init(pci_bus);
 
     if (pcms->acpi_nvdimm_state.is_enabled) {

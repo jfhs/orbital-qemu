@@ -38,7 +38,7 @@ static void aeolia_xhci_class_init(ObjectClass *klass, void *data)
     pc->device_id = 0x90A4;
     pc->revision = 1;
     pc->is_express = true;
-    pc->class_id = PCI_CLASS_STORAGE_RAID;
+    pc->class_id = PCI_CLASS_SERIAL_USB;
     pc->init = aeolia_xhci_init;
 }
 

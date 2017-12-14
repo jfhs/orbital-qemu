@@ -38,7 +38,7 @@ static void aeolia_gbe_class_init(ObjectClass *klass, void *data)
     pc->device_id = 0x909E;
     pc->revision = 1;
     pc->is_express = true;
-    pc->class_id = PCI_CLASS_STORAGE_RAID;
+    pc->class_id = PCI_CLASS_NETWORK_ETHERNET;
     pc->init = aeolia_gbe_init;
 }
 

@@ -38,7 +38,7 @@ static void aeolia_dmac_class_init(ObjectClass *klass, void *data)
     pc->device_id = 0x90A2;
     pc->revision = 1;
     pc->is_express = true;
-    pc->class_id = PCI_CLASS_STORAGE_RAID;
+    pc->class_id = PCI_CLASS_SYSTEM_DMA;
     pc->init = aeolia_dmac_init;
 }
 

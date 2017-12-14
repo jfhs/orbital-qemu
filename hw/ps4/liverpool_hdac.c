@@ -38,7 +38,7 @@ static void liverpool_hdac_class_init(ObjectClass *klass, void *data)
     pc->device_id = 0x9921;
     pc->revision = 1;
     pc->is_express = true;
-    pc->class_id = PCI_CLASS_STORAGE_RAID;
+    pc->class_id = PCI_CLASS_MULTIMEDIA_AUDIO;
     pc->init = liverpool_hdac_init;
 }
 
