@@ -43,6 +43,8 @@
 #include "hw/pci-host/q35.h"
 #include "hw/smbios/smbios.h"
 #include "hw/sysbus.h"
+#include "hw/timer/hpet.h"
+#include "hw/timer/mc146818rtc.h"
 #include "sysemu/cpus.h"
 
 #include "kvm_i386.h"
@@ -127,6 +129,44 @@ static void ps4_cpus_init(PCMachineState *pcms)
     for (i = 0; i < smp_cpus; i++) {
         ps4_new_cpu(typename, possible_cpus->cpus[i].arch_id, &error_fatal);
     }
+}
+
+static void ps4_basic_device_init(ISABus *isa_bus, qemu_irq *gsi,
+                          ISADevice **rtc_state, uint32_t hpet_irqs)
+{
+    int i;
+    DeviceState *hpet = NULL;
+    qemu_irq rtc_irq = NULL;
+
+    /*
+     * Check if an HPET shall be created.
+     *
+     * Without KVM_CAP_PIT_STATE2, we cannot switch off the in-kernel PIT
+     * when the HPET wants to take over. Thus we have to disable the latter.
+     */
+    if (!no_hpet && (!kvm_irqchip_in_kernel() || kvm_has_pit_state2())) {
+        /* In order to set property, here not using sysbus_try_create_simple */
+        hpet = qdev_try_create(NULL, TYPE_HPET);
+        if (hpet) {
+            /* For pc-piix-*, hpet's intcap is always IRQ2. For pc-q35-1.7
+             * and earlier, use IRQ2 for compat. Otherwise, use IRQ16~23,
+             * IRQ8 and IRQ2.
+             */
+            uint8_t compat = object_property_get_uint(OBJECT(hpet),
+                    HPET_INTCAP, NULL);
+            if (!compat) {
+                qdev_prop_set_uint32(hpet, HPET_INTCAP, hpet_irqs);
+            }
+            qdev_init_nofail(hpet);
+            sysbus_mmio_map(SYS_BUS_DEVICE(hpet), 0, HPET_BASE);
+
+            for (i = 0; i < GSI_NUM_PINS; i++) {
+                sysbus_connect_irq(SYS_BUS_DEVICE(hpet), i, gsi[i]);
+            }
+            rtc_irq = qdev_get_gpio_in(hpet, HPET_LEGACY_RTC_INT);
+        }
+    }
+    *rtc_state = rtc_init(isa_bus, 2000, rtc_irq);
 }
 
 static void ps4_init(MachineState *machine)
@@ -271,9 +311,7 @@ static void ps4_init(MachineState *machine)
     }
 
     /* init basic PC hardware */
-    pc_basic_device_init(isa_bus, pcms->gsi, &rtc_state, !mc->no_floppy,
-                         (pcms->vmport != ON_OFF_AUTO_ON), pcms->pit,
-                         0xff0104);
+    ps4_basic_device_init(isa_bus, pcms->gsi, &rtc_state, 0xff0104);
 
     /* connect pm stuff to lpc */
     ich9_lpc_pm_init(lpc, pc_machine_is_smm_enabled(pcms));
