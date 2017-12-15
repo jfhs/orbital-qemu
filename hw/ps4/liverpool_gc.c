@@ -1,5 +1,5 @@
 /*
- * QEMU model of Liverpool Graphics Controller device.
+ * QEMU model of Liverpool Graphics Controller (Starsha) device.
  *
  * Copyright (c) 2017 Alexandro Sanchez Bach
  *
@@ -34,12 +34,14 @@ typedef struct LiverpoolGCState {
 static uint64_t liverpool_gc_read(void *opaque, hwaddr addr,
                               unsigned size)
 {
+    printf("liverpool_gc_read:  { addr: %lX, size: %X }\n", addr, size);
     return 0;
 }
 
 static void liverpool_gc_write(void *opaque, hwaddr addr,
                            uint64_t value, unsigned size)
 {
+    printf("liverpool_gc_write: { addr: %lX, size: %X, value: %lX }\n", addr, size, value);
 }
 
 static const MemoryRegionOps liverpool_gc_ops = {
@@ -60,8 +62,8 @@ static int liverpool_gc_init(PCIDevice *dev)
         &liverpool_gc_ops, (void*)"gc-2", "liverpool-gc-2", 0x40000);
 
     pci_register_bar(dev, 0, PCI_BASE_ADDRESS_SPACE_MEMORY, &s->iomem[0]);
-    pci_register_bar(dev, 1, PCI_BASE_ADDRESS_SPACE_MEMORY, &s->iomem[1]);
-    pci_register_bar(dev, 2, PCI_BASE_ADDRESS_SPACE_MEMORY, &s->iomem[2]);
+    pci_register_bar(dev, 2, PCI_BASE_ADDRESS_SPACE_MEMORY, &s->iomem[1]);
+    pci_register_bar(dev, 5, PCI_BASE_ADDRESS_SPACE_MEMORY, &s->iomem[2]);
 
     return 0;
 }

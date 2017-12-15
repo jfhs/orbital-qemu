@@ -1,5 +1,5 @@
 /*
- * QEMU model of Liverpool device 0x1433.
+ * QEMU model of Liverpool Processor Function 5 device.
  *
  * Copyright (c) 2017 Alexandro Sanchez Bach
  *
@@ -32,6 +32,7 @@ static int liverpool_dev1433_init(PCIDevice *dev)
 
 static void liverpool_dev1433_class_init(ObjectClass *klass, void *data)
 {
+    DeviceClass *dc = DEVICE_CLASS(klass);
     PCIDeviceClass *pc = PCI_DEVICE_CLASS(klass);
 
     pc->vendor_id = 0x1022;
@@ -40,6 +41,7 @@ static void liverpool_dev1433_class_init(ObjectClass *klass, void *data)
     pc->is_express = true;
     pc->class_id = PCI_CLASS_NOT_DEFINED;
     pc->init = liverpool_dev1433_init;
+    dc->desc = "Liverpool Processor Function 5";
 }
 
 static const TypeInfo liverpool_dev1433_info = {

@@ -1,5 +1,5 @@
 /*
- * QEMU model of Liverpool device 0x1431.
+ * QEMU model of Liverpool Processor Function 3 device.
  *
  * Copyright (c) 2017 Alexandro Sanchez Bach
  *
@@ -62,6 +62,7 @@ static int liverpool_dev1431_init(PCIDevice *dev)
 
 static void liverpool_dev1431_class_init(ObjectClass *klass, void *data)
 {
+    DeviceClass *dc = DEVICE_CLASS(klass);
     PCIDeviceClass *pc = PCI_DEVICE_CLASS(klass);
 
     pc->vendor_id = 0x1022;
@@ -70,6 +71,7 @@ static void liverpool_dev1431_class_init(ObjectClass *klass, void *data)
     pc->is_express = true;
     pc->class_id = PCI_CLASS_NOT_DEFINED;
     pc->init = liverpool_dev1431_init;
+    dc->desc = "Liverpool Processor Function 3";
 }
 
 static const TypeInfo liverpool_dev1431_info = {

@@ -424,7 +424,7 @@ static void ps4_init(MachineState *machine)
     pc_cmos_init(pcms, idebus[0], idebus[1], rtc_state);
 
     /* the rest devices to which pci devfn is automatically assigned */
-    pc_vga_init(isa_bus, pci_bus);
+    pci_create_simple(pci_bus, -1, "VGA");
     pc_pci_device_init(pci_bus);
 
     if (pcms->acpi_nvdimm_state.is_enabled) {
