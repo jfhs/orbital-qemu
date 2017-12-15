@@ -347,6 +347,36 @@ static void ps4_init(MachineState *machine)
     qdev_prop_set_int32(dev, "addr", PCI_DEVFN(2, 0));
     qdev_init_nofail(dev);
 
+    dev = qdev_create(BUS(pci_bus), TYPE_LIVERPOOL_DEV142E);
+    qdev_prop_set_bit(dev, "multifunction", true);
+    qdev_prop_set_int32(dev, "addr", PCI_DEVFN(0x18, 0));
+    qdev_init_nofail(dev);
+
+    dev = qdev_create(BUS(pci_bus), TYPE_LIVERPOOL_DEV142F);
+    qdev_prop_set_bit(dev, "multifunction", true);
+    qdev_prop_set_int32(dev, "addr", PCI_DEVFN(0x18, 1));
+    qdev_init_nofail(dev);
+
+    dev = qdev_create(BUS(pci_bus), TYPE_LIVERPOOL_DEV1430);
+    qdev_prop_set_bit(dev, "multifunction", true);
+    qdev_prop_set_int32(dev, "addr", PCI_DEVFN(0x18, 2));
+    qdev_init_nofail(dev);
+
+    dev = qdev_create(BUS(pci_bus), TYPE_LIVERPOOL_DEV1431);
+    qdev_prop_set_bit(dev, "multifunction", true);
+    qdev_prop_set_int32(dev, "addr", PCI_DEVFN(0x18, 3));
+    qdev_init_nofail(dev);
+
+    dev = qdev_create(BUS(pci_bus), TYPE_LIVERPOOL_DEV1432);
+    qdev_prop_set_bit(dev, "multifunction", true);
+    qdev_prop_set_int32(dev, "addr", PCI_DEVFN(0x18, 4));
+    qdev_init_nofail(dev);
+
+    dev = qdev_create(BUS(pci_bus), TYPE_LIVERPOOL_DEV1433);
+    qdev_prop_set_bit(dev, "multifunction", true);
+    qdev_prop_set_int32(dev, "addr", PCI_DEVFN(0x18, 5));
+    qdev_init_nofail(dev);
+
     // Aeolia
     dev = qdev_create(BUS(pci_bus), TYPE_AEOLIA_ACPI);
     qdev_prop_set_bit(dev, "multifunction", true);
