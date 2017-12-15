@@ -37,6 +37,7 @@ typedef struct AeoliaACPIState {
 static uint64_t aeolia_ram_read(void *opaque, hwaddr addr,
                               unsigned size)
 {
+    return 0;
 }
 
 static void aeolia_ram_write(void *opaque, hwaddr addr,

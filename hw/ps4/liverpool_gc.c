@@ -21,12 +21,48 @@
 #include "qemu/osdep.h"
 #include "hw/pci/pci.h"
 
+#define LIVERPOOL_GC(obj) \
+    OBJECT_CHECK(LiverpoolGCState, (obj), TYPE_LIVERPOOL_GC)
+
 typedef struct LiverpoolGCState {
+    /*< private >*/
     PCIDevice parent_obj;
+    /*< public >*/
+    MemoryRegion iomem[3];
 } LiverpoolGCState;
+
+static uint64_t liverpool_gc_read(void *opaque, hwaddr addr,
+                              unsigned size)
+{
+    return 0;
+}
+
+static void liverpool_gc_write(void *opaque, hwaddr addr,
+                           uint64_t value, unsigned size)
+{
+}
+
+static const MemoryRegionOps liverpool_gc_ops = {
+    .read = liverpool_gc_read,
+    .write = liverpool_gc_write,
+    .endianness = DEVICE_LITTLE_ENDIAN,
+};
 
 static int liverpool_gc_init(PCIDevice *dev)
 {
+    LiverpoolGCState *s = LIVERPOOL_GC(dev);
+
+    memory_region_init_io(&s->iomem[0], OBJECT(dev),
+        &liverpool_gc_ops, (void*)"gc-0", "liverpool-gc-0", 0x4000000);
+    memory_region_init_io(&s->iomem[1], OBJECT(dev),
+        &liverpool_gc_ops, (void*)"gc-1", "liverpool-gc-1", 0x800000);
+    memory_region_init_io(&s->iomem[2], OBJECT(dev),
+        &liverpool_gc_ops, (void*)"gc-2", "liverpool-gc-2", 0x40000);
+
+    pci_register_bar(dev, 0, PCI_BASE_ADDRESS_SPACE_MEMORY, &s->iomem[0]);
+    pci_register_bar(dev, 1, PCI_BASE_ADDRESS_SPACE_MEMORY, &s->iomem[1]);
+    pci_register_bar(dev, 2, PCI_BASE_ADDRESS_SPACE_MEMORY, &s->iomem[2]);
+
     return 0;
 }
 

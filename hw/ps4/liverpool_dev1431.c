@@ -21,12 +21,42 @@
 #include "qemu/osdep.h"
 #include "hw/pci/pci.h"
 
+#define PCIR_VERSION 0xFC
+
+#define PCIR16(dev, reg) (*(uint16_t*)(&dev->config[reg]))
+#define PCIR32(dev, reg) (*(uint32_t*)(&dev->config[reg]))
+#define PCIR64(dev, reg) (*(uint64_t*)(&dev->config[reg]))
+
 typedef struct LiverpoolDev1431State {
     PCIDevice parent_obj;
 } LiverpoolDev1431State;
 
 static int liverpool_dev1431_init(PCIDevice *dev)
 {
+    /*
+     * Set APU chipset version.
+     * Liverpool:
+     * - 0x00710F00 : LVP A0
+     * - 0x00710F10 : LVP B0
+     * - 0x00710F11 : LVP B1
+     * - 0x00710F12 : LVP B2
+     * - 0x00710F13 : LVP B2.1
+     * - 0x00710F30 : LVP+ A0
+     * - 0x00710F31 : LVP+ A0b
+     * - 0x00710F32 : LVP+ A1
+     * - 0x00710F40 : LVP+ B0
+     * - 0x00710F80 : LVP2 A0
+     * - 0x00710F81 : LVP2 A1
+     * - 0x00710FA0 : LVP2C A0
+     * Gladius:
+     * - 0x00740F00 : GL A0
+     * - 0x00740F01 : GL A1
+     * - 0x00740F10 : GL B0
+     * - 0x00740F11 : GL B1
+     * - 0x00740F12 : GL T(B2)
+     */
+    PCIR32(dev, PCIR_VERSION) = 0x00710F13;
+
     return 0;
 }
 
