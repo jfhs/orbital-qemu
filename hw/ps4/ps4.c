@@ -332,20 +332,12 @@ static void ps4_init(MachineState *machine)
     qdev_prop_set_int32(dev, "addr", PCI_DEVFN(0, 2));
     qdev_init_nofail(dev);*/
 
-    dev = qdev_create(BUS(pci_bus), TYPE_LIVERPOOL_GC);
-    qdev_prop_set_bit(dev, "multifunction", true);
-    qdev_prop_set_int32(dev, "addr", PCI_DEVFN(1, 0));
-    qdev_init_nofail(dev);
-
-    dev = qdev_create(BUS(pci_bus), TYPE_LIVERPOOL_HDAC);
-    qdev_prop_set_bit(dev, "multifunction", true);
-    qdev_prop_set_int32(dev, "addr", PCI_DEVFN(1, 1));
-    qdev_init_nofail(dev);
-
-    dev = qdev_create(BUS(pci_bus), TYPE_LIVERPOOL_ROOTP);
-    qdev_prop_set_bit(dev, "multifunction", true);
-    qdev_prop_set_int32(dev, "addr", PCI_DEVFN(2, 0));
-    qdev_init_nofail(dev);
+    pci_create_simple_multifunction(
+        pci_bus, PCI_DEVFN(0x01, 0x00), true, TYPE_LIVERPOOL_GC);
+    pci_create_simple_multifunction(
+        pci_bus, PCI_DEVFN(0x01, 0x01), true, TYPE_LIVERPOOL_HDAC);
+    pci_create_simple_multifunction(
+        pci_bus, PCI_DEVFN(0x02, 0x00), true, TYPE_LIVERPOOL_ROOTP);
 
     dev = qdev_create(BUS(pci_bus), TYPE_LIVERPOOL_DEV142E);
     qdev_prop_set_bit(dev, "multifunction", true);
@@ -422,9 +414,6 @@ static void ps4_init(MachineState *machine)
     qdev_init_nofail(dev);
 
     pc_cmos_init(pcms, idebus[0], idebus[1], rtc_state);
-
-    /* the rest devices to which pci devfn is automatically assigned */
-    pci_create_simple(pci_bus, -1, "VGA");
     pc_pci_device_init(pci_bus);
 
     if (pcms->acpi_nvdimm_state.is_enabled) {
