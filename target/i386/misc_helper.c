@@ -24,6 +24,7 @@
 #include "exec/exec-all.h"
 #include "exec/cpu_ldst.h"
 #include "exec/address-spaces.h"
+#include "hw/i386/pc.h"
 
 void helper_outb(CPUX86State *env, uint32_t port, uint32_t data)
 {
@@ -518,6 +519,12 @@ void helper_rdmsr(CPUX86State *env)
         break;
     case MSR_IA32_BNDCFGS:
         val = env->msr_bndcfgs;
+        break;
+    case MSR_K8_TOP_MEM1:
+        val = PC_MACHINE(qdev_get_machine())->below_4g_mem_size;
+        break;
+    case MSR_K8_TOP_MEM2:
+        val = PC_MACHINE(qdev_get_machine())->above_4g_mem_size + (1ULL << 32);
         break;
     default:
         if ((uint32_t)env->regs[R_ECX] >= MSR_MC0_CTL

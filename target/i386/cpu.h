@@ -451,6 +451,8 @@ typedef enum X86Seg {
 #define MSR_TSC_AUX                     0xc0000103
 
 #define MSR_VM_HSAVE_PA                 0xc0010117
+#define MSR_K8_TOP_MEM1                 0xc001001a
+#define MSR_K8_TOP_MEM2                 0xc001001d
 
 #define MSR_IA32_BNDCFGS                0x00000d90
 #define MSR_IA32_XSS                    0x00000da0
