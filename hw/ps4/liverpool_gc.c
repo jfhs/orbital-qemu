@@ -18,8 +18,25 @@
  */
 
 #include "liverpool.h"
+#include "liverpool_gc_mmio.h"
 #include "qemu/osdep.h"
 #include "hw/pci/pci.h"
+#include "liverpool_gc_mmio.h"
+
+#include "ui/console.h"
+#include "hw/display/vga.h"
+#include "hw/display/vga_int.h"
+
+#define LIVERPOOL_GC_VENDOR_ID 0x1002
+#define LIVERPOOL_GC_DEVICE_ID 0x9920
+
+// Helpers
+#define PCIR16(dev, reg) (*(uint16_t*)(&dev->config[reg]))
+#define PCIR32(dev, reg) (*(uint32_t*)(&dev->config[reg]))
+#define PCIR64(dev, reg) (*(uint64_t*)(&dev->config[reg]))
+
+#define MMIO_R(...) MMIO_READ(mmio, __VA_ARGS__)
+#define MMIO_W(...) MMIO_WRITE(mmio, __VA_ARGS__)
 
 #define LIVERPOOL_GC(obj) \
     OBJECT_CHECK(LiverpoolGCState, (obj), TYPE_LIVERPOOL_GC)
@@ -29,6 +46,8 @@ typedef struct LiverpoolGCState {
     PCIDevice parent_obj;
     /*< public >*/
     MemoryRegion iomem[3];
+    VGACommonState vga;
+    uint32_t mmio[0x10000];
 } LiverpoolGCState;
 
 static uint64_t liverpool_gc_read(void *opaque, hwaddr addr,
@@ -50,34 +69,92 @@ static const MemoryRegionOps liverpool_gc_ops = {
     .endianness = DEVICE_LITTLE_ENDIAN,
 };
 
-static int liverpool_gc_init(PCIDevice *dev)
+/* Liverpool GC MMIO */
+static uint64_t liverpool_gc_mmio_read(
+    void *opaque, hwaddr addr, unsigned size)
+{
+    LiverpoolGCState *s = opaque;
+    uint32_t* mmio = s->mmio;
+
+    switch (addr) {
+    case VM_INVALIDATE_RESPONSE:
+        return MMIO_R(VM_INVALIDATE_REQUEST);
+    case RLC_SERDES_CU_MASTER_BUSY:
+        return 0;
+    }
+
+    printf("liverpool_gc_read:  { addr: %lX, size: %X }\n", addr, size);
+    return MMIO_R(addr);
+}
+
+static void liverpool_gc_mmio_write(
+    void *opaque, hwaddr addr, uint64_t value, unsigned size)
+{
+    LiverpoolGCState *s = opaque;
+    uint32_t* mmio = s->mmio;
+
+    // Large registers
+    if (addr == MM_DATA) {
+        addr = MMIO_R(MM_INDEX);
+    }
+
+    MMIO_W(addr, value);
+    printf("liverpool_gc_write: { addr: %lX, size: %X, value: %lX }\n", addr, size, value);
+}
+
+static const MemoryRegionOps liverpool_gc_mmio_ops = {
+    .read = liverpool_gc_mmio_read,
+    .write = liverpool_gc_mmio_write,
+    .endianness = DEVICE_LITTLE_ENDIAN,
+};
+
+/* Device functions */
+static void liverpool_gc_realize(PCIDevice *dev, Error **errp)
 {
     LiverpoolGCState *s = LIVERPOOL_GC(dev);
 
+    // PCI Configuration Space
+    dev->config[PCI_INTERRUPT_LINE] = 0xFF;
+    dev->config[PCI_INTERRUPT_PIN] = 0x01;
+    pci_add_capability(dev, PCI_CAP_ID_MSI, 0, PCI_CAP_SIZEOF, errp);
+
+    // Memory
     memory_region_init_io(&s->iomem[0], OBJECT(dev),
-        &liverpool_gc_ops, (void*)"gc-0", "liverpool-gc-0", 0x4000000);
+        &liverpool_gc_ops, s, "liverpool-gc-0", 0x4000000);
     memory_region_init_io(&s->iomem[1], OBJECT(dev),
-        &liverpool_gc_ops, (void*)"gc-1", "liverpool-gc-1", 0x800000);
+        &liverpool_gc_ops, s, "liverpool-gc-1", 0x800000);
     memory_region_init_io(&s->iomem[2], OBJECT(dev),
-        &liverpool_gc_ops, (void*)"gc-2", "liverpool-gc-2", 0x40000);
+        &liverpool_gc_mmio_ops, s, "liverpool-gc-mmio", 0x40000);
 
     pci_register_bar(dev, 0, PCI_BASE_ADDRESS_SPACE_MEMORY, &s->iomem[0]);
     pci_register_bar(dev, 2, PCI_BASE_ADDRESS_SPACE_MEMORY, &s->iomem[1]);
     pci_register_bar(dev, 5, PCI_BASE_ADDRESS_SPACE_MEMORY, &s->iomem[2]);
 
-    return 0;
+    // VGA
+    VGACommonState *vga = &s->vga;
+    vga_common_init(vga, OBJECT(dev), true);
+    vga_init(vga, OBJECT(dev), pci_address_space(dev),
+        pci_address_space_io(dev), true);
+    vga->con = graphic_console_init(DEVICE(dev), 0, vga->hw_ops, vga);
+}
+
+static void liverpool_gc_exit(PCIDevice *dev)
+{
 }
 
 static void liverpool_gc_class_init(ObjectClass *klass, void *data)
 {
     PCIDeviceClass *pc = PCI_DEVICE_CLASS(klass);
 
-    pc->vendor_id = 0x1002;
-    pc->device_id = 0x9920;
-    pc->revision = 1;
-    pc->is_express = true;
-    pc->class_id = PCI_CLASS_STORAGE_RAID;
-    pc->init = liverpool_gc_init;
+    pc->vendor_id = LIVERPOOL_GC_VENDOR_ID;
+    pc->device_id = LIVERPOOL_GC_DEVICE_ID;
+    pc->revision = 0;
+    pc->subsystem_vendor_id = LIVERPOOL_GC_VENDOR_ID;
+    pc->subsystem_id = LIVERPOOL_GC_DEVICE_ID;
+    pc->romfile = "vgabios-cirrus.bin";
+    pc->class_id = PCI_CLASS_DISPLAY_VGA;
+    pc->realize = liverpool_gc_realize;
+    pc->exit = liverpool_gc_exit;
 }
 
 static const TypeInfo liverpool_gc_info = {
