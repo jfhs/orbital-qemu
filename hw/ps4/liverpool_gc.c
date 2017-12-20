@@ -83,7 +83,7 @@ static uint64_t liverpool_gc_mmio_read(
         return 0;
     }
 
-    printf("liverpool_gc_read:  { addr: %lX, size: %X }\n", addr, size);
+    printf("liverpool_gc_mmio_read:  { addr: %lX, size: %X }\n", addr, size);
     return MMIO_R(addr);
 }
 
@@ -99,7 +99,7 @@ static void liverpool_gc_mmio_write(
     }
 
     MMIO_W(addr, value);
-    printf("liverpool_gc_write: { addr: %lX, size: %X, value: %lX }\n", addr, size, value);
+    printf("liverpool_gc_mmio_write: { addr: %lX, size: %X, value: %lX }\n", addr, size, value);
 }
 
 static const MemoryRegionOps liverpool_gc_mmio_ops = {

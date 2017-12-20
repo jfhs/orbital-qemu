@@ -3,6 +3,9 @@
  *
  * Copyright (c) 2017 Alexandro Sanchez Bach
  *
+ * Based on: https://github.com/agraf/qemu/tree/hacky-aeolia/hw/misc/aeolia.c
+ * Copyright (c) 2015 Alexander Graf
+ *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
@@ -19,21 +22,35 @@
 
 #include "aeolia.h"
 #include "qemu/osdep.h"
+#include "qemu/timer.h"
 #include "hw/pci/pci.h"
+#include "hw/sysbus.h"
+#include "hw/timer/hpet.h"
+#include "hw/i386/pc.h"
+
+#include "aeolia_pcie_sflash.h"
 
 // MMIO
 #define APCIE_CHIP_ID0 0x1104
 #define APCIE_CHIP_ID1 0x1108
 #define APCIE_CHIP_REV 0x110C
 
-#define HPET_UNK004 0x0004
-#define HPET_UNK010 0x0010
+#define WDT_TIMER0 0x81028
+#define WDT_TIMER1 0x8102C
 
 // Peripherals
-#define HPET_BASE 0x182000
-#define HPET_SIZE 0x1000
+#define AEOLIA_SFLASH_BASE  0xC2000
+#define AEOLIA_SFLASH_SIZE  0x2000
+#define AEOLIA_WDT_BASE     0x81000
+#define AEOLIA_WDT_SIZE     0x1000
+#define AEOLIA_HPET_BASE    0x182000
+#define AEOLIA_HPET_SIZE    0x400
+
+#define RANGE(peripheral) \
+    AEOLIA_##peripheral##_BASE ... AEOLIA_##peripheral##_BASE + AEOLIA_##peripheral##_SIZE
 #define CONTAINS(peripheral, addr) \
-    (peripheral##_BASE <= addr && addr < peripheral##_BASE + peripheral##_SIZE)
+    AEOLIA_##peripheral##_BASE <= addr && \
+    AEOLIA_##peripheral##_BASE + AEOLIA_##peripheral##_SIZE > addr
 
 // Helpers
 #define AEOLIA_PCIE(obj) \
@@ -44,7 +61,12 @@ typedef struct AeoliaPCIEState {
     PCIDevice parent_obj;
     /*< public >*/
     MemoryRegion iomem[3];
+    SysBusDevice* hpet;
 
+    // Peripherals
+    uint32_t sflash_offset;
+    uint32_t sflash_data;
+    uint32_t sflash_unkC3000;
 } AeoliaPCIEState;
 
 /* Aeolia PCIe Unk0 */
@@ -99,31 +121,59 @@ static const MemoryRegionOps aeolia_pcie_1_ops = {
 static uint64_t aeolia_pcie_peripherals_read(
     void *opaque, hwaddr addr, unsigned size)
 {
-    //AeoliaPCIEState *s = opaque;
+    AeoliaPCIEState *s = opaque;
+    uint64_t value = 0;
 
-    if (CONTAINS(HPET, addr)) {
-        addr -= HPET_BASE;
-        printf("aeolia_hpet_read:  { addr: %lX, size: %X }\n", addr, size);
-        switch (addr) {
-        case HPET_UNK004:
-            return 0xFFFFFFFF;
-        case HPET_UNK010:
-            return 0;
-        }
-        return 0;
+    switch (addr) {
+    // HPET
+    case RANGE(HPET):
+        addr -= AEOLIA_HPET_BASE;
+        memory_region_dispatch_read(s->hpet->mmio[0].memory,
+            addr, &value, size, MEMTXATTRS_UNSPECIFIED);
+        break;
+    // Timer/WDT
+    case WDT_TIMER0:
+    case WDT_TIMER1:
+        value = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL); // TODO
+        break;
+    // SFlash
+    case SFLASH_VENDOR:
+        value = SFLASH_VENDOR_MACRONIX;
+        break;
+    case SFLASH_UNKC3000_STATUS:
+        value = s->sflash_unkC3000;
+        break;
+    default:
+        value = 0;
     }
-    else {
-        printf("aeolia_pcie_peripherals_read:  { addr: %lX, size: %X }\n", addr, size);
-        return 0;
-    }
+    printf("aeolia_pcie_peripherals_read:  { addr: %lX, size: %X } => %lX\n", addr, size, value);
+    return value;
 }
 
 static void aeolia_pcie_peripherals_write(
     void *opaque, hwaddr addr, uint64_t value, unsigned size)
 {
-    //AeoliaPCIEState *s = opaque;
+    AeoliaPCIEState *s = opaque;
 
-    printf("aeolia_pcie_peripherals_write: { addr: %lX, size: %X, value: %lX }\n", addr, size, value);
+    switch (addr) {
+    // HPET
+    case RANGE(HPET):
+        addr -= AEOLIA_HPET_BASE;
+        memory_region_dispatch_write(s->hpet->mmio[0].memory,
+            addr, value, size, MEMTXATTRS_UNSPECIFIED);
+    // SFlash
+    case SFLASH_OFFSET:
+        s->sflash_offset = value;
+        break;
+    case SFLASH_DATA:
+        s->sflash_data = value;
+        break;
+    case SFLASH_UNKC3004:
+        s->sflash_unkC3000 = (value & 1) << 2; // TODO
+        break;
+    default:
+        printf("aeolia_pcie_peripherals_write: { addr: %lX, size: %X, value: %lX }\n", addr, size, value);
+    }
 }
 
 static const MemoryRegionOps aeolia_pcie_peripherals_ops = {
@@ -153,6 +203,12 @@ static void aeolia_pcie_realize(PCIDevice *dev, Error **errp)
     pci_register_bar(dev, 0, PCI_BASE_ADDRESS_SPACE_MEMORY, &s->iomem[0]);
     pci_register_bar(dev, 2, PCI_BASE_ADDRESS_SPACE_MEMORY, &s->iomem[1]);
     pci_register_bar(dev, 4, PCI_BASE_ADDRESS_SPACE_MEMORY, &s->iomem[2]);
+
+    // Devices
+    s->hpet = SYS_BUS_DEVICE(qdev_try_create(NULL, TYPE_HPET));
+    qdev_prop_set_uint8(DEVICE(s->hpet), "timers", 4);
+    qdev_prop_set_uint32(DEVICE(s->hpet), HPET_INTCAP, 0x10);
+    qdev_init_nofail(DEVICE(s->hpet));
 }
 
 static void aeolia_pcie_class_init(ObjectClass *klass, void *data)
