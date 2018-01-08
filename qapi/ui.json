@@ -1029,7 +1029,7 @@
 ##
 { 'enum'    : 'DisplayType',
   'data'    : [ 'default', 'none', 'gtk', 'sdl',
-                'egl-headless', 'curses', 'cocoa' ] }
+                'egl-headless', 'curses', 'cocoa', 'orbital' ] }
 
 ##
 # @DisplayOptions:
@@ -1056,4 +1056,5 @@
                 'sdl'            : 'DisplayNoOpts',
                 'egl-headless'   : 'DisplayNoOpts',
                 'curses'         : 'DisplayNoOpts',
-                'cocoa'          : 'DisplayNoOpts' } }
+                'cocoa'          : 'DisplayNoOpts',
+                'orbital'        : 'DisplayNoOpts' } }

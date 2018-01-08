@@ -404,6 +404,7 @@ libusb=""
 usb_redir=""
 opengl=""
 opengl_dmabuf="no"
+vulkan=""
 cpuid_h="no"
 avx2_opt="no"
 zlib="yes"
@@ -1210,6 +1211,10 @@ for opt do
   ;;
   --enable-opengl) opengl="yes"
   ;;
+  --disable-vulkan) vulkan="no"
+  ;;
+  --enable-vulkan) vulkan="yes"
+  ;;
   --disable-rbd) rbd="no"
   ;;
   --enable-rbd) rbd="yes"
@@ -1621,6 +1626,7 @@ disabled with --disable-FEATURE, default is enabled if available:
   replication     replication support
   vhost-vsock     virtio sockets device support
   opengl          opengl support
+  vulkan          vulkan support
   virglrenderer   virgl rendering support
   xfsctl          xfsctl support
   qom-cast-debug  cast debugging support
@@ -3817,6 +3823,27 @@ EOF
 fi
 
 ##########################################
+# vulkan probe (for sdl2)
+
+if test "$vulkan" != "no" ; then
+  vulkan_pkgs="vulkan"
+  if $pkg_config $vulkan_pkgs; then
+    vulkan_cflags="$($pkg_config --cflags $vulkan_pkgs)"
+    # TODO
+    vulkan_libs="-L/mingw64/bin/ -lvulkan-1"
+    vulkan=yes
+    QEMU_CFLAGS="$QEMU_CFLAGS $vulkan_cflags"
+  else
+    if test "$vulkan" = "yes" ; then
+      feature_not_found "vulkan" "Please install vulkan (mesa) devel pkgs: $vulkan_pkgs"
+    fi
+    vulkan_cflags=""
+    vulkan_libs=""
+    vulkan=no
+  fi
+fi
+
+##########################################
 # libxml2 probe
 if test "$libxml2" != "no" ; then
     if $pkg_config --exists libxml-2.0; then
@@ -5827,6 +5854,7 @@ echo "libusb            $libusb"
 echo "usb net redir     $usb_redir"
 echo "OpenGL support    $opengl"
 echo "OpenGL dmabufs    $opengl_dmabuf"
+echo "Vulkan support    $vulkan"
 echo "libiscsi support  $libiscsi"
 echo "libnfs support    $libnfs"
 echo "build guest agent $guest_agent"
@@ -6344,6 +6372,11 @@ if test "$opengl" = "yes" ; then
   if test "$opengl_dmabuf" = "yes" ; then
     echo "CONFIG_OPENGL_DMABUF=y" >> $config_host_mak
   fi
+fi
+
+if test "$vulkan" = "yes" ; then
+  echo "CONFIG_VULKAN=y" >> $config_host_mak
+  echo "VULKAN_LIBS=$vulkan_libs" >> $config_host_mak
 fi
 
 if test "$malloc_trim" = "yes" ; then

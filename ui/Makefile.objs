@@ -7,6 +7,7 @@ vnc-obj-$(CONFIG_VNC_SASL) += vnc-auth-sasl.o
 vnc-obj-y += vnc-ws.o
 vnc-obj-y += vnc-jobs.o
 
+common-obj-y += orbital.o
 common-obj-y += keymaps.o console.o cursor.o qemu-pixman.o
 common-obj-y += input.o input-keymap.o input-legacy.o
 common-obj-$(CONFIG_LINUX) += input-linux.o
@@ -56,9 +57,15 @@ common-obj-$(CONFIG_OPENGL) += console-gl.o
 common-obj-$(CONFIG_OPENGL) += egl-helpers.o
 common-obj-$(CONFIG_OPENGL) += egl-context.o
 common-obj-$(CONFIG_OPENGL_DMABUF) += egl-headless.o
+ifeq ($(CONFIG_VULKAN),y)
+common-obj-y += vk-helpers.o
+endif
 
 shader.o-libs += $(OPENGL_LIBS)
 console-gl.o-libs += $(OPENGL_LIBS)
 egl-helpers.o-libs += $(OPENGL_LIBS)
 egl-context.o-libs += $(OPENGL_LIBS)
 egl-headless.o-libs += $(OPENGL_LIBS)
+ifeq ($(CONFIG_VULKAN),y)
+vk-helpers.o-libs += $(VULKAN_LIBS)
+endif

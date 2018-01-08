@@ -75,6 +75,7 @@ int main(int argc, char **argv)
 #include "net/slirp.h"
 #include "monitor/monitor.h"
 #include "ui/console.h"
+#include "ui/orbital.h"
 #include "ui/input.h"
 #include "sysemu/sysemu.h"
 #include "sysemu/numa.h"
@@ -2198,6 +2199,8 @@ static void parse_display(const char *p)
             }
             opts = nextopt;
         }
+    } else if (strstart(p, "orbital", &opts)) {
+        dpy.type = DISPLAY_TYPE_ORBITAL;
     } else if (strstart(p, "none", &opts)) {
         dpy.type = DISPLAY_TYPE_NONE;
     } else {

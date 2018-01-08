@@ -50,6 +50,7 @@ typedef struct LiverpoolGCState {
     uint32_t mmio[0x10000];
 } LiverpoolGCState;
 
+/* Liverpool GC ??? */
 static uint64_t liverpool_gc_read(void *opaque, hwaddr addr,
                               unsigned size)
 {
