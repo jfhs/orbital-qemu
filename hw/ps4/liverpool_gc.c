@@ -22,6 +22,7 @@
 #include "qemu/osdep.h"
 #include "hw/pci/pci.h"
 #include "liverpool_gc_mmio.h"
+#include "dce/dce_8_0_d.h"
 
 #include "ui/console.h"
 #include "hw/display/vga.h"
@@ -48,6 +49,7 @@ typedef struct LiverpoolGCState {
     MemoryRegion iomem[3];
     VGACommonState vga;
     uint32_t mmio[0x10000];
+    uint32_t samu_ix[SAMU_IX_REG_COUNT__];
 } LiverpoolGCState;
 
 /* Liverpool GC ??? */
@@ -82,6 +84,8 @@ static uint64_t liverpool_gc_mmio_read(
         return MMIO_R(VM_INVALIDATE_REQUEST);
     case RLC_SERDES_CU_MASTER_BUSY:
         return 0;
+    case SAMU_IX_DATA:
+        return s->samu_ix[MMIO_R(SAMU_IX_INDEX)];
     }
 
     printf("liverpool_gc_mmio_read:  { addr: %lX, size: %X }\n", addr, size);
@@ -93,6 +97,12 @@ static void liverpool_gc_mmio_write(
 {
     LiverpoolGCState *s = opaque;
     uint32_t* mmio = s->mmio;
+
+    // Special registers
+    if (addr == SAMU_IX_DATA) {
+        s->samu_ix[MMIO_R(SAMU_IX_INDEX)] = value;
+        return;
+    }
 
     // Large registers
     if (addr == MM_DATA) {

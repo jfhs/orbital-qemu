@@ -37,6 +37,8 @@
 
 #define WDT_TIMER0 0x81028
 #define WDT_TIMER1 0x8102C
+#define WDT_UNK81000 0x81000 // R/W
+#define WDT_UNK81084 0x81084 // R/W
 
 // Peripherals
 #define AEOLIA_SFLASH_BASE  0xC2000
@@ -135,6 +137,7 @@ static uint64_t aeolia_pcie_peripherals_read(
     case WDT_TIMER0:
     case WDT_TIMER1:
         value = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL); // TODO
+        value /= 10000000LL; // TODO: What's the appropiate factor
         break;
     // SFlash
     case SFLASH_VENDOR:

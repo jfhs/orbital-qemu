@@ -121,7 +121,7 @@ static uint64_t uart_read(void *opaque, hwaddr addr,
     addr >>= 2;
     switch (addr) {
     case REG_RXTX:
-        r = getc(stdin);
+        r = 0; // TODO: getc(stdin);
         s->regs[REG_LSR] &= ~LSR_DR;
         uart_update_irq(s);
         break;
