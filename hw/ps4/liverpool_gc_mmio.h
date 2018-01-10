@@ -66,6 +66,9 @@
 #define mmACP_DSP_SW_INTR_CNTL                           0x000051E8
 #define mmACP_DSP_SW_INTR_STAT                           0x000051EB
 
+// ACP unknown regs
+#define mmACP_UNK512F_                                   0x0000512F
+
 /* SAMU */
 
 // SAMU

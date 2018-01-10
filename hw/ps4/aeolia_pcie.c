@@ -40,6 +40,9 @@
 #define WDT_UNK81000 0x81000 // R/W
 #define WDT_UNK81084 0x81084 // R/W
 
+#define ICC_STATUS   0x184814
+#define ICC_DOORBELL 0x184824
+
 // Peripherals
 #define AEOLIA_SFLASH_BASE  0xC2000
 #define AEOLIA_SFLASH_SIZE  0x2000
@@ -69,7 +72,17 @@ typedef struct AeoliaPCIEState {
     uint32_t sflash_offset;
     uint32_t sflash_data;
     uint32_t sflash_unkC3000;
+
+    uint32_t icc_status;
+    char* icc_data;
 } AeoliaPCIEState;
+
+/* helpers */
+void aeolia_pcie_set_icc_data(PCIDevice* dev, char* icc_data)
+{
+    AeoliaPCIEState *s = AEOLIA_PCIE(dev);
+    s->icc_data = icc_data;
+}
 
 /* Aeolia PCIe Unk0 */
 static uint64_t aeolia_pcie_0_read
@@ -120,18 +133,28 @@ static const MemoryRegionOps aeolia_pcie_1_ops = {
 };
 
 /* Aeolia PCIe Peripherals */
+static void icc_doorbell(AeoliaPCIEState *s, int type)
+{
+    if (type != 3) {
+        printf("icc_doorbell with type %d\n", type);
+        return;
+    }
+    stl_le_p(&s->icc_data[0x2C7F4], 1);
+}
+
 static uint64_t aeolia_pcie_peripherals_read(
     void *opaque, hwaddr addr, unsigned size)
 {
     AeoliaPCIEState *s = opaque;
     uint64_t value = 0;
+    uint64_t offset;
 
     switch (addr) {
     // HPET
     case RANGE(HPET):
-        addr -= AEOLIA_HPET_BASE;
+        offset = addr - AEOLIA_HPET_BASE;
         memory_region_dispatch_read(s->hpet->mmio[0].memory,
-            addr, &value, size, MEMTXATTRS_UNSPECIFIED);
+            offset, &value, size, MEMTXATTRS_UNSPECIFIED);
         break;
     // Timer/WDT
     case WDT_TIMER0:
@@ -146,10 +169,13 @@ static uint64_t aeolia_pcie_peripherals_read(
     case SFLASH_UNKC3000_STATUS:
         value = s->sflash_unkC3000;
         break;
+    // ICC
+    case ICC_STATUS:
+        value = s->icc_status;
     default:
+        printf("aeolia_pcie_peripherals_read:  { addr: %lX, size: %X } => %lX\n", addr, size, value);
         value = 0;
     }
-    printf("aeolia_pcie_peripherals_read:  { addr: %lX, size: %X } => %lX\n", addr, size, value);
     return value;
 }
 
@@ -173,6 +199,13 @@ static void aeolia_pcie_peripherals_write(
         break;
     case SFLASH_UNKC3004:
         s->sflash_unkC3000 = (value & 1) << 2; // TODO
+        break;
+    // ICC
+    case ICC_STATUS:
+        value = s->icc_status;
+        break;
+    case ICC_DOORBELL:
+        icc_doorbell(s, value);
         break;
     default:
         printf("aeolia_pcie_peripherals_write: { addr: %lX, size: %X, value: %lX }\n", addr, size, value);

@@ -59,6 +59,86 @@
 /* Hardware initialization */
 #define MAX_SATA_PORTS 6
 
+#define TYPE_PS4_MACHINE MACHINE_TYPE_NAME("ps4")
+
+#define PS4_MACHINE(obj) \
+    OBJECT_CHECK(PS4MachineState, (obj), TYPE_PS4_MACHINE)
+
+typedef struct PS4MachineState {
+    /*< private >*/
+    PCMachineState parent_obj;
+    /*< public >*/
+    PCIBus *pci_bus;
+
+    PCIDevice *aeolia_acpi;
+    PCIDevice *aeolia_gbe;
+    PCIDevice *aeolia_ahci;
+    PCIDevice *aeolia_sdhci;
+    PCIDevice *aeolia_pcie;
+    PCIDevice *aeolia_dmac;
+    PCIDevice *aeolia_mem;
+    PCIDevice *aeolia_xhci;
+} PS4MachineState;
+
+static void ps4_aeolia_init(PS4MachineState* s)
+{
+    PCIBus *bus;
+
+    bus = s->pci_bus;
+    s->aeolia_acpi = pci_create_simple_multifunction(
+        bus, PCI_DEVFN(0x14, 0x00), true, TYPE_AEOLIA_ACPI);
+    s->aeolia_gbe = pci_create_simple_multifunction(
+        bus, PCI_DEVFN(0x14, 0x01), true, TYPE_AEOLIA_GBE);
+    s->aeolia_ahci = pci_create_simple_multifunction(
+        bus, PCI_DEVFN(0x14, 0x02), true, TYPE_AEOLIA_AHCI);
+    s->aeolia_sdhci = pci_create_simple_multifunction(
+        bus, PCI_DEVFN(0x14, 0x03), true, TYPE_AEOLIA_SDHCI);
+    s->aeolia_pcie = pci_create_simple_multifunction(
+        bus, PCI_DEVFN(0x14, 0x04), true, TYPE_AEOLIA_PCIE);
+    s->aeolia_dmac = pci_create_simple_multifunction(
+        bus, PCI_DEVFN(0x14, 0x05), true, TYPE_AEOLIA_DMAC);
+    s->aeolia_mem = pci_create_simple_multifunction(
+        bus, PCI_DEVFN(0x14, 0x06), true, TYPE_AEOLIA_MEM);
+    s->aeolia_xhci = pci_create_simple_multifunction(
+        bus, PCI_DEVFN(0x14, 0x07), true, TYPE_AEOLIA_XHCI);
+
+    char* icc_data = aeolia_mem_get_icc_data(s->aeolia_mem);
+    aeolia_pcie_set_icc_data(s->aeolia_pcie, icc_data);
+}
+
+static void ps4_liverpool_init(PS4MachineState* s)
+{
+    PCIBus *bus;
+
+    bus = s->pci_bus;
+    /*
+    // TODO: Uncommenting this causes trouble
+    pci_create_simple_multifunction(
+        bus, PCI_DEVFN(0x00, 0x00), true, TYPE_LIVERPOOL_ROOTC);
+    pci_create_simple_multifunction(
+        bus, PCI_DEVFN(0x00, 0x02), true, TYPE_LIVERPOOL_IOMMU);
+    */
+    pci_create_simple_multifunction(
+        bus, PCI_DEVFN(0x01, 0x00), true, TYPE_LIVERPOOL_GC);
+    pci_create_simple_multifunction(
+        bus, PCI_DEVFN(0x01, 0x01), true, TYPE_LIVERPOOL_HDAC);
+    pci_create_simple_multifunction(
+        bus, PCI_DEVFN(0x02, 0x00), true, TYPE_LIVERPOOL_ROOTP);
+
+    pci_create_simple_multifunction(
+        bus, PCI_DEVFN(0x18, 0x00), true, TYPE_LIVERPOOL_DEV142E);
+    pci_create_simple_multifunction(
+        bus, PCI_DEVFN(0x18, 0x01), true, TYPE_LIVERPOOL_DEV142F);
+    pci_create_simple_multifunction(
+        bus, PCI_DEVFN(0x18, 0x02), true, TYPE_LIVERPOOL_DEV1430);
+    pci_create_simple_multifunction(
+        bus, PCI_DEVFN(0x18, 0x03), true, TYPE_LIVERPOOL_DEV1431);
+    pci_create_simple_multifunction(
+        bus, PCI_DEVFN(0x18, 0x04), true, TYPE_LIVERPOOL_DEV1432);
+    pci_create_simple_multifunction(
+        bus, PCI_DEVFN(0x18, 0x05), true, TYPE_LIVERPOOL_DEV1433);
+}
+
 /* Calculates initial APIC ID for a specific CPU index
  *
  * Currently we need to be able to calculate the APIC ID from the CPU index
@@ -172,6 +252,7 @@ static void ps4_basic_device_init(ISABus *isa_bus, qemu_irq *gsi,
 static void ps4_init(MachineState *machine)
 {
     MachineClass *mc = MACHINE_GET_CLASS(machine);
+    PS4MachineState *s = PS4_MACHINE(machine);
     PCMachineState *pcms = PC_MACHINE(machine);
     PCMachineClass *pcmc = PC_MACHINE_GET_CLASS(pcms);
     MemoryRegion *system_memory = get_system_memory();
@@ -185,8 +266,8 @@ static void ps4_init(MachineState *machine)
     ICH9LPCState *ich9_lpc;
     qemu_irq *i8259;
     GSIState *gsi_state;
-    DriveInfo *hd[MAX_SATA_PORTS];
     BusState *idebus[MAX_SATA_PORTS];
+    DriveInfo *hd[MAX_SATA_PORTS];
     ISADevice *rtc_state;
     MemoryRegion *ram_memory;
     MemoryRegion *pci_memory;
@@ -266,6 +347,7 @@ static void ps4_init(MachineState *machine)
     qdev_init_nofail(DEVICE(q35_host));
     phb = PCI_HOST_BRIDGE(q35_host);
     pci_bus = phb->bus;
+    s->pci_bus = pci_bus;
 
    /* create ISA bus */
     lpc = pci_create_simple_multifunction(pci_bus, PCI_DEVFN(ICH9_LPC_DEV,
@@ -321,97 +403,15 @@ static void ps4_init(MachineState *machine)
     qdev_init_nofail(dev);
     sysbus_mmio_map_overlap(SYS_BUS_DEVICE(dev), 0, BASE_AEOLIA_UART_0, -1000);
 
-    // Liverpool
-    /*dev = qdev_create(BUS(pci_bus), TYPE_LIVERPOOL_ROOTC);
-    qdev_prop_set_bit(dev, "multifunction", true);
-    qdev_prop_set_int32(dev, "addr", PCI_DEVFN(0, 0));
-    qdev_init_nofail(dev);*/
+    ps4_liverpool_init(s);
+    ps4_aeolia_init(s);
 
-    /*dev = qdev_create(BUS(pci_bus), TYPE_LIVERPOOL_IOMMU);
-    qdev_prop_set_bit(dev, "multifunction", true);
-    qdev_prop_set_int32(dev, "addr", PCI_DEVFN(0, 2));
-    qdev_init_nofail(dev);*/
-
-    pci_create_simple_multifunction(
-        pci_bus, PCI_DEVFN(0x01, 0x00), true, TYPE_LIVERPOOL_GC);
-    pci_create_simple_multifunction(
-        pci_bus, PCI_DEVFN(0x01, 0x01), true, TYPE_LIVERPOOL_HDAC);
-    pci_create_simple_multifunction(
-        pci_bus, PCI_DEVFN(0x02, 0x00), true, TYPE_LIVERPOOL_ROOTP);
-
-    dev = qdev_create(BUS(pci_bus), TYPE_LIVERPOOL_DEV142E);
-    qdev_prop_set_bit(dev, "multifunction", true);
-    qdev_prop_set_int32(dev, "addr", PCI_DEVFN(0x18, 0));
-    qdev_init_nofail(dev);
-
-    dev = qdev_create(BUS(pci_bus), TYPE_LIVERPOOL_DEV142F);
-    qdev_prop_set_bit(dev, "multifunction", true);
-    qdev_prop_set_int32(dev, "addr", PCI_DEVFN(0x18, 1));
-    qdev_init_nofail(dev);
-
-    dev = qdev_create(BUS(pci_bus), TYPE_LIVERPOOL_DEV1430);
-    qdev_prop_set_bit(dev, "multifunction", true);
-    qdev_prop_set_int32(dev, "addr", PCI_DEVFN(0x18, 2));
-    qdev_init_nofail(dev);
-
-    dev = qdev_create(BUS(pci_bus), TYPE_LIVERPOOL_DEV1431);
-    qdev_prop_set_bit(dev, "multifunction", true);
-    qdev_prop_set_int32(dev, "addr", PCI_DEVFN(0x18, 3));
-    qdev_init_nofail(dev);
-
-    dev = qdev_create(BUS(pci_bus), TYPE_LIVERPOOL_DEV1432);
-    qdev_prop_set_bit(dev, "multifunction", true);
-    qdev_prop_set_int32(dev, "addr", PCI_DEVFN(0x18, 4));
-    qdev_init_nofail(dev);
-
-    dev = qdev_create(BUS(pci_bus), TYPE_LIVERPOOL_DEV1433);
-    qdev_prop_set_bit(dev, "multifunction", true);
-    qdev_prop_set_int32(dev, "addr", PCI_DEVFN(0x18, 5));
-    qdev_init_nofail(dev);
-
-    // Aeolia
-    dev = qdev_create(BUS(pci_bus), TYPE_AEOLIA_ACPI);
-    qdev_prop_set_bit(dev, "multifunction", true);
-    qdev_prop_set_int32(dev, "addr", PCI_DEVFN(20, 0));
-    qdev_init_nofail(dev);
-
-    dev = qdev_create(BUS(pci_bus), TYPE_AEOLIA_GBE);
-    qdev_prop_set_bit(dev, "multifunction", true);
-    qdev_prop_set_int32(dev, "addr", PCI_DEVFN(20, 1));
-    qdev_init_nofail(dev);
-
-    ahci = pci_create_simple_multifunction(
-        pci_bus, PCI_DEVFN(0x14, 0x02), true, TYPE_AEOLIA_AHCI);
+    ahci = s->aeolia_ahci;
     idebus[0] = qdev_get_child_bus(&ahci->qdev, "ide.0");
     idebus[1] = qdev_get_child_bus(&ahci->qdev, "ide.1");
     g_assert(MAX_SATA_PORTS == ahci_get_num_ports(ahci));
     ide_drive_get(hd, ahci_get_num_ports(ahci));
     ahci_ide_create_devs(ahci, hd);
-
-    dev = qdev_create(BUS(pci_bus), TYPE_AEOLIA_SDHCI);
-    qdev_prop_set_bit(dev, "multifunction", true);
-    qdev_prop_set_int32(dev, "addr", PCI_DEVFN(20, 3));
-    qdev_init_nofail(dev);
-
-    dev = qdev_create(BUS(pci_bus), TYPE_AEOLIA_PCIE);
-    qdev_prop_set_bit(dev, "multifunction", true);
-    qdev_prop_set_int32(dev, "addr", PCI_DEVFN(20, 4));
-    qdev_init_nofail(dev);
-
-    dev = qdev_create(BUS(pci_bus), TYPE_AEOLIA_DMAC);
-    qdev_prop_set_bit(dev, "multifunction", true);
-    qdev_prop_set_int32(dev, "addr", PCI_DEVFN(20, 5));
-    qdev_init_nofail(dev);
-
-    dev = qdev_create(BUS(pci_bus), TYPE_AEOLIA_MEM);
-    qdev_prop_set_bit(dev, "multifunction", true);
-    qdev_prop_set_int32(dev, "addr", PCI_DEVFN(20, 6));
-    qdev_init_nofail(dev);
-
-    dev = qdev_create(BUS(pci_bus), TYPE_AEOLIA_XHCI);
-    qdev_prop_set_bit(dev, "multifunction", true);
-    qdev_prop_set_int32(dev, "addr", PCI_DEVFN(20, 7));
-    qdev_init_nofail(dev);
 
     pc_cmos_init(pcms, idebus[0], idebus[1], rtc_state);
     pc_pci_device_init(pci_bus);
@@ -438,8 +438,9 @@ static void ps4_class_init(ObjectClass *oc, void *data)
 }
 
 static TypeInfo ps4_type = {
-    .name = MACHINE_TYPE_NAME("ps4"),
+    .name = TYPE_PS4_MACHINE,
     .parent = TYPE_PC_MACHINE,
+    .instance_size = sizeof(PS4MachineState),
     .class_init = ps4_class_init
 };
 

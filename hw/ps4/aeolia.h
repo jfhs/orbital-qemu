@@ -20,6 +20,9 @@
 #ifndef HW_PS4_AEOLIA_H
 #define HW_PS4_AEOLIA_H
 
+// Forward declaration
+typedef struct PCIDevice PCIDevice;
+
 // Aeolia devices
 #define TYPE_AEOLIA_ACPI  "aeolia-acpi"
 #define TYPE_AEOLIA_GBE   "aeolia-gbe"
@@ -36,5 +39,11 @@
 // Memory
 #define BASE_AEOLIA_UART_0 0xD0340000
 #define BASE_AEOLIA_UART_1 0xD0341000
+
+/* aeolia_pcie.h */
+void aeolia_pcie_set_icc_data(PCIDevice* dev, char* icc_data);
+
+/* aeolia_mem.h */
+char* aeolia_mem_get_icc_data(PCIDevice* dev);
 
 #endif /* HW_PS4_AEOLIA_H */

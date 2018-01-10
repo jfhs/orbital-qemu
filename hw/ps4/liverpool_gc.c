@@ -36,6 +36,7 @@
 #define PCIR32(dev, reg) (*(uint32_t*)(&dev->config[reg]))
 #define PCIR64(dev, reg) (*(uint64_t*)(&dev->config[reg]))
 
+#define MMIO(index) (mm##index * 4)
 #define MMIO_R(...) MMIO_READ(mmio, __VA_ARGS__)
 #define MMIO_W(...) MMIO_WRITE(mmio, __VA_ARGS__)
 
@@ -84,6 +85,10 @@ static uint64_t liverpool_gc_mmio_read(
         return MMIO_R(VM_INVALIDATE_REQUEST);
     case RLC_SERDES_CU_MASTER_BUSY:
         return 0;
+    case MMIO(ACP_STATUS):
+        return 1;
+    case MMIO(ACP_UNK512F_):
+        return 0xFFFFFFFF;
     case SAMU_IX_DATA:
         return s->samu_ix[MMIO_R(SAMU_IX_INDEX)];
     }
@@ -109,7 +114,14 @@ static void liverpool_gc_mmio_write(
         addr = MMIO_R(MM_INDEX);
     }
 
-    MMIO_W(addr, value);
+    switch (addr) {
+    case MMIO(ACP_SOFT_RESET):
+        s->mmio[mmACP_SOFT_RESET] = (value << 16);
+        printf("liverpool_gc_mmio_write: { addr: %lX, size: %X, value: %lX } => %X\n", addr, size, value, s->mmio[mmACP_SOFT_RESET]);
+        break;
+    default:
+        MMIO_W(addr, value);
+    }
     printf("liverpool_gc_mmio_write: { addr: %lX, size: %X, value: %lX }\n", addr, size, value);
 }
 
