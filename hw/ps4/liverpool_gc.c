@@ -21,8 +21,8 @@
 #include "liverpool_gc_mmio.h"
 #include "qemu/osdep.h"
 #include "hw/pci/pci.h"
+
 #include "liverpool_gc_mmio.h"
-#include "liverpool/dce/dce_8_0_d.h"
 
 #include "ui/console.h"
 #include "hw/display/vga.h"
@@ -51,6 +51,18 @@ typedef struct LiverpoolGCState {
     VGACommonState vga;
     uint32_t mmio[0x10000];
     uint32_t samu_ix[SAMU_IX_REG_COUNT__];
+
+    /* gfx */
+    uint8_t cp_pfp_ucode[0x8000];
+    uint8_t cp_ce_ucode[0x8000];
+    uint8_t cp_me_ram[0x8000];
+    uint8_t cp_mec_me1_ucode[0x8000];
+    uint8_t cp_mec_me2_ucode[0x8000];
+    uint8_t rlc_gpm_ucode[0x8000];
+
+    /* oss */
+    uint8_t sdma0_ucode[0x8000];
+    uint8_t sdma1_ucode[0x8000];
 } LiverpoolGCState;
 
 /* Liverpool GC ??? */
@@ -74,6 +86,52 @@ static const MemoryRegionOps liverpool_gc_ops = {
 };
 
 /* Liverpool GC MMIO */
+static void liverpool_gc_ucode_load(
+    LiverpoolGCState *s, uint32_t mm_index, uint32_t mm_value)
+{
+    uint32_t offset = s->mmio[mm_index];
+    uint8_t *data;    
+    size_t size;
+
+    switch (mm_index) {
+    case mmCP_PFP_UCODE_ADDR:
+        data = s->cp_pfp_ucode;
+        size = sizeof(s->cp_pfp_ucode);
+        break;
+    case mmCP_CE_UCODE_ADDR:
+        data = s->cp_ce_ucode;
+        size = sizeof(s->cp_ce_ucode);
+        break;
+    case mmCP_MEC_ME1_UCODE_ADDR:
+        data = s->cp_mec_me1_ucode;
+        size = sizeof(s->cp_mec_me1_ucode);
+        break;
+    case mmCP_MEC_ME2_UCODE_ADDR:
+        data = s->cp_mec_me2_ucode;
+        size = sizeof(s->cp_mec_me2_ucode);
+        break;
+    case mmRLC_GPM_UCODE_ADDR:
+        data = s->rlc_gpm_ucode;
+        size = sizeof(s->rlc_gpm_ucode);
+        break;
+    case mmSDMA0_UCODE_ADDR:
+        data = s->sdma0_ucode;
+        size = sizeof(s->sdma0_ucode);
+        break;
+    case mmSDMA1_UCODE_ADDR:
+        data = s->sdma1_ucode;
+        size = sizeof(s->sdma1_ucode);
+        break;
+    default:
+        printf("liverpool_gc_ucode_load: Unknown storage");
+        assert(0);
+    }
+
+    assert(offset < size);
+    stl_le_p(&data[offset], mm_value);
+    s->mmio[mm_index] += 4;
+}
+
 static uint64_t liverpool_gc_mmio_read(
     void *opaque, hwaddr addr, unsigned size)
 {
@@ -81,9 +139,9 @@ static uint64_t liverpool_gc_mmio_read(
     uint32_t* mmio = s->mmio;
 
     switch (addr) {
-    case VM_INVALIDATE_RESPONSE:
-        return MMIO_R(VM_INVALIDATE_REQUEST);
-    case RLC_SERDES_CU_MASTER_BUSY:
+    case MMIO(VM_INVALIDATE_RESPONSE):
+        return mmio[mmVM_INVALIDATE_REQUEST];
+    case MMIO(RLC_SERDES_CU_MASTER_BUSY):
         return 0;
     case MMIO(ACP_STATUS):
         return 1;
@@ -102,6 +160,7 @@ static void liverpool_gc_mmio_write(
 {
     LiverpoolGCState *s = opaque;
     uint32_t* mmio = s->mmio;
+    uint32_t index = addr >> 2;
 
     // Special registers
     if (addr == SAMU_IX_DATA) {
@@ -110,19 +169,48 @@ static void liverpool_gc_mmio_write(
     }
 
     // Large registers
-    if (addr == MM_DATA) {
-        addr = MMIO_R(MM_INDEX);
+    if (addr == MMIO(MM_DATA)) {
+        addr = mmio[mmMM_INDEX];
     }
 
-    switch (addr) {
-    case MMIO(ACP_SOFT_RESET):
-        s->mmio[mmACP_SOFT_RESET] = (value << 16);
-        printf("liverpool_gc_mmio_write: { addr: %lX, size: %X, value: %lX } => %X\n", addr, size, value, s->mmio[mmACP_SOFT_RESET]);
+    switch (index) {
+    case mmACP_SOFT_RESET:
+        mmio[mmACP_SOFT_RESET] = (value << 16);
+        break;
+    /* gfx */
+    case mmCP_PFP_UCODE_DATA:
+        liverpool_gc_ucode_load(s, mmCP_PFP_UCODE_ADDR, value);
+        break;
+    case mmCP_ME_RAM_DATA: {
+        uint32_t offset = mmio[mmCP_ME_RAM_WADDR];
+        assert(offset < sizeof(s->cp_me_ram));
+        stl_le_p(&s->cp_me_ram[offset], value);
+        mmio[mmCP_ME_RAM_WADDR] += 4;
+        break;
+    }
+    case mmCP_CE_UCODE_DATA:
+        liverpool_gc_ucode_load(s, mmCP_CE_UCODE_ADDR, value);
+        break;
+    case mmCP_MEC_ME1_UCODE_DATA:
+        liverpool_gc_ucode_load(s, mmCP_MEC_ME1_UCODE_ADDR, value);
+        break;
+    case mmCP_MEC_ME2_UCODE_DATA:
+        liverpool_gc_ucode_load(s, mmCP_MEC_ME2_UCODE_ADDR, value);
+        break;
+    case mmRLC_GPM_UCODE_DATA:
+        liverpool_gc_ucode_load(s, mmRLC_GPM_UCODE_ADDR, value);
+        break;
+    /* oss */
+    case mmSDMA0_UCODE_DATA:
+        liverpool_gc_ucode_load(s, mmSDMA0_UCODE_ADDR, value);
+        break;
+    case mmSDMA1_UCODE_DATA:
+        liverpool_gc_ucode_load(s, mmSDMA1_UCODE_ADDR, value);
         break;
     default:
+        printf("liverpool_gc_mmio_write: { addr: %lX, size: %X, value: %lX }\n", addr, size, value);
         MMIO_W(addr, value);
     }
-    printf("liverpool_gc_mmio_write: { addr: %lX, size: %X, value: %lX }\n", addr, size, value);
 }
 
 static const MemoryRegionOps liverpool_gc_mmio_ops = {
