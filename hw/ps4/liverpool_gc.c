@@ -22,7 +22,7 @@
 #include "qemu/osdep.h"
 #include "hw/pci/pci.h"
 #include "liverpool_gc_mmio.h"
-#include "dce/dce_8_0_d.h"
+#include "liverpool/dce/dce_8_0_d.h"
 
 #include "ui/console.h"
 #include "hw/display/vga.h"

@@ -126,17 +126,17 @@ static void ps4_liverpool_init(PS4MachineState* s)
         bus, PCI_DEVFN(0x02, 0x00), true, TYPE_LIVERPOOL_ROOTP);
 
     pci_create_simple_multifunction(
-        bus, PCI_DEVFN(0x18, 0x00), true, TYPE_LIVERPOOL_DEV142E);
+        bus, PCI_DEVFN(0x18, 0x00), true, TYPE_LIVERPOOL_FUNC0);
     pci_create_simple_multifunction(
-        bus, PCI_DEVFN(0x18, 0x01), true, TYPE_LIVERPOOL_DEV142F);
+        bus, PCI_DEVFN(0x18, 0x01), true, TYPE_LIVERPOOL_FUNC1);
     pci_create_simple_multifunction(
-        bus, PCI_DEVFN(0x18, 0x02), true, TYPE_LIVERPOOL_DEV1430);
+        bus, PCI_DEVFN(0x18, 0x02), true, TYPE_LIVERPOOL_FUNC2);
     pci_create_simple_multifunction(
-        bus, PCI_DEVFN(0x18, 0x03), true, TYPE_LIVERPOOL_DEV1431);
+        bus, PCI_DEVFN(0x18, 0x03), true, TYPE_LIVERPOOL_FUNC3);
     pci_create_simple_multifunction(
-        bus, PCI_DEVFN(0x18, 0x04), true, TYPE_LIVERPOOL_DEV1432);
+        bus, PCI_DEVFN(0x18, 0x04), true, TYPE_LIVERPOOL_FUNC4);
     pci_create_simple_multifunction(
-        bus, PCI_DEVFN(0x18, 0x05), true, TYPE_LIVERPOOL_DEV1433);
+        bus, PCI_DEVFN(0x18, 0x05), true, TYPE_LIVERPOOL_FUNC5);
 }
 
 /* Calculates initial APIC ID for a specific CPU index
