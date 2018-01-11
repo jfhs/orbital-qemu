@@ -40,8 +40,27 @@
 #define WDT_UNK81000 0x81000 // R/W
 #define WDT_UNK81084 0x81084 // R/W
 
-#define ICC_STATUS   0x184814
-#define ICC_DOORBELL 0x184824
+#define APCIE_ICC_BASE                       0x184000
+#define APCIE_ICC_SIZE                         0x1000
+#define APCIE_ICC_REG(x)        (APCIE_ICC_BASE + (x))
+#define APCIE_ICC_REG_DOORBELL    APCIE_ICC_REG(0x804)
+#define APCIE_ICC_REG_STATUS      APCIE_ICC_REG(0x814)
+#define APCIE_ICC_REG_IRQ_MASK    APCIE_ICC_REG(0x824)
+#define APCIE_ICC_MSG_PENDING                     0x1
+#define APCIE_ICC_IRQ_PENDING                     0x2
+#define APCIE_ICC_REPLY                        0x4000
+#define APCIE_ICC_EVENT                        0x8000
+
+#define ICC_CMD_QUERY_BOARD                      0x02
+#define ICC_CMD_QUERY_BOARD_FLAG_BOARD_ID      0x0005
+#define ICC_CMD_QUERY_BOARD_FLAG_VERSION       0x0006
+#define ICC_CMD_QUERY_NVRAM                      0x03
+#define ICC_CMD_QUERY_NVRAM_FLAG_WRITE         0x0000
+#define ICC_CMD_QUERY_NVRAM_FLAG_READ          0x0001
+#define ICC_CMD_QUERY_BUTTONS                    0x08
+#define ICC_CMD_QUERY_BUTTONS_FLAG_STATE       0x0000
+#define ICC_CMD_QUERY_BUTTONS_FLAG_LIST        0x0001
+#define ICC_CMD_QUERY_SNVRAM_READ                0x8d
 
 // Peripherals
 #define AEOLIA_SFLASH_BASE  0xC2000
@@ -73,6 +92,7 @@ typedef struct AeoliaPCIEState {
     uint32_t sflash_data;
     uint32_t sflash_unkC3000;
 
+    uint32_t icc_doorbell;
     uint32_t icc_status;
     char* icc_data;
 } AeoliaPCIEState;
@@ -133,13 +153,90 @@ static const MemoryRegionOps aeolia_pcie_1_ops = {
 };
 
 /* Aeolia PCIe Peripherals */
-static void icc_doorbell(AeoliaPCIEState *s, int type)
+static void icc_calculate_csum(aeolia_icc_message_hdr* msg)
+{
+    uint8_t *data = (uint8_t*)msg;
+    uint16_t checksum;
+    int i;
+
+    checksum = 0;
+    msg->checksum = 0;
+    for (i = 0; i < 0x7F0; i++) {
+        checksum += data[i];
+    }
+    msg->checksum = checksum;
+}
+
+static void icc_query(AeoliaPCIEState *s)
+{
+    aeolia_icc_message_hdr *query, *reply;
+    query = (aeolia_icc_message_hdr*)&s->icc_data[AMEM_ICC_QUERY];
+    reply = (aeolia_icc_message_hdr*)&s->icc_data[AMEM_ICC_REPLY];
+
+    printf("qemu: ICC: New command\n");
+    if (query->magic != 0x42) {
+        printf("qemu: ICC: Unexpected command: %x\n", query->magic);
+    }
+
+    reply->magic = 0x42;
+    reply->major = query->major;
+    reply->minor = APCIE_ICC_REPLY;
+    reply->reserved = 0;
+    reply->cookie = query->cookie;
+
+    switch (query->minor) {
+#if 0
+    case ICC_CMD_QUERY_BOARD:
+        switch (flags) {
+        case ICC_CMD_QUERY_BOARD_FLAG_BOARD_ID:
+            icc_query_board_id(s, reply);
+            break;
+        case ICC_CMD_QUERY_BOARD_FLAG_VERSION:
+            icc_query_board_version(s, reply);
+            break;
+        default:
+            printf("qemu: ICC: Unknown board query %#x!\n", flags);
+        }
+        break;
+    case ICC_CMD_QUERY_NVRAM:
+        switch (flags) {
+        case ICC_CMD_QUERY_NVRAM_FLAG_READ:
+            icc_query_nvram_read(s, reply);
+            break;
+        default:
+            printf("qemu: ICC: Unknown NVRAM query %#x!\n", flags);
+        }
+        break;
+#endif
+    default:
+        reply->length = sizeof(aeolia_icc_message_hdr);
+        reply->result = 0;
+        printf("qemu: ICC: Unknown query %#x!\n", query->minor);
+    }
+    icc_calculate_csum(reply);
+    s->icc_status |= APCIE_ICC_MSG_PENDING;
+    s->icc_doorbell &= ~APCIE_ICC_MSG_PENDING;
+    //icc_send_irq(s);
+}
+
+static void icc_doorbell(AeoliaPCIEState *s, uint32_t value)
+{
+    s->icc_doorbell |= value;
+    if (s->icc_doorbell & APCIE_ICC_IRQ_PENDING) {
+        s->icc_doorbell &= ~APCIE_ICC_IRQ_PENDING;
+    }
+    if (s->icc_doorbell & APCIE_ICC_MSG_PENDING) {
+        icc_query(s);
+    }
+}
+
+static void icc_irq_mask(AeoliaPCIEState *s, uint32_t type)
 {
     if (type != 3) {
-        printf("icc_doorbell with type %d\n", type);
+        printf("icc_irq_mask with type %d\n", type);
         return;
     }
-    stl_le_p(&s->icc_data[0x2C7F4], 1);
+    stl_le_p(&s->icc_data[AMEM_ICC_QUERY_R], 1);
 }
 
 static uint64_t aeolia_pcie_peripherals_read(
@@ -170,8 +267,12 @@ static uint64_t aeolia_pcie_peripherals_read(
         value = s->sflash_unkC3000;
         break;
     // ICC
-    case ICC_STATUS:
+    case APCIE_ICC_REG_DOORBELL:
+        value = s->icc_doorbell;
+        break;
+    case APCIE_ICC_REG_STATUS:
         value = s->icc_status;
+        break;
     default:
         printf("aeolia_pcie_peripherals_read:  { addr: %lX, size: %X } => %lX\n", addr, size, value);
         value = 0;
@@ -201,11 +302,14 @@ static void aeolia_pcie_peripherals_write(
         s->sflash_unkC3000 = (value & 1) << 2; // TODO
         break;
     // ICC
-    case ICC_STATUS:
-        value = s->icc_status;
-        break;
-    case ICC_DOORBELL:
+    case APCIE_ICC_REG_DOORBELL:
         icc_doorbell(s, value);
+        break;
+    case APCIE_ICC_REG_STATUS:
+        s->icc_status &= value;
+        break;
+    case APCIE_ICC_REG_IRQ_MASK:
+        icc_irq_mask(s, value);
         break;
     default:
         printf("aeolia_pcie_peripherals_write: { addr: %lX, size: %X, value: %lX }\n", addr, size, value);

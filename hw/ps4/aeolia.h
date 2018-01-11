@@ -20,6 +20,8 @@
 #ifndef HW_PS4_AEOLIA_H
 #define HW_PS4_AEOLIA_H
 
+#include "qemu/osdep.h"
+
 // Forward declaration
 typedef struct PCIDevice PCIDevice;
 
@@ -39,6 +41,27 @@ typedef struct PCIDevice PCIDevice;
 // Memory
 #define BASE_AEOLIA_UART_0 0xD0340000
 #define BASE_AEOLIA_UART_1 0xD0341000
+
+// ICC
+#define AMEM_ICC_BASE                    0x2C000
+#define AMEM_ICC_SIZE                     0x1000
+#define AMEM_ICC_QUERY    (AMEM_ICC_BASE + 0x000)
+#define AMEM_ICC_QUERY_W  (AMEM_ICC_BASE + 0x7F0)
+#define AMEM_ICC_QUERY_R  (AMEM_ICC_BASE + 0x7F4)
+#define AMEM_ICC_REPLY    (AMEM_ICC_BASE + 0x800)
+#define AMEM_ICC_REPLY_W  (AMEM_ICC_BASE + 0xFF0)
+#define AMEM_ICC_REPLY_R  (AMEM_ICC_BASE + 0xFF4)
+
+typedef struct aeolia_icc_message_hdr {
+    uint8_t magic;
+    uint8_t major;
+    uint16_t minor;
+    uint16_t reserved;
+    uint16_t cookie;
+    uint16_t length;
+    uint16_t checksum;
+    uint16_t result;
+} QEMU_PACKED aeolia_icc_message_hdr;
 
 /* aeolia_pcie.h */
 void aeolia_pcie_set_icc_data(PCIDevice* dev, char* icc_data);
