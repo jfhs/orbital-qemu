@@ -141,6 +141,8 @@ static uint64_t liverpool_gc_mmio_read(
     switch (addr) {
     case MMIO(VM_INVALIDATE_RESPONSE):
         return mmio[mmVM_INVALIDATE_REQUEST];
+    case MMIO(CP_HQD_ACTIVE):
+        return 0;
     case MMIO(RLC_SERDES_CU_MASTER_BUSY):
         return 0;
     case MMIO(ACP_STATUS):
@@ -201,6 +203,17 @@ static void liverpool_gc_mmio_write(
         liverpool_gc_ucode_load(s, mmRLC_GPM_UCODE_ADDR, value);
         break;
     /* oss */
+    case mmSRBM_GFX_CNTL: {
+#if 0
+        uint32_t me = REG_GET_FIELD(value, SRBM_GFX_CNTL, MEID);
+        uint32_t pipe = REG_GET_FIELD(value, SRBM_GFX_CNTL, PIPEID);
+        uint32_t queue = REG_GET_FIELD(value, SRBM_GFX_CNTL, QUEUEID);
+        uint32_t vmid = REG_GET_FIELD(value, SRBM_GFX_CNTL, VMID);
+        printf("liverpool_gc_mmio_write: mmSRBM_GFX_CNTL { me: %d, pipe: %d, queue: %d, vmid: %d }\n", me, pipe, queue, vmid);
+#endif
+        MMIO_W(addr, value);
+        break;
+    }
     case mmSDMA0_UCODE_DATA:
         liverpool_gc_ucode_load(s, mmSDMA0_UCODE_ADDR, value);
         break;

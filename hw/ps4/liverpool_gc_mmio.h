@@ -22,10 +22,25 @@
 
 #include "macros.h"
 #include "liverpool/bif/bif_4_1_d.h"
+#include "liverpool/bif/bif_4_1_sh_mask.h"
 #include "liverpool/dce/dce_8_0_d.h"
+#include "liverpool/dce/dce_8_0_sh_mask.h"
 #include "liverpool/gca/gfx_7_2_d.h"
+#include "liverpool/gca/gfx_7_2_sh_mask.h"
 #include "liverpool/gmc/gmc_7_1_d.h"
+#include "liverpool/gmc/gmc_7_1_sh_mask.h"
 #include "liverpool/oss/oss_2_0_d.h"
+#include "liverpool/oss/oss_2_0_sh_mask.h"
+
+#define REG_FIELD_SHIFT(reg, field) reg##__##field##__SHIFT
+#define REG_FIELD_MASK(reg, field) reg##__##field##_MASK
+
+#define REG_SET_FIELD(orig_val, reg, field, field_val)  \
+    (((orig_val) & ~REG_FIELD_MASK(reg, field)) |       \
+     (REG_FIELD_MASK(reg, field) & ((field_val) << REG_FIELD_SHIFT(reg, field))))
+
+#define REG_GET_FIELD(value, reg, field)                \
+    (((value) & REG_FIELD_MASK(reg, field)) >> REG_FIELD_SHIFT(reg, field))
 
 /* ACP */
 
