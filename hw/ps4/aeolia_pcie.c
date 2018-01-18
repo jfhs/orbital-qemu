@@ -25,9 +25,9 @@
 #include "qemu/timer.h"
 #include "hw/pci/pci.h"
 #include "hw/sysbus.h"
-#include "hw/timer/hpet.h"
 #include "hw/i386/pc.h"
 
+#include "aeolia/aeolia_hpet.h"
 #include "aeolia_pcie_sflash.h"
 
 // MMIO
@@ -345,7 +345,7 @@ static void aeolia_pcie_realize(PCIDevice *dev, Error **errp)
     pci_register_bar(dev, 4, PCI_BASE_ADDRESS_SPACE_MEMORY, &s->iomem[2]);
 
     // Devices
-    s->hpet = SYS_BUS_DEVICE(qdev_try_create(NULL, TYPE_HPET));
+    s->hpet = SYS_BUS_DEVICE(qdev_try_create(NULL, TYPE_AEOLIA_HPET));
     qdev_prop_set_uint8(DEVICE(s->hpet), "timers", 4);
     qdev_prop_set_uint32(DEVICE(s->hpet), HPET_INTCAP, 0x10);
     qdev_init_nofail(DEVICE(s->hpet));

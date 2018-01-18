@@ -1,0 +1,1 @@
+obj-y += aeolia_hpet.o

@@ -1,3 +1,4 @@
+obj-y += aeolia/
 obj-y += aeolia_acpi.o
 obj-y += aeolia_ahci.o
 obj-y += aeolia_dmac.o

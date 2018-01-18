@@ -18,7 +18,7 @@
 
 #define HPET_BASE               0xfed00000
 #define HPET_LEN                0x400
-#define HPET_CLK_PERIOD         10 /* 10 ns*/
+#define HPET_CLK_PERIOD         100 /* 100 ns*/
 
 #define FS_PER_NS 1000000       /* 1000000 femtoseconds == 1 ns */
 #define HPET_MIN_TIMERS         3
@@ -76,11 +76,11 @@ struct hpet_fw_config
 
 extern struct hpet_fw_config hpet_cfg;
 
-#define TYPE_HPET "hpet"
+#define TYPE_AEOLIA_HPET "aeolia-hpet"
 
 static inline bool hpet_find(void)
 {
-    return object_resolve_path_type("", TYPE_HPET, NULL);
+    return object_resolve_path_type("", TYPE_AEOLIA_HPET, NULL);
 }
 
 #endif

@@ -31,10 +31,10 @@
 #include "qapi/error.h"
 #include "qemu/error-report.h"
 #include "qemu/timer.h"
-#include "hw/timer/hpet.h"
 #include "hw/sysbus.h"
 #include "hw/timer/mc146818rtc.h"
 #include "hw/timer/i8254.h"
+#include "aeolia_hpet.h"
 
 //#define HPET_DEBUG
 #ifdef HPET_DEBUG
@@ -45,13 +45,13 @@
 
 #define HPET_MSI_SUPPORT        0
 
-#define HPET(obj) OBJECT_CHECK(HPETState, (obj), TYPE_HPET)
+#define AEOLIA_HPET(obj) OBJECT_CHECK(AeoliaHPETState, (obj), TYPE_AEOLIA_HPET)
 
-struct HPETState;
+struct AeoliaHPETState;
 typedef struct HPETTimer {  /* timers */
     uint8_t tn;             /*timer number*/
     QEMUTimer *qemu_timer;
-    struct HPETState *state;
+    struct AeoliaHPETState *state;
     /* Memory-mapped, software visible timer registers */
     uint64_t config;        /* configuration/cap */
     uint64_t cmp;           /* comparator */
@@ -63,7 +63,7 @@ typedef struct HPETTimer {  /* timers */
                              */
 } HPETTimer;
 
-typedef struct HPETState {
+typedef struct AeoliaHPETState {
     /*< private >*/
     SysBusDevice parent_obj;
     /*< public >*/
@@ -84,9 +84,9 @@ typedef struct HPETState {
     uint64_t isr;               /* interrupt status reg */
     uint64_t hpet_counter;      /* main counter */
     uint8_t  hpet_id;           /* instance id */
-} HPETState;
+} AeoliaHPETState;
 
-static uint32_t hpet_in_legacy_mode(HPETState *s)
+static uint32_t hpet_in_legacy_mode(AeoliaHPETState *s)
 {
     return s->config & HPET_CFG_LEGACY;
 }
@@ -101,7 +101,7 @@ static uint32_t timer_fsb_route(HPETTimer *t)
     return t->config & HPET_TN_FSB_ENABLE;
 }
 
-static uint32_t hpet_enabled(HPETState *s)
+static uint32_t hpet_enabled(AeoliaHPETState *s)
 {
     return s->config & HPET_CFG_ENABLE;
 }
@@ -153,7 +153,7 @@ static int deactivating_bit(uint64_t old, uint64_t new, uint64_t mask)
     return ((old & mask) && !(new & mask));
 }
 
-static uint64_t hpet_get_ticks(HPETState *s)
+static uint64_t hpet_get_ticks(AeoliaHPETState *s)
 {
     return ns_to_ticks(qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL) + s->hpet_offset);
 }
@@ -184,7 +184,7 @@ static inline uint64_t hpet_calculate_diff(HPETTimer *t, uint64_t current)
 static void update_irq(struct HPETTimer *timer, int set)
 {
     uint64_t mask;
-    HPETState *s;
+    AeoliaHPETState *s;
     int route;
 
     if (timer->tn <= 1 && hpet_in_legacy_mode(timer->state)) {
@@ -218,7 +218,7 @@ static void update_irq(struct HPETTimer *timer, int set)
 
 static void hpet_pre_save(void *opaque)
 {
-    HPETState *s = opaque;
+    AeoliaHPETState *s = opaque;
 
     /* save current counter value */
     s->hpet_counter = hpet_get_ticks(s);
@@ -226,7 +226,7 @@ static void hpet_pre_save(void *opaque)
 
 static int hpet_pre_load(void *opaque)
 {
-    HPETState *s = opaque;
+    AeoliaHPETState *s = opaque;
 
     /* version 1 only supports 3, later versions will load the actual value */
     s->num_timers = HPET_MIN_TIMERS;
@@ -235,7 +235,7 @@ static int hpet_pre_load(void *opaque)
 
 static bool hpet_validate_num_timers(void *opaque, int version_id)
 {
-    HPETState *s = opaque;
+    AeoliaHPETState *s = opaque;
 
     if (s->num_timers < HPET_MIN_TIMERS) {
         return false;
@@ -247,7 +247,7 @@ static bool hpet_validate_num_timers(void *opaque, int version_id)
 
 static int hpet_post_load(void *opaque, int version_id)
 {
-    HPETState *s = opaque;
+    AeoliaHPETState *s = opaque;
 
     /* Recalculate the offset between the main counter and guest time */
     s->hpet_offset = ticks_to_ns(s->hpet_counter) - qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
@@ -267,7 +267,7 @@ static int hpet_post_load(void *opaque, int version_id)
 
 static bool hpet_rtc_irq_level_needed(void *opaque)
 {
-    HPETState *s = opaque;
+    AeoliaHPETState *s = opaque;
 
     return s->rtc_irq_level != 0;
 }
@@ -278,7 +278,7 @@ static const VMStateDescription vmstate_hpet_rtc_irq_level = {
     .minimum_version_id = 1,
     .needed = hpet_rtc_irq_level_needed,
     .fields = (VMStateField[]) {
-        VMSTATE_UINT8(rtc_irq_level, HPETState),
+        VMSTATE_UINT8(rtc_irq_level, AeoliaHPETState),
         VMSTATE_END_OF_LIST()
     }
 };
@@ -307,12 +307,12 @@ static const VMStateDescription vmstate_hpet = {
     .pre_load = hpet_pre_load,
     .post_load = hpet_post_load,
     .fields = (VMStateField[]) {
-        VMSTATE_UINT64(config, HPETState),
-        VMSTATE_UINT64(isr, HPETState),
-        VMSTATE_UINT64(hpet_counter, HPETState),
-        VMSTATE_UINT8_V(num_timers, HPETState, 2),
+        VMSTATE_UINT64(config, AeoliaHPETState),
+        VMSTATE_UINT64(isr, AeoliaHPETState),
+        VMSTATE_UINT64(hpet_counter, AeoliaHPETState),
+        VMSTATE_UINT8_V(num_timers, AeoliaHPETState, 2),
         VMSTATE_VALIDATE("num_timers in range", hpet_validate_num_timers),
-        VMSTATE_STRUCT_VARRAY_UINT8(timer, HPETState, num_timers, 0,
+        VMSTATE_STRUCT_VARRAY_UINT8(timer, AeoliaHPETState, num_timers, 0,
                                     vmstate_hpet_timer, HPETTimer),
         VMSTATE_END_OF_LIST()
     },
@@ -404,7 +404,7 @@ static uint32_t hpet_ram_readw(void *opaque, hwaddr addr)
 static uint64_t hpet_ram_read(void *opaque, hwaddr addr,
                               unsigned size)
 {
-    HPETState *s = opaque;
+    AeoliaHPETState *s = opaque;
     uint64_t cur_tick, index;
 
     DPRINTF("qemu: Enter hpet_ram_readl at %" PRIx64 "\n", addr);
@@ -477,7 +477,7 @@ static void hpet_ram_write(void *opaque, hwaddr addr,
                            uint64_t value, unsigned size)
 {
     int i;
-    HPETState *s = opaque;
+    AeoliaHPETState *s = opaque;
     uint64_t old_val, new_val, val, index;
 
     DPRINTF("qemu: Enter hpet_ram_writel at %" PRIx64 " = %#x\n", addr, value);
@@ -653,7 +653,7 @@ static const MemoryRegionOps hpet_ram_ops = {
 
 static void hpet_reset(DeviceState *d)
 {
-    HPETState *s = HPET(d);
+    AeoliaHPETState *s = AEOLIA_HPET(d);
     SysBusDevice *sbd = SYS_BUS_DEVICE(d);
     int i;
 
@@ -685,7 +685,7 @@ static void hpet_reset(DeviceState *d)
 
 static void hpet_handle_legacy_irq(void *opaque, int n, int level)
 {
-    HPETState *s = HPET(opaque);
+    AeoliaHPETState *s = AEOLIA_HPET(opaque);
 
     if (n == HPET_LEGACY_PIT_INT) {
         if (!hpet_in_legacy_mode(s)) {
@@ -702,7 +702,7 @@ static void hpet_handle_legacy_irq(void *opaque, int n, int level)
 static void hpet_init(Object *obj)
 {
     SysBusDevice *sbd = SYS_BUS_DEVICE(obj);
-    HPETState *s = HPET(obj);
+    AeoliaHPETState *s = AEOLIA_HPET(obj);
 
     /* HPET Area */
     memory_region_init_io(&s->iomem, obj, &hpet_ram_ops, s, "hpet", HPET_LEN);
@@ -712,7 +712,7 @@ static void hpet_init(Object *obj)
 static void hpet_realize(DeviceState *dev, Error **errp)
 {
     SysBusDevice *sbd = SYS_BUS_DEVICE(dev);
-    HPETState *s = HPET(dev);
+    AeoliaHPETState *s = AEOLIA_HPET(dev);
     int i;
     HPETTimer *timer;
 
@@ -757,9 +757,9 @@ static void hpet_realize(DeviceState *dev, Error **errp)
 }
 
 static Property hpet_device_properties[] = {
-    DEFINE_PROP_UINT8("timers", HPETState, num_timers, HPET_MIN_TIMERS),
-    DEFINE_PROP_BIT("msi", HPETState, flags, HPET_MSI_SUPPORT, false),
-    DEFINE_PROP_UINT32(HPET_INTCAP, HPETState, intcap, 0),
+    DEFINE_PROP_UINT8("timers", AeoliaHPETState, num_timers, HPET_MIN_TIMERS),
+    DEFINE_PROP_BIT("msi", AeoliaHPETState, flags, HPET_MSI_SUPPORT, false),
+    DEFINE_PROP_UINT32(HPET_INTCAP, AeoliaHPETState, intcap, 0),
     DEFINE_PROP_END_OF_LIST(),
 };
 
@@ -773,17 +773,17 @@ static void hpet_device_class_init(ObjectClass *klass, void *data)
     dc->props = hpet_device_properties;
 }
 
-static const TypeInfo hpet_device_info = {
-    .name          = TYPE_HPET,
+static const TypeInfo aeolia_hpet_device_info = {
+    .name          = TYPE_AEOLIA_HPET,
     .parent        = TYPE_SYS_BUS_DEVICE,
-    .instance_size = sizeof(HPETState),
+    .instance_size = sizeof(AeoliaHPETState),
     .instance_init = hpet_init,
     .class_init    = hpet_device_class_init,
 };
 
-static void hpet_register_types(void)
+static void aeolia_hpet_register_types(void)
 {
-    type_register_static(&hpet_device_info);
+    type_register_static(&aeolia_hpet_device_info);
 }
 
-type_init(hpet_register_types)
+type_init(aeolia_hpet_register_types)
