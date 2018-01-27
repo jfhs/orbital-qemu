@@ -636,6 +636,15 @@ static uint32_t apic_get_current_count(APICCommonState *s)
 static void apic_timer_update(APICCommonState *s, int64_t current_time)
 {
     if (apic_next_timer(s, current_time)) {
+        /* HACK:
+         * LAPIC timer ticking too fast for Orbis, since bnet_bandwidth_init
+         * schedules the initialization of some structures after a certain
+         * amount of ticks, which at the current pace is not enough to
+         * initialize some data structures, thus causing a NULL dereference.
+         * To prevent this, we add 100 ms between each tick.
+         */
+        s->next_time += 100*1000*1000; /* ns */
+
         timer_mod(s->timer, s->next_time);
     } else {
         timer_del(s->timer);

@@ -70,12 +70,18 @@ static uint64_t aeolia_mem_3_read
     AeoliaMemState *s = AEOLIA_MEM(opaque);
     uint64_t value;
 
-    value = ldl_le_p(&s->data[addr]);
-    /* print any reads except hexdumps in 0x2C000..0x2C020 and 0x2C800..0x2C820 */
-    if (!(size == 1 && (
-        (addr >= 0x2C000 && addr < 0x2C020) ||
-        (addr >= 0x2C800 && addr < 0x2C820)))) {
-        printf("aeolia_mem_3_read:  { addr: %lX, size: %X } => %llX\n", addr, size, value);
+    switch (size) {
+    case 1:
+        value = *(uint8_t*)(&s->data[addr]);
+        break;
+    case 2:
+        value = *(uint16_t*)(&s->data[addr]);
+        break;
+    case 4:
+        value = *(uint32_t*)(&s->data[addr]);
+        break;
+    default:
+        printf("aeolia_mem_3_read: Unexpected size %d\n", size);
     }
     return value;
 }
@@ -85,8 +91,19 @@ static void aeolia_mem_3_write
 {
     AeoliaMemState *s = AEOLIA_MEM(opaque);
 
-    stl_le_p(&s->data[addr], value);
-    printf("aeolia_mem_3_write: { addr: %lX, size: %X, value: %lX }\n", addr, size, value);
+    switch (size) {
+    case 1:
+        stb_p(&s->data[addr], value);
+        break;
+    case 2:
+        stw_le_p(&s->data[addr], value);
+        break;
+    case 4:
+        stl_le_p(&s->data[addr], value);
+        break;
+    default:
+        printf("aeolia_mem_3_write: Unexpected size %d\n", size);
+    }
 }
 
 static const MemoryRegionOps aeolia_mem_3_ops = {
