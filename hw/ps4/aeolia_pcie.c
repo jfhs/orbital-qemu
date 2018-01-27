@@ -23,6 +23,7 @@
 #include "aeolia.h"
 #include "qemu/osdep.h"
 #include "qemu/timer.h"
+#include "hw/pci/msi.h"
 #include "hw/pci/pci.h"
 #include "hw/sysbus.h"
 #include "hw/i386/pc.h"
@@ -31,6 +32,9 @@
 #include "aeolia_pcie_sflash.h"
 
 // MMIO
+#define APCIE_RTC_STATUS              0x100
+#define APCIE_RTC_STATUS__BATTERY_OK  0x100
+#define APCIE_RTC_STATUS__CLOCK_OK      0x4
 #define APCIE_CHIP_ID0 0x1104
 #define APCIE_CHIP_ID1 0x1108
 #define APCIE_CHIP_REV 0x110C
@@ -40,27 +44,41 @@
 #define WDT_UNK81000 0x81000 // R/W
 #define WDT_UNK81084 0x81084 // R/W
 
-#define APCIE_ICC_BASE                       0x184000
-#define APCIE_ICC_SIZE                         0x1000
-#define APCIE_ICC_REG(x)        (APCIE_ICC_BASE + (x))
-#define APCIE_ICC_REG_DOORBELL    APCIE_ICC_REG(0x804)
-#define APCIE_ICC_REG_STATUS      APCIE_ICC_REG(0x814)
-#define APCIE_ICC_REG_IRQ_MASK    APCIE_ICC_REG(0x824)
-#define APCIE_ICC_MSG_PENDING                     0x1
-#define APCIE_ICC_IRQ_PENDING                     0x2
-#define APCIE_ICC_REPLY                        0x4000
-#define APCIE_ICC_EVENT                        0x8000
 
-#define ICC_CMD_QUERY_BOARD                      0x02
-#define ICC_CMD_QUERY_BOARD_FLAG_BOARD_ID      0x0005
-#define ICC_CMD_QUERY_BOARD_FLAG_VERSION       0x0006
-#define ICC_CMD_QUERY_NVRAM                      0x03
-#define ICC_CMD_QUERY_NVRAM_FLAG_WRITE         0x0000
-#define ICC_CMD_QUERY_NVRAM_FLAG_READ          0x0001
-#define ICC_CMD_QUERY_BUTTONS                    0x08
-#define ICC_CMD_QUERY_BUTTONS_FLAG_STATE       0x0000
-#define ICC_CMD_QUERY_BUTTONS_FLAG_LIST        0x0001
-#define ICC_CMD_QUERY_SNVRAM_READ                0x8d
+#define APCIE_ICC_BASE                                    0x184000
+#define APCIE_ICC_SIZE                                      0x1000
+#define APCIE_ICC_REG(x)                     (APCIE_ICC_BASE + (x))
+#define APCIE_ICC_REG_DOORBELL                 APCIE_ICC_REG(0x804)
+#define APCIE_ICC_REG_STATUS                   APCIE_ICC_REG(0x814)
+#define APCIE_ICC_REG_IRQ_MASK                 APCIE_ICC_REG(0x824)
+#define APCIE_ICC_MSG_PENDING                                  0x1
+#define APCIE_ICC_IRQ_PENDING                                  0x2
+#define APCIE_ICC_REPLY                                     0x4000
+#define APCIE_ICC_EVENT                                     0x8000
+
+#define APCIE_PCIE_BASE                                   0x1c8000
+#define APCIE_PCIE_SIZE                                     0x1000
+#define APCIE_PCIE_REG(x)                   (APCIE_PCIE_BASE + (x))
+#define APCIE_PCIE_REG_MSI_FNC4_IRQ_STA       APCIE_PCIE_REG(0x43C)
+#define APCIE_PCIE_REG_UNK49C                 APCIE_PCIE_REG(0x49C)
+#define APCIE_PCIE_REG_UNK4A0                 APCIE_PCIE_REG(0x4A0)
+#define APCIE_PCIE_REG_UNK4BC                 APCIE_PCIE_REG(0x4BC)
+#define APCIE_PCIE_REG_UNK4C0                 APCIE_PCIE_REG(0x4C0)
+#define APCIE_PCIE_REG_UNK54C                 APCIE_PCIE_REG(0x54C)
+#define APCIE_PCIE_REG_UNK554                 APCIE_PCIE_REG(0x554)
+#define APCIE_PCIE_REG_UNK56C                 APCIE_PCIE_REG(0x56C)
+#define APCIE_PCIE_REG_UNK5A4                 APCIE_PCIE_REG(0x5A4)
+
+#define ICC_CMD_QUERY_BOARD                                   0x02
+#define ICC_CMD_QUERY_BOARD_FLAG_BOARD_ID                   0x0005
+#define ICC_CMD_QUERY_BOARD_FLAG_VERSION                    0x0006
+#define ICC_CMD_QUERY_NVRAM                                   0x03
+#define ICC_CMD_QUERY_NVRAM_FLAG_WRITE                      0x0000
+#define ICC_CMD_QUERY_NVRAM_FLAG_READ                       0x0001
+#define ICC_CMD_QUERY_BUTTONS                                 0x08
+#define ICC_CMD_QUERY_BUTTONS_FLAG_STATE                    0x0000
+#define ICC_CMD_QUERY_BUTTONS_FLAG_LIST                     0x0001
+#define ICC_CMD_QUERY_SNVRAM_READ                             0x8d
 
 // Peripherals
 #define AEOLIA_SFLASH_BASE  0xC2000
@@ -95,6 +113,12 @@ typedef struct AeoliaPCIEState {
     uint32_t icc_doorbell;
     uint32_t icc_status;
     char* icc_data;
+
+    uint32_t msi_data_fn4;
+    uint32_t msi_data_fn5;
+    uint32_t msi_addr_fn4;
+    uint32_t msi_addr_fn5;
+    uint32_t msi_data_fn4dev3;
 } AeoliaPCIEState;
 
 /* helpers */
@@ -129,6 +153,9 @@ static uint64_t aeolia_pcie_1_read
     (void *opaque, hwaddr addr, unsigned size)
 {
     switch (addr) {
+    case APCIE_RTC_STATUS:
+        return APCIE_RTC_STATUS__BATTERY_OK |
+               APCIE_RTC_STATUS__CLOCK_OK;
     case APCIE_CHIP_ID0:
         return 0x41B30130;
     case APCIE_CHIP_ID1:
@@ -153,6 +180,16 @@ static const MemoryRegionOps aeolia_pcie_1_ops = {
 };
 
 /* Aeolia PCIe Peripherals */
+
+static void icc_send_irq(AeoliaPCIEState *s)
+{
+    s->icc_status |= APCIE_ICC_IRQ_PENDING;
+
+    /* Trigger MSI */
+    stl_le_phys(&address_space_memory, s->msi_addr_fn4,
+                s->msi_data_fn4 | s->msi_data_fn4dev3);
+}
+
 static void icc_calculate_csum(aeolia_icc_message_hdr* msg)
 {
     uint8_t *data = (uint8_t*)msg;
@@ -165,6 +202,40 @@ static void icc_calculate_csum(aeolia_icc_message_hdr* msg)
         checksum += data[i];
     }
     msg->checksum = checksum;
+}
+
+static void icc_query_board_id(
+    AeoliaPCIEState *s, aeolia_icc_message_hdr* reply)
+{
+}
+
+typedef struct icc_query_board_version_t {
+    /* TODO: These fields are named based on some unreferenced strings.
+             Double-check once you find the corresponding Xref. */
+    uint32_t emc_version_major;
+    uint32_t emc_version_minor;
+    uint32_t emc_version_branch;
+    uint32_t emc_version_revision;
+    uint32_t emc_version_modify;
+    uint32_t emc_version_edition;
+    uint32_t emc_version_sec_dsc;
+    uint32_t emc_version_reserved;
+} icc_query_board_version_t;
+
+static void icc_query_board_version(
+    AeoliaPCIEState *s, aeolia_icc_message_hdr* reply)
+{
+    icc_query_board_version_t* data =
+        ((char*)reply + sizeof(aeolia_icc_message_hdr));
+
+    data->emc_version_major = 0x0002;
+    data->emc_version_minor = 0x0018;
+    data->emc_version_branch = 0x0001;
+    data->emc_version_revision = 0x0000;
+
+    reply->result = 0;
+    reply->length = sizeof(aeolia_icc_message_hdr) +
+                    sizeof(icc_query_board_version_t);
 }
 
 static void icc_query(AeoliaPCIEState *s)
@@ -180,14 +251,13 @@ static void icc_query(AeoliaPCIEState *s)
 
     reply->magic = 0x42;
     reply->major = query->major;
-    reply->minor = APCIE_ICC_REPLY;
+    reply->minor = query->minor | APCIE_ICC_REPLY;
     reply->reserved = 0;
     reply->cookie = query->cookie;
 
-    switch (query->minor) {
-#if 0
+    switch (query->major) {
     case ICC_CMD_QUERY_BOARD:
-        switch (flags) {
+        switch (query->minor) {
         case ICC_CMD_QUERY_BOARD_FLAG_BOARD_ID:
             icc_query_board_id(s, reply);
             break;
@@ -195,28 +265,33 @@ static void icc_query(AeoliaPCIEState *s)
             icc_query_board_version(s, reply);
             break;
         default:
-            printf("qemu: ICC: Unknown board query %#x!\n", flags);
+            printf("qemu: ICC: Unknown board query %#x!\n", query->minor);
         }
         break;
+#if 0
     case ICC_CMD_QUERY_NVRAM:
-        switch (flags) {
+        switch (query->minor) {
         case ICC_CMD_QUERY_NVRAM_FLAG_READ:
             icc_query_nvram_read(s, reply);
             break;
         default:
-            printf("qemu: ICC: Unknown NVRAM query %#x!\n", flags);
+            printf("qemu: ICC: Unknown NVRAM query %#x!\n", query->minor);
         }
         break;
 #endif
     default:
         reply->length = sizeof(aeolia_icc_message_hdr);
         reply->result = 0;
-        printf("qemu: ICC: Unknown query %#x!\n", query->minor);
+        printf("qemu: ICC: Unknown query %#x!\n", query->major);
     }
     icc_calculate_csum(reply);
     s->icc_status |= APCIE_ICC_MSG_PENDING;
     s->icc_doorbell &= ~APCIE_ICC_MSG_PENDING;
-    //icc_send_irq(s);
+    s->icc_data[AMEM_ICC_QUERY_W] = 0;
+    s->icc_data[AMEM_ICC_QUERY_R] = 1;
+    s->icc_data[AMEM_ICC_REPLY_W] = 1;
+    s->icc_data[AMEM_ICC_REPLY_R] = 0;
+    icc_send_irq(s);
 }
 
 static void icc_doorbell(AeoliaPCIEState *s, uint32_t value)
@@ -306,10 +381,20 @@ static void aeolia_pcie_peripherals_write(
         icc_doorbell(s, value);
         break;
     case APCIE_ICC_REG_STATUS:
-        s->icc_status &= value;
+        s->icc_status &= ~value;
         break;
     case APCIE_ICC_REG_IRQ_MASK:
         icc_irq_mask(s, value);
+        break;
+    // PCIE
+    case APCIE_PCIE_REG_UNK49C:
+        s->msi_data_fn4 = value;
+        break;
+    case APCIE_PCIE_REG_UNK4BC:
+        s->msi_addr_fn4 = value;
+        break;
+    case APCIE_PCIE_REG_UNK54C:
+        s->msi_data_fn4dev3 = value;
         break;
     default:
         printf("aeolia_pcie_peripherals_write: { addr: %lX, size: %X, value: %lX }\n", addr, size, value);
@@ -343,6 +428,7 @@ static void aeolia_pcie_realize(PCIDevice *dev, Error **errp)
     pci_register_bar(dev, 0, PCI_BASE_ADDRESS_SPACE_MEMORY, &s->iomem[0]);
     pci_register_bar(dev, 2, PCI_BASE_ADDRESS_SPACE_MEMORY, &s->iomem[1]);
     pci_register_bar(dev, 4, PCI_BASE_ADDRESS_SPACE_MEMORY, &s->iomem[2]);
+    msi_init(dev, 0x50, 1, true, false, errp);
 
     // Devices
     s->hpet = SYS_BUS_DEVICE(qdev_try_create(NULL, TYPE_AEOLIA_HPET));
