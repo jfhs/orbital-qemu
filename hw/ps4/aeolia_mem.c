@@ -133,8 +133,7 @@ static void aeolia_mem_realize(PCIDevice *dev, Error **errp)
         &aeolia_mem_3_ops, s, "aeolia-mem-3", 0x40000);
     
     pci_register_bar(dev, 0, PCI_BASE_ADDRESS_SPACE_MEMORY, &s->iomem[0]);
-    // TODO: Uncommenting this causes Orbis to panic
-    //pci_register_bar(dev, 2, PCI_BASE_ADDRESS_SPACE_MEMORY, &s->iomem[1]);
+    pci_register_bar(dev, 2, PCI_BASE_ADDRESS_SPACE_MEMORY, &s->iomem[1]);
     pci_register_bar(dev, 4, PCI_BASE_ADDRESS_SPACE_MEMORY, &s->iomem[2]);
     pci_register_bar(dev, 5, PCI_BASE_ADDRESS_SPACE_MEMORY, &s->iomem[3]);
 }
