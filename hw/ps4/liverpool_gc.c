@@ -36,9 +36,11 @@
 #define PCIR32(dev, reg) (*(uint32_t*)(&dev->config[reg]))
 #define PCIR64(dev, reg) (*(uint64_t*)(&dev->config[reg]))
 
-#define MMIO(index) (mm##index * 4)
-#define MMIO_R(...) MMIO_READ(mmio, __VA_ARGS__)
-#define MMIO_W(...) MMIO_WRITE(mmio, __VA_ARGS__)
+#if 0 /* DEBUG */
+#define DPRINTF printf
+#else
+#define DPRINTF
+#endif
 
 #define LIVERPOOL_GC(obj) \
     OBJECT_CHECK(LiverpoolGCState, (obj), TYPE_LIVERPOOL_GC)
@@ -50,7 +52,6 @@ typedef struct LiverpoolGCState {
     MemoryRegion iomem[3];
     VGACommonState vga;
     uint32_t mmio[0x10000];
-    uint32_t samu_ix[SAMU_IX_REG_COUNT__];
 
     /* gfx */
     uint8_t cp_pfp_ucode[0x8000];
@@ -63,6 +64,10 @@ typedef struct LiverpoolGCState {
     /* oss */
     uint8_t sdma0_ucode[0x8000];
     uint8_t sdma1_ucode[0x8000];
+
+    /* samu */
+    uint32_t samu_ix[0x80];
+    uint32_t samu_sab_ix[0x40];
 } LiverpoolGCState;
 
 /* Liverpool GC ??? */
@@ -137,24 +142,43 @@ static uint64_t liverpool_gc_mmio_read(
 {
     LiverpoolGCState *s = opaque;
     uint32_t* mmio = s->mmio;
+    uint32_t index = addr >> 2;
+    uint32_t index_ix;
 
-    switch (addr) {
-    case MMIO(VM_INVALIDATE_RESPONSE):
+    switch (index) {
+    case mmVM_INVALIDATE_RESPONSE:
         return mmio[mmVM_INVALIDATE_REQUEST];
-    case MMIO(CP_HQD_ACTIVE):
+    case mmCP_HQD_ACTIVE:
         return 0;
-    case MMIO(RLC_SERDES_CU_MASTER_BUSY):
+    case mmRLC_SERDES_CU_MASTER_BUSY:
         return 0;
-    case MMIO(ACP_STATUS):
+    case mmACP_STATUS:
         return 1;
-    case MMIO(ACP_UNK512F_):
+    case mmACP_UNK512F_:
         return 0xFFFFFFFF;
-    case SAMU_IX_DATA:
-        return s->samu_ix[MMIO_R(SAMU_IX_INDEX)];
+    /* samu */
+    case mmSAM_IX_DATA:
+        index_ix = s->mmio[mmSAM_IX_INDEX];
+        printf("mmSAM_IX_DATA_read { index: %X }\n", index_ix);
+        return s->samu_ix[index_ix];
+    case mmSAM_SAB_IX_DATA:
+        index_ix = s->mmio[mmSAM_SAB_IX_INDEX];
+        printf("mmSAM_SAB_IX_DATA_read { index: %X }\n", index_ix);
+        return s->samu_sab_ix[index_ix];
     }
 
     printf("liverpool_gc_mmio_read:  { addr: %lX, size: %X }\n", addr, size);
-    return MMIO_R(addr);
+    return s->mmio[index];
+}
+
+static void liverpool_gc_samu_doorbell(LiverpoolGCState *s, uint32_t value)
+{
+    uint64_t paddr;
+
+    assert(value == 1);
+    paddr = s->samu_ix[ixSAM_PADDR_HI];
+    paddr = s->samu_ix[ixSAM_PADDR_LO] | (paddr << 32);
+    printf("liverpool_gc_samu_doorbell:  { paddr: %llX }\n", paddr);
 }
 
 static void liverpool_gc_mmio_write(
@@ -163,18 +187,37 @@ static void liverpool_gc_mmio_write(
     LiverpoolGCState *s = opaque;
     uint32_t* mmio = s->mmio;
     uint32_t index = addr >> 2;
+    uint32_t index_ix;
 
-    // Special registers
-    if (addr == SAMU_IX_DATA) {
-        s->samu_ix[MMIO_R(SAMU_IX_INDEX)] = value;
+    // Indirect registers
+    switch (index) {
+    case mmSAM_IX_DATA:
+        switch (s->mmio[mmSAM_IX_INDEX]) {
+        case ixSAM_DOORBELL:
+            liverpool_gc_samu_doorbell(s, value);
+            break;
+        default:
+            index_ix = s->mmio[mmSAM_IX_INDEX];
+            printf("mmSAM_IX_DATA_write { index: %X, value: %X }\n", index_ix, value);
+            s->samu_ix[index_ix] = value;
+        }
+        return;
+
+    case mmSAM_SAB_IX_DATA:
+        switch (s->mmio[mmSAM_SAB_IX_INDEX]) {
+        default:
+            index_ix = s->mmio[mmSAM_SAB_IX_INDEX];
+            printf("mmSAM_SAB_IX_DATA_write { index: %X, value: %X }\n", index_ix, value);
+            s->samu_sab_ix[index_ix] = value;
+        }
+        return;
+
+    case mmMM_DATA:
+        liverpool_gc_mmio_write(s, mmio[mmMM_INDEX], value, size);
         return;
     }
 
-    // Large registers
-    if (addr == MMIO(MM_DATA)) {
-        addr = mmio[mmMM_INDEX];
-    }
-
+    // Direct registers
     switch (index) {
     case mmACP_SOFT_RESET:
         mmio[mmACP_SOFT_RESET] = (value << 16);
@@ -204,14 +247,12 @@ static void liverpool_gc_mmio_write(
         break;
     /* oss */
     case mmSRBM_GFX_CNTL: {
-#if 0
         uint32_t me = REG_GET_FIELD(value, SRBM_GFX_CNTL, MEID);
         uint32_t pipe = REG_GET_FIELD(value, SRBM_GFX_CNTL, PIPEID);
         uint32_t queue = REG_GET_FIELD(value, SRBM_GFX_CNTL, QUEUEID);
         uint32_t vmid = REG_GET_FIELD(value, SRBM_GFX_CNTL, VMID);
-        printf("liverpool_gc_mmio_write: mmSRBM_GFX_CNTL { me: %d, pipe: %d, queue: %d, vmid: %d }\n", me, pipe, queue, vmid);
-#endif
-        MMIO_W(addr, value);
+        DPRINTF("liverpool_gc_mmio_write: mmSRBM_GFX_CNTL { me: %d, pipe: %d, queue: %d, vmid: %d }\n", me, pipe, queue, vmid);
+        s->mmio[index] = value;
         break;
     }
     case mmSDMA0_UCODE_DATA:
@@ -222,7 +263,7 @@ static void liverpool_gc_mmio_write(
         break;
     default:
         printf("liverpool_gc_mmio_write: { addr: %lX, size: %X, value: %lX }\n", addr, size, value);
-        MMIO_W(addr, value);
+        s->mmio[index] = value;
     }
 }
 

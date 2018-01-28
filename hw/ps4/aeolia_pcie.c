@@ -56,7 +56,7 @@
 #define APCIE_ICC_REPLY                                     0x4000
 #define APCIE_ICC_EVENT                                     0x8000
 
-#define APCIE_PCIE_BASE                                   0x1c8000
+#define APCIE_PCIE_BASE                                   0x1C8000
 #define APCIE_PCIE_SIZE                                     0x1000
 #define APCIE_PCIE_REG(x)                   (APCIE_PCIE_BASE + (x))
 #define APCIE_PCIE_REG_MSI_FNC4_IRQ_STA       APCIE_PCIE_REG(0x43C)

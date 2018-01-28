@@ -73,14 +73,23 @@
 /* SAMU */
 
 // SAMU
-#define SAMU_IX_INDEX                                    0x00022000
-#define SAMU_IX_DATA                                     0x00022004
+#define mmSAM_IX_INDEX                                   0x00008800
+#define mmSAM_IX_DATA                                    0x00008801
+#define mmSAM_SAB_IX_INDEX                               0x00008802
+#define mmSAM_SAB_IX_DATA                                0x00008803
 
 // SAMU IX
-#define SAMU_IX_REG_UNK32                                0x0000004A
-#define SAMU_IX_REG_UNK33HI                              0x00000033
-#define SAMU_IX_REG_UNK33LO                              0x00000034
-#define SAMU_IX_REG_BUSY                                 0x0000004A
-#define SAMU_IX_REG_COUNT__                              0x00000080 // TODO
+#define ixSAM_RST_HOST_SOFT_RESET                        0x00000001
+#define ixSAM_CGC_HOST_CTRL                              0x00000003
+#define ixSAM_DOORBELL                                   0x00000032
+#define ixSAM_PADDR_HI                                   0x00000033
+#define ixSAM_PADDR_LO                                   0x00000034
+#define ixSAM_SCRATCH_0                                  0x00000038
+#define ixSAM_BUSY                                       0x0000004A
+#define ixSAM_RST_HOST_SOFT_RST_RDY                      0x00000051
+
+// SAMU SAB IX
+#define ixSAM_SAB_INIT_TLB_CONFIG                        0x00000004
+#define ixSAM_SAB_UNK29                                  0x00000029
 
 #endif /* HW_PS4_LIVERPOOL_GC_MMIO_H */
