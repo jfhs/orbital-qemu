@@ -63,10 +63,10 @@ typedef struct aeolia_icc_message_hdr {
     uint16_t result;
 } QEMU_PACKED aeolia_icc_message_hdr;
 
-/* aeolia_pcie.h */
+/* aeolia_pcie.c */
 void aeolia_pcie_set_icc_data(PCIDevice* dev, char* icc_data);
 
-/* aeolia_mem.h */
+/* aeolia_mem.c */
 char* aeolia_mem_get_icc_data(PCIDevice* dev);
 
 #endif /* HW_PS4_AEOLIA_H */

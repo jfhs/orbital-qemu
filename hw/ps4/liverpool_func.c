@@ -83,7 +83,7 @@ static int liverpool_func5_init(PCIDevice *dev)
 
 /* class initialization */
 static void liverpool_func_class_init(ObjectClass *oc,
-    uint16_t dev_id, char* dev_desc, int (*dev_init)(PCIDevice*))
+    uint16_t dev_id, const char* dev_desc, int (*dev_init)(PCIDevice*))
 {
     DeviceClass *dc = DEVICE_CLASS(oc);
     PCIDeviceClass *pc = PCI_DEVICE_CLASS(oc);

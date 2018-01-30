@@ -42,6 +42,9 @@
 #define DPRINTF
 #endif
 
+// Interrupt handlers
+#define GBASE_IH_SBL_DRIVER 0x98
+
 #define LIVERPOOL_GC(obj) \
     OBJECT_CHECK(LiverpoolGCState, (obj), TYPE_LIVERPOOL_GC)
 
@@ -171,6 +174,14 @@ static uint64_t liverpool_gc_mmio_read(
     return s->mmio[index];
 }
 
+static void liverpool_gc_ih_rb_push(LiverpoolGCState *s, uint32_t value)
+{
+    uint64_t paddr = s->mmio[mmIH_RB_BASE] + s->mmio[mmIH_RB_WPTR];
+    stl_le_phys(&address_space_memory, paddr, value);
+    s->mmio[mmIH_RB_WPTR] += 4;
+    s->mmio[mmIH_RB_WPTR] &= 0x1FFFF; // IH_RB is 0x20000 bytes in size
+}
+
 static void liverpool_gc_samu_doorbell(LiverpoolGCState *s, uint32_t value)
 {
     uint64_t paddr;
@@ -179,6 +190,14 @@ static void liverpool_gc_samu_doorbell(LiverpoolGCState *s, uint32_t value)
     paddr = s->samu_ix[ixSAM_PADDR_HI];
     paddr = s->samu_ix[ixSAM_PADDR_LO] | (paddr << 32);
     printf("liverpool_gc_samu_doorbell:  { paddr: %llX }\n", paddr);
+
+    liverpool_gc_ih_rb_push(s, GBASE_IH_SBL_DRIVER);
+    liverpool_gc_ih_rb_push(s, 0 /* TODO */);
+    liverpool_gc_ih_rb_push(s, 0 /* TODO */);
+    liverpool_gc_ih_rb_push(s, 0 /* TODO */);
+    /* Trigger MSI */
+    // TODO: How does GC know the address (0xFEEFF000) and function (48) to trigger
+    stl_le_phys(&address_space_memory, 0xFEEFF000, 48);
 }
 
 static void liverpool_gc_mmio_write(
@@ -270,6 +289,29 @@ static void liverpool_gc_mmio_write(
 static const MemoryRegionOps liverpool_gc_mmio_ops = {
     .read = liverpool_gc_mmio_read,
     .write = liverpool_gc_mmio_write,
+    .endianness = DEVICE_LITTLE_ENDIAN,
+    .impl = {
+        .min_access_size = 4,
+        .max_access_size = 4,
+    },
+};
+
+static uint64_t liverpool_gc_rom_read
+    (void *opaque, hwaddr addr, unsigned size)
+{
+    printf("liverpool_gc_rom_read:  { addr: %llX, size: %X }\n", addr, size);
+    return 0;
+}
+
+static void liverpool_gc_rom_write
+    (void *opaque, hwaddr addr, uint64_t value, unsigned size)
+{
+    printf("liverpool_gc_rom_write: { addr: %llX, size: %X, value: %llX }\n", addr, size, value);
+}
+
+static const MemoryRegionOps liverpool_gc_rom_ops = {
+    .read = liverpool_gc_rom_read,
+    .write = liverpool_gc_rom_write,
     .endianness = DEVICE_LITTLE_ENDIAN,
 };
 

@@ -208,7 +208,7 @@ static void q35_host_initfn(Object *obj)
     object_initialize(&s->mch, sizeof(s->mch), TYPE_MCH_PCI_DEVICE);
     object_property_add_child(OBJECT(s), "mch", OBJECT(&s->mch), NULL);
     qdev_prop_set_int32(DEVICE(&s->mch), "addr", PCI_DEVFN(0, 0));
-    qdev_prop_set_bit(DEVICE(&s->mch), "multifunction", false);
+    qdev_prop_set_bit(DEVICE(&s->mch), "multifunction", true);
     /* mch's object_initialize resets the default value, set it again */
     qdev_prop_set_uint64(DEVICE(s), PCI_HOST_PROP_PCI_HOLE64_SIZE,
                          Q35_PCI_HOST_HOLE64_SIZE_DEFAULT);

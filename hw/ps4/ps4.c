@@ -70,6 +70,18 @@ typedef struct PS4MachineState {
     /*< public >*/
     PCIBus *pci_bus;
 
+    PCIDevice *liverpool_rootc;
+    PCIDevice *liverpool_iommu;
+    PCIDevice *liverpool_gc;
+    PCIDevice *liverpool_hdac;
+    PCIDevice *liverpool_rootp;
+    PCIDevice *liverpool_func0;
+    PCIDevice *liverpool_func1;
+    PCIDevice *liverpool_func2;
+    PCIDevice *liverpool_func3;
+    PCIDevice *liverpool_func4;
+    PCIDevice *liverpool_func5;
+
     PCIDevice *aeolia_acpi;
     PCIDevice *aeolia_gbe;
     PCIDevice *aeolia_ahci;
@@ -109,33 +121,34 @@ static void ps4_aeolia_init(PS4MachineState* s)
 static void ps4_liverpool_init(PS4MachineState* s)
 {
     PCIBus *bus;
+    DeviceState *dev;
 
     bus = s->pci_bus;
     /*
     // TODO: Uncommenting this causes trouble
     pci_create_simple_multifunction(
-        bus, PCI_DEVFN(0x00, 0x00), true, TYPE_LIVERPOOL_ROOTC);
-    pci_create_simple_multifunction(
-        bus, PCI_DEVFN(0x00, 0x02), true, TYPE_LIVERPOOL_IOMMU);
-    */
-    pci_create_simple_multifunction(
+        bus, PCI_DEVFN(0x00, 0x00), true, TYPE_LIVERPOOL_ROOTC);*/
+    s->liverpool_iommu = pci_create_simple_multifunction(
+        bus, PCI_DEVFN(0x00, 0x02), true, TYPE_LIVERPOOL_IOMMU_PCI);
+
+    s->liverpool_gc = pci_create_simple_multifunction(
         bus, PCI_DEVFN(0x01, 0x00), true, TYPE_LIVERPOOL_GC);
-    pci_create_simple_multifunction(
+    s->liverpool_hdac = pci_create_simple_multifunction(
         bus, PCI_DEVFN(0x01, 0x01), true, TYPE_LIVERPOOL_HDAC);
-    pci_create_simple_multifunction(
+    s->liverpool_rootp = pci_create_simple_multifunction(
         bus, PCI_DEVFN(0x02, 0x00), true, TYPE_LIVERPOOL_ROOTP);
 
-    pci_create_simple_multifunction(
+    s->liverpool_func0 = pci_create_simple_multifunction(
         bus, PCI_DEVFN(0x18, 0x00), true, TYPE_LIVERPOOL_FUNC0);
-    pci_create_simple_multifunction(
+    s->liverpool_func1 = pci_create_simple_multifunction(
         bus, PCI_DEVFN(0x18, 0x01), true, TYPE_LIVERPOOL_FUNC1);
-    pci_create_simple_multifunction(
+    s->liverpool_func2 = pci_create_simple_multifunction(
         bus, PCI_DEVFN(0x18, 0x02), true, TYPE_LIVERPOOL_FUNC2);
-    pci_create_simple_multifunction(
+    s->liverpool_func3 = pci_create_simple_multifunction(
         bus, PCI_DEVFN(0x18, 0x03), true, TYPE_LIVERPOOL_FUNC3);
-    pci_create_simple_multifunction(
+    s->liverpool_func4 = pci_create_simple_multifunction(
         bus, PCI_DEVFN(0x18, 0x04), true, TYPE_LIVERPOOL_FUNC4);
-    pci_create_simple_multifunction(
+    s->liverpool_func5 = pci_create_simple_multifunction(
         bus, PCI_DEVFN(0x18, 0x05), true, TYPE_LIVERPOOL_FUNC5);
 }
 
