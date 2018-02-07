@@ -638,7 +638,7 @@ static void liverpool_iommu_mmio_trace(hwaddr addr, unsigned size)
 static uint64_t liverpool_iommu_mmio_read(void *opaque, hwaddr addr, unsigned size)
 {
     LiverpoolIOMMUState *s = opaque;
-
+    printf("liverpool_iommu_mmio_read:  { addr: %lX, size: %X }\n", addr, size);
     uint64_t val = -1;
     if (addr + size > AMDVI_MMIO_SIZE) {
         //trace_liverpool_iommu_mmio_read_invalid(AMDVI_MMIO_SIZE, addr, size);

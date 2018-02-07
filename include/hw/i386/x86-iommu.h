@@ -39,6 +39,7 @@ typedef struct X86IOMMUClass X86IOMMUClass;
 typedef enum IommuType {
     TYPE_INTEL,
     TYPE_AMD,
+    TYPE_AMD_LIVERPOOL,
     TYPE_NONE
 } IommuType;
 
