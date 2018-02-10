@@ -56,6 +56,8 @@ static int aeolia_acpi_init(PCIDevice *dev)
     AeoliaACPIState *s = AEOLIA_ACPI(dev);
     uint8_t *pci_conf = dev->config;
 
+    // PCI Configuration Space
+    dev->config[PCI_CLASS_PROG] = 0x00;
     pci_set_word(pci_conf + PCI_COMMAND, PCI_COMMAND_IO | PCI_COMMAND_MEMORY |
                  PCI_COMMAND_MASTER | PCI_COMMAND_SPECIAL);
 
@@ -84,9 +86,9 @@ static void aeolia_acpi_class_init(ObjectClass *klass, void *data)
 
     pc->vendor_id = 0x104D;
     pc->device_id = 0x908F;
-    pc->revision = 1;
+    pc->revision = 0;
     pc->is_express = true;
-    pc->class_id = PCI_CLASS_STORAGE_RAID;
+    pc->class_id = PCI_CLASS_SYSTEM_OTHER;
     pc->init = aeolia_acpi_init;
 }
 

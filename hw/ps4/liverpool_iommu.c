@@ -28,6 +28,16 @@
 #define LIVERPOOL_IOMMU_PCI(obj) \
     OBJECT_CHECK(LiverpoolIOMMUPCIState, (obj), TYPE_LIVERPOOL_IOMMU_PCI)
 
+#define DEBUG_IOMMU 0
+
+#define DPRINTF(fmt, ...) \
+do { \
+    if (DEBUG_IOMMU) { \
+        fprintf(stderr, "lvp-iommu (%s:%d): ", __FUNCTION__, __LINE__); \
+        fprintf(stderr, fmt, __VA_ARGS__); \
+    } \
+} while (0)
+
 typedef struct LiverpoolIOMMUState {
     /*< private >*/
     X86IOMMUState parent_obj;
@@ -562,7 +572,7 @@ static void liverpool_iommu_cmdbuf_exec(LiverpoolIOMMUState *s)
 
     if (dma_memory_read(&address_space_memory, s->cmdbuf + s->cmdbuf_head,
         cmd, AMDVI_COMMAND_SIZE)) {
-        //trace_liverpool_iommu_command_read_fail(s->cmdbuf, s->cmdbuf_head);
+        DPRINTF("error: fail to access memory at 0x%"PRIx64" + 0x%"PRIx32"\n", s->cmdbuf, s->cmdbuf_head);
         liverpool_iommu_log_command_error(s, s->cmdbuf + s->cmdbuf_head);
         return;
     }
@@ -1023,8 +1033,9 @@ static void liverpool_iommu_do_translate(AMDVIAddressSpace *as, hwaddr addr,
     uint64_t entry[4];
 
     if (iotlb_entry) {
-        /*trace_liverpool_iommu_iotlb_hit(PCI_BUS_NUM(devid), PCI_SLOT(devid),
-                PCI_FUNC(devid), addr, iotlb_entry->translated_addr);*/
+        DPRINTF("hit iotlb devid %02x:%02x.%x gpa 0x%"PRIx64" hpa 0x%"PRIx64"\n",
+            PCI_BUS_NUM(devid), PCI_SLOT(devid), PCI_FUNC(devid), addr,
+            iotlb_entry->translated_addr);
         ret->iova = addr & ~iotlb_entry->page_mask;
         ret->translated_addr = iotlb_entry->translated_addr;
         ret->addr_mask = iotlb_entry->page_mask;
@@ -1087,12 +1098,12 @@ static IOMMUTLBEntry liverpool_iommu_translate(IOMMUMemoryRegion *iommu, hwaddr 
     }
 
     liverpool_iommu_do_translate(as, addr, flag & IOMMU_WO, &ret);
-    /*trace_liverpool_iommu_translation_result(as->bus_num, PCI_SLOT(as->devfn),
-            PCI_FUNC(as->devfn), addr, ret.translated_addr);*/
+    DPRINTF("devid: %02x:%02x.%x gpa 0x%"PRIx64" hpa 0x%"PRIx64"\n",
+        as->bus_num, PCI_SLOT(as->devfn), PCI_FUNC(as->devfn), addr, ret.translated_addr);
     return ret;
 }
 
-static AddressSpace *liverpool_iommu_host_dma_iommu(PCIBus *bus, void *opaque, int devfn)
+AddressSpace *liverpool_iommu_host_dma_iommu(PCIBus *bus, void *opaque, int devfn)
 {
     LiverpoolIOMMUState *s = opaque;
     AMDVIAddressSpace **iommu_as;
@@ -1115,12 +1126,12 @@ static AddressSpace *liverpool_iommu_host_dma_iommu(PCIBus *bus, void *opaque, i
 
         memory_region_init_iommu(&iommu_as[devfn]->iommu,
                                  sizeof(iommu_as[devfn]->iommu),
-                                 TYPE_AMD_IOMMU_MEMORY_REGION,
+                                 TYPE_LIVERPOOL_IOMMU_MEMORY_REGION,
                                  OBJECT(s),
-                                 "amd-iommu", UINT64_MAX);
+                                 "liverpool-iommu", UINT64_MAX);
         address_space_init(&iommu_as[devfn]->as,
                            MEMORY_REGION(&iommu_as[devfn]->iommu),
-                           "amd-iommu");
+                           "liverpool-iommu");
     }
     return &iommu_as[devfn]->as;
 }
@@ -1291,10 +1302,25 @@ static const TypeInfo liverpool_iommu_pci_info = {
     .class_init    = liverpool_iommu_pci_class_init,
 };
 
+static void liverpool_iommu_memory_region_class_init(ObjectClass *oc, void *data)
+{
+    IOMMUMemoryRegionClass *imrc = IOMMU_MEMORY_REGION_CLASS(oc);
+
+    imrc->translate = liverpool_iommu_translate;
+    imrc->notify_flag_changed = liverpool_iommu_notify_flag_changed;
+}
+
+static const TypeInfo liverpool_iommu_memory_region_info = {
+    .parent = TYPE_IOMMU_MEMORY_REGION,
+    .name = TYPE_LIVERPOOL_IOMMU_MEMORY_REGION,
+    .class_init = liverpool_iommu_memory_region_class_init,
+};
+
 static void liverpool_register_types(void)
 {
     type_register_static(&liverpool_iommu_info);
     type_register_static(&liverpool_iommu_pci_info);
+    type_register_static(&liverpool_iommu_memory_region_info);
 }
 
 type_init(liverpool_register_types)

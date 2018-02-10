@@ -20,6 +20,7 @@
 #include "aeolia.h"
 #include "qemu/osdep.h"
 #include "hw/pci/pci.h"
+#include "hw/pci/msi.h"
 
 // Helpers
 #define AEOLIA_XHCI(obj) \

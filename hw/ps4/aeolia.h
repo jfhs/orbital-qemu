@@ -63,6 +63,9 @@ typedef struct aeolia_icc_message_hdr {
     uint16_t result;
 } QEMU_PACKED aeolia_icc_message_hdr;
 
+/* aeolia_ahci.c */
+void aeolia_ahci_set_address_space(PCIDevice* dev, AddressSpace* as);
+
 /* aeolia_pcie.c */
 void aeolia_pcie_set_icc_data(PCIDevice* dev, char* icc_data);
 

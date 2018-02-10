@@ -45,6 +45,12 @@
 
 typedef struct AHCIPCIState AeoliaAHCIState;
 
+void aeolia_ahci_set_address_space(PCIDevice* dev, AddressSpace* as)
+{
+    AeoliaAHCIState *s = AEOLIA_AHCI(dev);
+    s->ahci.as = as;
+}
+
 static void aeolia_ahci_init(Object *obj)
 {
     AeoliaAHCIState *d = AEOLIA_AHCI(obj);
@@ -63,6 +69,8 @@ static void aeolia_ahci_realize(PCIDevice *dev, Error **errp)
 
     pci_config_set_prog_interface(dev->config, AHCI_PROGMODE_MAJOR_REV_1);
 
+    // TODO: This should be uncommented, but it will break BIOS
+    //dev->config[PCI_CLASS_PROG] = 0x02;
     dev->config[PCI_CACHE_LINE_SIZE] = 0x08;
     dev->config[PCI_LATENCY_TIMER] = 0x00;
     pci_config_set_interrupt_pin(dev->config, 1);
@@ -115,16 +123,16 @@ static void aeolia_ahci_reset(DeviceState *dev)
     ahci_reset(&d->ahci);
 }
 
-static void aeolia_ahci_class_init(ObjectClass *klass, void *data)
+static void aeolia_ahci_class_init(ObjectClass *oc, void *data)
 {
-    DeviceClass *dc = DEVICE_CLASS(klass);
-    PCIDeviceClass *pc = PCI_DEVICE_CLASS(klass);
+    DeviceClass *dc = DEVICE_CLASS(oc);
+    PCIDeviceClass *pc = PCI_DEVICE_CLASS(oc);
 
     pc->vendor_id = 0x104D;
     pc->device_id = 0x909F;
-    pc->revision = 0x01;
+    pc->revision = 0;
     pc->is_express = true;
-    pc->class_id = PCI_CLASS_STORAGE_SATA;
+    pc->class_id = PCI_CLASS_STORAGE_SATA; // TODO: This should be PCI_CLASS_SYSTEM_OTHER, but it will break BIOS
     pc->realize = aeolia_ahci_realize;
     pc->exit = aeolia_ahci_exit;
     dc->reset = aeolia_ahci_reset;

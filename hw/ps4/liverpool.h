@@ -20,10 +20,15 @@
 #ifndef HW_PS4_LIVERPOOL_H
 #define HW_PS4_LIVERPOOL_H
 
+typedef struct AddressSpace AddressSpace;
+typedef struct PCIBus PCIBus;
+
 // Liverpool devices
 #define TYPE_LIVERPOOL_ROOTC        "liverpool-rootc"
 #define TYPE_LIVERPOOL_IOMMU        "liverpool-iommu"
 #define TYPE_LIVERPOOL_IOMMU_PCI    "liverpool-iommu-pci"
+#define TYPE_LIVERPOOL_IOMMU_MEMORY_REGION \
+                                    "liverpool-iommu-mr"
 #define TYPE_LIVERPOOL_GC           "liverpool-gc"
 #define TYPE_LIVERPOOL_HDAC         "liverpool-hdac"
 #define TYPE_LIVERPOOL_ROOTP        "liverpool-rootp"
@@ -39,5 +44,8 @@
 #define BASE_LIVERPOOL_GC_1 0xE4000000
 #define BASE_LIVERPOOL_GC_2 0xE4800000
 #define BASE_LIVERPOOL_HDAC 0xE4840000
+
+/* liverpool_iommu.c */
+AddressSpace *liverpool_iommu_host_dma_iommu(PCIBus *bus, void *opaque, int devfn);
 
 #endif /* HW_PS4_LIVERPOOL_H */

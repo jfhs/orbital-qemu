@@ -25,9 +25,10 @@ typedef struct AeoliaDMACState {
     PCIDevice parent_obj;
 } AeoliaDMACState;
 
-static int aeolia_dmac_init(PCIDevice *dev)
+static void aeolia_dmac_realize(PCIDevice *dev, Error **errp)
 {
-    return 0;
+    // PCI Configuration Space
+    dev->config[PCI_CLASS_PROG] = 0x05;
 }
 
 static void aeolia_dmac_class_init(ObjectClass *klass, void *data)
@@ -36,10 +37,10 @@ static void aeolia_dmac_class_init(ObjectClass *klass, void *data)
 
     pc->vendor_id = 0x104D;
     pc->device_id = 0x90A2;
-    pc->revision = 1;
+    pc->revision = 0;
     pc->is_express = true;
-    pc->class_id = PCI_CLASS_SYSTEM_DMA;
-    pc->init = aeolia_dmac_init;
+    pc->class_id = PCI_CLASS_SYSTEM_OTHER;
+    pc->realize = aeolia_dmac_realize;
 }
 
 static const TypeInfo aeolia_dmac_info = {
