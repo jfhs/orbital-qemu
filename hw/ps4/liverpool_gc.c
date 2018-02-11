@@ -93,6 +93,29 @@ static const MemoryRegionOps liverpool_gc_ops = {
     .endianness = DEVICE_LITTLE_ENDIAN,
 };
 
+/* Liverpool GC Memory */
+
+static uint64_t liverpool_gc_memory_translate(LiverpoolGCState *s, uint64_t addr) {
+    int vmid = 0;
+    uint64_t pde_base, pde_index, pde;
+    uint64_t pte_base, pte_index, pte;
+    uint64_t translated_addr;
+
+    if (vmid < 8) {
+        pde_base = s->mmio[mmVM_CONTEXT0_PAGE_TABLE_BASE_ADDR + (vmid - 0)] << 12;
+    } else {
+		pde_base = s->mmio[mmVM_CONTEXT8_PAGE_TABLE_BASE_ADDR + (vmid - 8)] << 12;
+	}
+
+    pde_index = (addr >> 23) & 0xFFFFF; /* TODO: What's the mask? */
+    pte_index = (addr >> 12) & 0x7FF;
+    pde = ldq_le_phys(&address_space_memory, pde_base + pde_index * 8);
+    pte_base = (pde & ~0xFF);
+    pte = ldq_le_phys(&address_space_memory, pte_base + pte_index * 8);
+    translated_addr = pte & ~0xFFF | addr & 0xFFF;
+    return translated_addr;
+}
+
 /* Liverpool GC MMIO */
 static void liverpool_gc_ucode_load(
     LiverpoolGCState *s, uint32_t mm_index, uint32_t mm_value)
@@ -176,10 +199,16 @@ static uint64_t liverpool_gc_mmio_read(
 
 static void liverpool_gc_ih_rb_push(LiverpoolGCState *s, uint32_t value)
 {
-    uint64_t paddr = s->mmio[mmIH_RB_BASE] + s->mmio[mmIH_RB_WPTR];
-    stl_le_phys(&address_space_memory, paddr, value);
+    // Push value
+    uint64_t addr = ((uint64_t)s->mmio[mmIH_RB_BASE] << 8) + s->mmio[mmIH_RB_WPTR];
+    addr = liverpool_gc_memory_translate(s, addr);
+    stl_le_phys(&address_space_memory, addr, value);
     s->mmio[mmIH_RB_WPTR] += 4;
     s->mmio[mmIH_RB_WPTR] &= 0x1FFFF; // IH_RB is 0x20000 bytes in size
+    // Update WPTR
+    uint64_t wptr_addr = ((uint64_t)s->mmio[mmIH_RB_WPTR_ADDR_HI] << 32) + s->mmio[mmIH_RB_WPTR_ADDR_LO];
+    wptr_addr = liverpool_gc_memory_translate(s, wptr_addr);
+    stl_le_phys(&address_space_memory, wptr_addr, s->mmio[mmIH_RB_WPTR]);
 }
 
 static void liverpool_gc_samu_doorbell(LiverpoolGCState *s, uint32_t value)
@@ -189,15 +218,16 @@ static void liverpool_gc_samu_doorbell(LiverpoolGCState *s, uint32_t value)
     assert(value == 1);
     paddr = s->samu_ix[ixSAM_PADDR_HI];
     paddr = s->samu_ix[ixSAM_PADDR_LO] | (paddr << 32);
-    printf("liverpool_gc_samu_doorbell:  { paddr: %llX }\n", paddr);
+    printf("liverpool_gc_samu_doorbell: { paddr: %llX }\n", paddr);
 
     liverpool_gc_ih_rb_push(s, GBASE_IH_SBL_DRIVER);
     liverpool_gc_ih_rb_push(s, 0 /* TODO */);
     liverpool_gc_ih_rb_push(s, 0 /* TODO */);
     liverpool_gc_ih_rb_push(s, 0 /* TODO */);
+
     /* Trigger MSI */
     // TODO: How does GC know the address (0xFEEFF000) and function (48) to trigger
-    stl_le_phys(&address_space_memory, 0xFEEFF000, 48);
+    stl_le_phys(&address_space_memory, 0xFEEFF000, 49);
 }
 
 static void liverpool_gc_mmio_write(

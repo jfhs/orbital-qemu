@@ -116,8 +116,6 @@ static void ps4_aeolia_init(PS4MachineState* s)
 
     char* icc_data = aeolia_mem_get_icc_data(s->aeolia_mem);
     aeolia_pcie_set_icc_data(s->aeolia_pcie, icc_data);
-    aeolia_ahci_set_address_space(s->aeolia_ahci,
-        pci_device_iommu_address_space(s->aeolia_ahci));
 }
 
 static void ps4_liverpool_init(PS4MachineState* s)

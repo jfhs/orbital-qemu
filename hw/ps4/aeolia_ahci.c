@@ -45,12 +45,6 @@
 
 typedef struct AHCIPCIState AeoliaAHCIState;
 
-void aeolia_ahci_set_address_space(PCIDevice* dev, AddressSpace* as)
-{
-    AeoliaAHCIState *s = AEOLIA_AHCI(dev);
-    s->ahci.as = as;
-}
-
 static void aeolia_ahci_init(Object *obj)
 {
     AeoliaAHCIState *d = AEOLIA_AHCI(obj);
@@ -65,7 +59,7 @@ static void aeolia_ahci_realize(PCIDevice *dev, Error **errp)
     int sata_cap_offset;
     int ret;
 
-    ahci_realize(&d->ahci, DEVICE(dev), pci_get_address_space(dev), 1);
+    ahci_realize(&d->ahci, DEVICE(dev), pci_device_iommu_address_space(dev), 1);
 
     pci_config_set_prog_interface(dev->config, AHCI_PROGMODE_MAJOR_REV_1);
 
