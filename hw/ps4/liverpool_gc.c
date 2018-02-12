@@ -36,11 +36,16 @@
 #define PCIR32(dev, reg) (*(uint32_t*)(&dev->config[reg]))
 #define PCIR64(dev, reg) (*(uint64_t*)(&dev->config[reg]))
 
-#if 0 /* DEBUG */
-#define DPRINTF printf
-#else
-#define DPRINTF
-#endif
+#define DEBUG_GC 0
+
+#define DPRINTF(...) \
+do { \
+    if (DEBUG_GC) { \
+        fprintf(stderr, "lvp-gc (%s:%d): ", __FUNCTION__, __LINE__); \
+        fprintf(stderr, __VA_ARGS__); \
+        fprintf(stderr, "\n"); \
+    } \
+} while (0)
 
 // Interrupt handlers
 #define GBASE_IH_SBL_DRIVER 0x98
@@ -72,6 +77,65 @@ typedef struct LiverpoolGCState {
     uint32_t samu_ix[0x80];
     uint32_t samu_sab_ix[0x40];
 } LiverpoolGCState;
+
+/* SAMU */
+#define SAMU_DOORBELL_FLAG_UNK56  (1ULL << 56)
+
+#define SAMU_CMD_IO_OPEN   2
+#define SAMU_CMD_IO_CLOSE  3
+#define SAMU_CMD_IO_READ   4
+#define SAMU_CMD_IO_WRITE  5
+#define SAMU_CMD_IO_SEEK   6
+#define SAMU_CMD_SPAWN     7
+#define SAMU_CMD_CRYPTO    8
+#define SAMU_CMD_MAILBOX   9
+
+typedef struct samu_command_unk2_t {
+} samu_command_unk2_t;
+
+typedef struct samu_command_unk3_t {
+} samu_command_unk3_t;
+
+typedef struct samu_command_unk4_t {
+} samu_command_unk4_t;
+
+typedef struct samu_command_unk5_t {
+    uint64_t unk_00;
+	uint64_t unk_08;
+    uint32_t unk_10; // always panic if unk_10 == 2
+    uint32_t size;
+} samu_command_unk5_t;
+
+typedef struct samu_command_unk6_t {
+} samu_command_unk6_t;
+
+typedef struct samu_command_spawn_t {
+} samu_command_spawn_t;
+
+typedef struct samu_command_crypto_t {
+} samu_command_crypto_t;
+
+typedef struct samu_command_mailbox_t {
+    uint64_t reqn;
+	uint64_t unk_08; // always zero
+	uint64_t unk_10; // always zero
+	uint64_t module_id;
+} samu_command_mailbox_t;
+
+typedef struct samu_packet_t {
+    uint32_t command;
+    uint32_t padding;
+    union {
+        samu_command_unk2_t io_open;
+        samu_command_unk3_t io_close;
+        samu_command_unk4_t io_read;
+        samu_command_unk5_t io_write;
+        samu_command_unk6_t io_seek;
+        samu_command_spawn_t spawn; // 7?
+        samu_command_crypto_t crypto; // 8?
+        samu_command_mailbox_t mailbox; // 9?
+    } data;
+} samu_packet_t;
 
 /* Liverpool GC ??? */
 static uint64_t liverpool_gc_read(void *opaque, hwaddr addr,
@@ -112,7 +176,7 @@ static uint64_t liverpool_gc_memory_translate(LiverpoolGCState *s, uint64_t addr
     pde = ldq_le_phys(&address_space_memory, pde_base + pde_index * 8);
     pte_base = (pde & ~0xFF);
     pte = ldq_le_phys(&address_space_memory, pte_base + pte_index * 8);
-    translated_addr = pte & ~0xFFF | addr & 0xFFF;
+    translated_addr = (pte & ~0xFFF) | (addr & 0xFFF);
     return translated_addr;
 }
 
@@ -211,22 +275,75 @@ static void liverpool_gc_ih_rb_push(LiverpoolGCState *s, uint32_t value)
     stl_le_phys(&address_space_memory, wptr_addr, s->mmio[mmIH_RB_WPTR]);
 }
 
+static void liverpool_gc_samu_packet_unk56(LiverpoolGCState *s, uint64_t addr)
+{
+    hwaddr len = 0x1000;
+    samu_packet_t* packet;
+    packet = address_space_map(&address_space_memory, addr, &len, true);
+    qemu_hexdump(packet, stdout, "#1#", 0x100);
+    packet->command = SAMU_CMD_IO_WRITE;
+    packet->padding = 0;
+    packet->data.io_write.size = 0x100;
+    qemu_hexdump(packet, stdout, "#2#", 0x100);
+    address_space_unmap(&address_space_memory, packet, addr, len, true);
+}
+
+static void liverpool_gc_samu_packet_crypto(LiverpoolGCState *s,
+    const samu_packet_t* query, samu_packet_t* reply)
+{
+}
+
+static void liverpool_gc_samu_packet(LiverpoolGCState *s, uint64_t addr)
+{
+    hwaddr query_len = 0x1000;
+    hwaddr reply_len = 0x1000;
+    uint64_t query_addr = addr;
+    uint64_t reply_addr = addr - 0x1000;
+    samu_packet_t* query = address_space_map(&address_space_memory, query_addr, &query_len, true);
+    samu_packet_t* reply = address_space_map(&address_space_memory, reply_addr, &reply_len, true);
+
+    qemu_hexdump(query, stdout, "#Q1#", 0x100);
+    qemu_hexdump(reply, stdout, "#R1#", 0x100);
+    reply->command = query->command;
+    reply->padding = 0;
+    switch (query->command) {
+    case SAMU_CMD_CRYPTO:
+        liverpool_gc_samu_packet_crypto(s, query, reply);
+        break;
+    default:
+        printf("Unknown SAMU command %d\n", query->command);
+    }
+    qemu_hexdump(query, stdout, "#Q2#", 0x100);
+    qemu_hexdump(reply, stdout, "#R2#", 0x100);
+    address_space_unmap(&address_space_memory, query, query_addr, query_len, true);
+    address_space_unmap(&address_space_memory, reply, reply_addr, reply_len, true);
+}
+
 static void liverpool_gc_samu_doorbell(LiverpoolGCState *s, uint32_t value)
 {
+    uint64_t packet;
     uint64_t paddr;
 
     assert(value == 1);
-    paddr = s->samu_ix[ixSAM_PADDR_HI];
-    paddr = s->samu_ix[ixSAM_PADDR_LO] | (paddr << 32);
-    printf("liverpool_gc_samu_doorbell: { paddr: %llX }\n", paddr);
+    packet = s->samu_ix[ixSAM_PADDR_HI];
+    packet = s->samu_ix[ixSAM_PADDR_LO] | (packet << 32);
+    paddr = packet & 0xFFFFFFFFFFFFULL;
+    printf("liverpool_gc_samu_doorbell: { flags: %llX, paddr: %llX }\n", packet >> 48, paddr);
+
+    if (packet & SAMU_DOORBELL_FLAG_UNK56) {
+        liverpool_gc_samu_packet_unk56(s, paddr);
+    } else {
+        liverpool_gc_samu_packet(s, paddr);
+    }
 
     liverpool_gc_ih_rb_push(s, GBASE_IH_SBL_DRIVER);
     liverpool_gc_ih_rb_push(s, 0 /* TODO */);
     liverpool_gc_ih_rb_push(s, 0 /* TODO */);
     liverpool_gc_ih_rb_push(s, 0 /* TODO */);
+    s->samu_ix[ixSAM_INTST] |= 1;
 
     /* Trigger MSI */
-    // TODO: How does GC know the address (0xFEEFF000) and function (48) to trigger
+    // TODO: How does GC know the address (0xFEEFF000) and function (49) to trigger
     stl_le_phys(&address_space_memory, 0xFEEFF000, 49);
 }
 
@@ -324,25 +441,6 @@ static const MemoryRegionOps liverpool_gc_mmio_ops = {
         .min_access_size = 4,
         .max_access_size = 4,
     },
-};
-
-static uint64_t liverpool_gc_rom_read
-    (void *opaque, hwaddr addr, unsigned size)
-{
-    printf("liverpool_gc_rom_read:  { addr: %llX, size: %X }\n", addr, size);
-    return 0;
-}
-
-static void liverpool_gc_rom_write
-    (void *opaque, hwaddr addr, uint64_t value, unsigned size)
-{
-    printf("liverpool_gc_rom_write: { addr: %llX, size: %X, value: %llX }\n", addr, size, value);
-}
-
-static const MemoryRegionOps liverpool_gc_rom_ops = {
-    .read = liverpool_gc_rom_read,
-    .write = liverpool_gc_rom_write,
-    .endianness = DEVICE_LITTLE_ENDIAN,
 };
 
 /* Device functions */

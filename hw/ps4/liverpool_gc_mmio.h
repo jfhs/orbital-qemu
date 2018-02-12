@@ -84,8 +84,12 @@
 #define ixSAM_DOORBELL                                   0x00000032
 #define ixSAM_PADDR_HI                                   0x00000033
 #define ixSAM_PADDR_LO                                   0x00000034
+#define ixSAM_UNK35                                      0x00000035
+#define ixSAM_UNK36                                      0x00000036
+#define ixSAM_UNK37                                      0x00000037
 #define ixSAM_SCRATCH_0                                  0x00000038
 #define ixSAM_BUSY                                       0x0000004A
+#define ixSAM_INTST                                      0x0000004B
 #define ixSAM_RST_HOST_SOFT_RST_RDY                      0x00000051
 
 // SAMU SAB IX
