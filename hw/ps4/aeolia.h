@@ -52,7 +52,7 @@ typedef struct PCIDevice PCIDevice;
 #define AMEM_ICC_REPLY_W  (AMEM_ICC_BASE + 0xFF0)
 #define AMEM_ICC_REPLY_R  (AMEM_ICC_BASE + 0xFF4)
 
-typedef struct aeolia_icc_message_hdr {
+typedef struct aeolia_icc_message_t {
     uint8_t magic;
     uint8_t major;
     uint16_t minor;
@@ -61,7 +61,8 @@ typedef struct aeolia_icc_message_hdr {
     uint16_t length;
     uint16_t checksum;
     uint16_t result;
-} QEMU_PACKED aeolia_icc_message_hdr;
+    uint8_t data[0];
+} QEMU_PACKED aeolia_icc_message_t;
 
 /* aeolia_pcie.c */
 void aeolia_pcie_set_icc_data(PCIDevice* dev, char* icc_data);

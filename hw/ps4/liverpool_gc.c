@@ -24,6 +24,7 @@
 
 #include "liverpool_gc_mmio.h"
 #include "liverpool/lvp_gc_samu.h"
+#include "ps4_keys.h"
 
 #include "ui/console.h"
 #include "hw/display/vga.h"
@@ -78,6 +79,7 @@ typedef struct LiverpoolGCState {
     /* samu */
     uint32_t samu_ix[0x80];
     uint32_t samu_sab_ix[0x40];
+    uint8_t samu_slots[SAMU_SLOT_COUNT][SAMU_SLOT_SIZE];
 } LiverpoolGCState;
 
 /* Liverpool GC ??? */
@@ -233,9 +235,77 @@ static void liverpool_gc_samu_packet_spawn(LiverpoolGCState *s,
 {
 }
 
+/* samu ccp */
+static void liverpool_gc_samu_packet_ccp_aes(LiverpoolGCState *s,
+    const samu_command_service_ccp_t* query_ccp, samu_command_service_ccp_t* reply_ccp)
+{
+    uint64_t data_size;
+    uint64_t in_addr, out_addr;
+    uint32_t in_slot, out_slot, key_slot, iv_slot;
+    void    *in_data,*out_data,*key_data,*iv_data;
+
+    data_size = query_ccp->aes.data_size;
+
+    in_addr = query_ccp->aes.in_addr;
+    in_data = address_space_map(&address_space_memory, in_addr, &data_size, true);
+
+    if (query_ccp->opcode & SAMU_CMD_SERVICE_CCP_OP_AES_FLAG_SLOT_OUT) {
+        out_slot = *(uint32_t*)&query_ccp->aes.out_addr;
+        out_data = s->samu_slots[out_slot];
+    } else {
+        out_addr = query_ccp->aes.out_addr;
+        out_data = address_space_map(&address_space_memory, out_addr, &data_size, true);
+    }
+
+    if (query_ccp->opcode & SAMU_CMD_SERVICE_CCP_OP_AES_FLAG_SLOT_KEY) {
+        key_slot = *(uint32_t*)&query_ccp->aes.key;
+        key_data = s->samu_slots[key_slot];
+    } else {
+        key_data = query_ccp->aes.key;
+    }
+
+    // TODO/HACK: We don't have keys, so use hardcoded blobs or copy things around raw
+    if (!memcmp(in_data, "\x78\x7B\x65\x95\x4F\x9F\x89\x59", 8)) {
+        assert(sizeof(SCE_EAP_HDD_KEY) <= data_size);
+        memcpy(out_data, SCE_EAP_HDD_KEY, sizeof(SCE_EAP_HDD_KEY));
+    } else {
+        memcpy(out_data, in_data, data_size);
+    }
+
+    address_space_unmap(&address_space_memory, in_data, in_addr, data_size, true);
+    if (!(query_ccp->opcode & SAMU_CMD_SERVICE_CCP_OP_AES_FLAG_SLOT_OUT)) {
+        address_space_unmap(&address_space_memory, out_data, out_addr, data_size, true);
+    }
+}
+
 static void liverpool_gc_samu_packet_ccp(LiverpoolGCState *s,
     const samu_packet_t* query, samu_packet_t* reply)
 {
+    const
+    samu_command_service_ccp_t *query_ccp = &query->data.service_ccp;
+    samu_command_service_ccp_t *reply_ccp = &reply->data.service_ccp;
+
+    reply_ccp->opcode = query_ccp->opcode;
+    reply_ccp->status = query_ccp->status;
+    switch (query_ccp->opcode >> 24) {
+    case SAMU_CMD_SERVICE_CCP_OP_AES:
+        liverpool_gc_samu_packet_ccp_aes(s, query_ccp, reply_ccp);
+        break;
+    case SAMU_CMD_SERVICE_CCP_OP_AES_INSITU:
+    case SAMU_CMD_SERVICE_CCP_OP_XTS:
+    case SAMU_CMD_SERVICE_CCP_OP_SHA:
+    case SAMU_CMD_SERVICE_CCP_OP_RSA:
+    case SAMU_CMD_SERVICE_CCP_OP_PASS:
+    case SAMU_CMD_SERVICE_CCP_OP_ECC:
+    case SAMU_CMD_SERVICE_CCP_OP_ZLIB:
+    case SAMU_CMD_SERVICE_CCP_OP_TRNG:
+    case SAMU_CMD_SERVICE_CCP_OP_HMAC:
+    case SAMU_CMD_SERVICE_CCP_OP_SNVS:
+        printf("Unimplemented SAMU CCP opcode %d\n", query_ccp->opcode);
+        break;
+    default:
+        printf("Unknown SAMU CCP opcode %d\n", query_ccp->opcode);
+    }
 }
 
 static void liverpool_gc_samu_packet_mailbox(LiverpoolGCState *s,
@@ -264,8 +334,8 @@ static void liverpool_gc_samu_packet(LiverpoolGCState *s, uint64_t addr)
     memset(reply, 0, reply_len);
     reply->command = query->command;
     reply->status = 0;
-    reply->message_id = 0;
-    reply->extended_msgs = 0;
+    reply->message_id = query->message_id;
+    reply->extended_msgs = query->extended_msgs;
 
     switch (query->command) {
     case SAMU_CMD_SERVICE_SPAWN:

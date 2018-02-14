@@ -198,7 +198,7 @@ static void icc_send_irq(AeoliaPCIEState *s)
                 s->msi_data_fn4 | s->msi_data_fn4dev3);
 }
 
-static void icc_calculate_csum(aeolia_icc_message_hdr* msg)
+static void icc_calculate_csum(aeolia_icc_message_t* msg)
 {
     uint8_t *data = (uint8_t*)msg;
     uint16_t checksum;
@@ -213,7 +213,7 @@ static void icc_calculate_csum(aeolia_icc_message_hdr* msg)
 }
 
 static void icc_query_board_id(
-    AeoliaPCIEState *s, aeolia_icc_message_hdr* reply)
+    AeoliaPCIEState *s, aeolia_icc_message_t* reply)
 {
 }
 
@@ -231,10 +231,9 @@ typedef struct icc_query_board_version_t {
 } icc_query_board_version_t;
 
 static void icc_query_board_version(
-    AeoliaPCIEState *s, aeolia_icc_message_hdr* reply)
+    AeoliaPCIEState *s, aeolia_icc_message_t* reply)
 {
-    icc_query_board_version_t* data =
-        ((char*)reply + sizeof(aeolia_icc_message_hdr));
+    icc_query_board_version_t* data = &reply->data;
 
     data->emc_version_major = 0x0002;
     data->emc_version_minor = 0x0018;
@@ -242,15 +241,15 @@ static void icc_query_board_version(
     data->emc_version_revision = 0x0000;
 
     reply->result = 0;
-    reply->length = sizeof(aeolia_icc_message_hdr) +
+    reply->length = sizeof(aeolia_icc_message_t) +
                     sizeof(icc_query_board_version_t);
 }
 
 static void icc_query(AeoliaPCIEState *s)
 {
-    aeolia_icc_message_hdr *query, *reply;
-    query = (aeolia_icc_message_hdr*)&s->icc_data[AMEM_ICC_QUERY];
-    reply = (aeolia_icc_message_hdr*)&s->icc_data[AMEM_ICC_REPLY];
+    aeolia_icc_message_t *query, *reply;
+    query = (aeolia_icc_message_t*)&s->icc_data[AMEM_ICC_QUERY];
+    reply = (aeolia_icc_message_t*)&s->icc_data[AMEM_ICC_REPLY];
 
     printf("qemu: ICC: New command\n");
     if (query->magic != 0x42) {
@@ -263,7 +262,7 @@ static void icc_query(AeoliaPCIEState *s)
     reply->minor = query->minor | APCIE_ICC_REPLY;
     reply->reserved = 0;
     reply->cookie = query->cookie;
-    reply->length = sizeof(aeolia_icc_message_hdr);
+    reply->length = sizeof(aeolia_icc_message_t);
     reply->result = 0;
 
     switch (query->major) {
