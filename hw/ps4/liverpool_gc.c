@@ -278,6 +278,12 @@ static void liverpool_gc_samu_packet_ccp_aes(LiverpoolGCState *s,
     }
 }
 
+static void liverpool_gc_samu_packet_ccp_hmac(LiverpoolGCState *s,
+    const samu_command_service_ccp_t* query_ccp, samu_command_service_ccp_t* reply_ccp)
+{
+
+}
+
 static void liverpool_gc_samu_packet_ccp(LiverpoolGCState *s,
     const samu_packet_t* query, samu_packet_t* reply)
 {
@@ -287,9 +293,13 @@ static void liverpool_gc_samu_packet_ccp(LiverpoolGCState *s,
 
     reply_ccp->opcode = query_ccp->opcode;
     reply_ccp->status = query_ccp->status;
-    switch (query_ccp->opcode >> 24) {
+    uint32_t ccp_op = query_ccp->opcode >> 24;
+    switch (ccp_op) {
     case SAMU_CMD_SERVICE_CCP_OP_AES:
         liverpool_gc_samu_packet_ccp_aes(s, query_ccp, reply_ccp);
+        break;
+    case SAMU_CMD_SERVICE_CCP_OP_HMAC:
+        liverpool_gc_samu_packet_ccp_hmac(s, query_ccp, reply_ccp);
         break;
     case SAMU_CMD_SERVICE_CCP_OP_AES_INSITU:
     case SAMU_CMD_SERVICE_CCP_OP_XTS:
@@ -299,12 +309,11 @@ static void liverpool_gc_samu_packet_ccp(LiverpoolGCState *s,
     case SAMU_CMD_SERVICE_CCP_OP_ECC:
     case SAMU_CMD_SERVICE_CCP_OP_ZLIB:
     case SAMU_CMD_SERVICE_CCP_OP_TRNG:
-    case SAMU_CMD_SERVICE_CCP_OP_HMAC:
     case SAMU_CMD_SERVICE_CCP_OP_SNVS:
-        printf("Unimplemented SAMU CCP opcode %d\n", query_ccp->opcode);
+        printf("Unimplemented SAMU CCP opcode: %d\n", ccp_op);
         break;
     default:
-        printf("Unknown SAMU CCP opcode %d\n", query_ccp->opcode);
+        printf("Unknown SAMU CCP opcode: %d\n", ccp_op);
     }
 }
 
@@ -323,10 +332,11 @@ static void liverpool_gc_samu_packet(LiverpoolGCState *s, uint64_t addr)
     hwaddr query_len = 0x1000;
     hwaddr reply_len = 0x1000;
     uint64_t query_addr = addr;
-    uint64_t reply_addr = addr - 0x1000;
+    uint64_t reply_addr = addr & 0xFFF00000; // TODO: Where does this address come from?
     samu_packet_t* query = address_space_map(&address_space_memory, query_addr, &query_len, true);
     samu_packet_t* reply = address_space_map(&address_space_memory, reply_addr, &reply_len, true);
-
+    printf("query %p\n", query);
+    printf("reply %p\n", reply);
     if (DEBUG_SAMU) {
         printf("SAMU Query:\n");
         qemu_hexdump(query, stdout, "#Q#", 0x100);
@@ -375,6 +385,9 @@ static void liverpool_gc_samu_doorbell(LiverpoolGCState *s, uint32_t value)
 {
     uint64_t packet;
     uint64_t paddr;
+    uint64_t msi_addr;
+    uint32_t msi_data;
+    PCIDevice* dev;
 
     assert(value == 1);
     packet = s->samu_ix[ixSAM_PADDR_HI];
@@ -388,6 +401,11 @@ static void liverpool_gc_samu_doorbell(LiverpoolGCState *s, uint32_t value)
         liverpool_gc_samu_packet(s, paddr);
     }
 
+    uint32_t command = ldl_le_phys(&address_space_memory, paddr);
+    if (command == SAMU_CMD_SERVICE_RAND) {
+        return;
+    }
+
     liverpool_gc_ih_rb_push(s, GBASE_IH_SBL_DRIVER);
     liverpool_gc_ih_rb_push(s, 0 /* TODO */);
     liverpool_gc_ih_rb_push(s, 0 /* TODO */);
@@ -395,8 +413,11 @@ static void liverpool_gc_samu_doorbell(LiverpoolGCState *s, uint32_t value)
     s->samu_ix[ixSAM_INTST] |= 1;
 
     /* Trigger MSI */
-    // TODO: How does GC know the address (0xFEEFF000) and function (49) to trigger
-    stl_le_phys(&address_space_memory, 0xFEEFF000, 49);
+    dev = PCI_DEVICE(s);
+    msi_addr = pci_get_long(&dev->config[dev->msi_cap + PCI_MSI_ADDRESS_HI]);
+    msi_addr = pci_get_long(&dev->config[dev->msi_cap + PCI_MSI_ADDRESS_LO]) | (msi_addr << 32);
+    msi_data = pci_get_long(&dev->config[dev->msi_cap + PCI_MSI_DATA_64]);
+    stl_le_phys(&address_space_memory, msi_addr, msi_data);
 }
 
 static void liverpool_gc_mmio_write(
@@ -503,7 +524,7 @@ static void liverpool_gc_realize(PCIDevice *dev, Error **errp)
     // PCI Configuration Space
     dev->config[PCI_INTERRUPT_LINE] = 0xFF;
     dev->config[PCI_INTERRUPT_PIN] = 0x01;
-    pci_add_capability(dev, PCI_CAP_ID_MSI, 0, PCI_CAP_SIZEOF, errp);
+    msi_init(dev, 0, 1, true, false, errp);
 
     // Memory
     memory_region_init_io(&s->iomem[0], OBJECT(dev),

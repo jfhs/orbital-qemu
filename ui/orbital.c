@@ -28,8 +28,8 @@
 #include "qemu/thread.h"
 #include "qemu/error-report.h"
 
-#include <SDL2/sdl.h>
-#include <SDL2/sdl_vulkan.h>
+#include <SDL2/SDL.h>
+#include <SDL2/SDL_vulkan.h>
 #include <vulkan/vulkan.h>
 
 // Configuration
