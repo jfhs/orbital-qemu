@@ -222,13 +222,14 @@ static void sflash_read(AeoliaPCIEState *s, uint32_t value)
     void *dma_data;
     uint32_t dma_addr = s->sflash_dma_addr;
     uint32_t dma_size = s->sflash_dma_size & ~0x80000000;
+    hwaddr map_size = dma_size;
 
     printf("DMA transfer of %#x bytes from %#x to %x\n",
         dma_size, s->sflash_offset, dma_addr);
-    dma_data = address_space_map(s->iommu_as, dma_addr, &dma_size, true);
+    dma_data = address_space_map(s->iommu_as, dma_addr, &map_size, true);
     fseek(s->sflash, s->sflash_offset, SEEK_SET);
     fread(dma_data, 1, dma_size, s->sflash);
-    address_space_unmap(s->iommu_as, dma_data, dma_addr, dma_size, true);
+    address_space_unmap(s->iommu_as, dma_data, dma_addr, map_size, true);
 }
 
 static void sflash_doorbell(AeoliaPCIEState *s, uint32_t value)

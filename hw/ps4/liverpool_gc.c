@@ -20,6 +20,7 @@
 #include "liverpool.h"
 #include "liverpool_gc_mmio.h"
 #include "qemu/osdep.h"
+#include "hw/pci/msi.h"
 #include "hw/pci/pci.h"
 
 #include "liverpool_gc_mmio.h"
@@ -86,14 +87,14 @@ typedef struct LiverpoolGCState {
 static uint64_t liverpool_gc_read(void *opaque, hwaddr addr,
                               unsigned size)
 {
-    printf("liverpool_gc_read:  { addr: %lX, size: %X }\n", addr, size);
+    printf("liverpool_gc_read:  { addr: %llX, size: %X }\n", addr, size);
     return 0;
 }
 
 static void liverpool_gc_write(void *opaque, hwaddr addr,
                            uint64_t value, unsigned size)
 {
-    printf("liverpool_gc_write: { addr: %lX, size: %X, value: %lX }\n", addr, size, value);
+    printf("liverpool_gc_write: { addr: %llX, size: %X, value: %llX }\n", addr, size, value);
 }
 
 static const MemoryRegionOps liverpool_gc_ops = {
@@ -194,15 +195,15 @@ static uint64_t liverpool_gc_mmio_read(
     /* samu */
     case mmSAM_IX_DATA:
         index_ix = s->mmio[mmSAM_IX_INDEX];
-        printf("mmSAM_IX_DATA_read { index: %X }\n", index_ix);
+        DPRINTF("mmSAM_IX_DATA_read { index: %X }\n", index_ix);
         return s->samu_ix[index_ix];
     case mmSAM_SAB_IX_DATA:
         index_ix = s->mmio[mmSAM_SAB_IX_INDEX];
-        printf("mmSAM_SAB_IX_DATA_read { index: %X }\n", index_ix);
+        DPRINTF("mmSAM_SAB_IX_DATA_read { index: %X }\n", index_ix);
         return s->samu_sab_ix[index_ix];
     }
 
-    DPRINTF("liverpool_gc_mmio_read:  { addr: %lX, size: %X }\n", addr, size);
+    DPRINTF("liverpool_gc_mmio_read:  { addr: %llX, size: %X }\n", addr, size);
     return s->mmio[index];
 }
 
@@ -243,18 +244,19 @@ static void liverpool_gc_samu_packet_ccp_aes(LiverpoolGCState *s,
     uint64_t in_addr, out_addr;
     uint32_t in_slot, out_slot, key_slot, iv_slot;
     void    *in_data,*out_data,*key_data,*iv_data;
+    hwaddr   in_size, out_size, key_size, iv_size;
 
     data_size = query_ccp->aes.data_size;
 
     in_addr = query_ccp->aes.in_addr;
-    in_data = address_space_map(&address_space_memory, in_addr, &data_size, true);
+    in_data = address_space_map(&address_space_memory, in_addr, &in_size, true);
 
     if (query_ccp->opcode & SAMU_CMD_SERVICE_CCP_OP_AES_FLAG_SLOT_OUT) {
         out_slot = *(uint32_t*)&query_ccp->aes.out_addr;
         out_data = s->samu_slots[out_slot];
     } else {
         out_addr = query_ccp->aes.out_addr;
-        out_data = address_space_map(&address_space_memory, out_addr, &data_size, true);
+        out_data = address_space_map(&address_space_memory, out_addr, &out_size, true);
     }
 
     if (query_ccp->opcode & SAMU_CMD_SERVICE_CCP_OP_AES_FLAG_SLOT_KEY) {
@@ -272,9 +274,9 @@ static void liverpool_gc_samu_packet_ccp_aes(LiverpoolGCState *s,
         memcpy(out_data, in_data, data_size);
     }
 
-    address_space_unmap(&address_space_memory, in_data, in_addr, data_size, true);
+    address_space_unmap(&address_space_memory, in_data, in_addr, in_size, true);
     if (!(query_ccp->opcode & SAMU_CMD_SERVICE_CCP_OP_AES_FLAG_SLOT_OUT)) {
-        address_space_unmap(&address_space_memory, out_data, out_addr, data_size, true);
+        address_space_unmap(&address_space_memory, out_data, out_addr, out_size, true);
     }
 }
 
@@ -329,19 +331,22 @@ static void liverpool_gc_samu_packet_rand(LiverpoolGCState *s,
 
 static void liverpool_gc_samu_packet(LiverpoolGCState *s, uint64_t addr)
 {
-    hwaddr query_len = 0x1000;
-    hwaddr reply_len = 0x1000;
+    uint64_t packet_length = 0x1000;
     uint64_t query_addr = addr;
     uint64_t reply_addr = addr & 0xFFF00000; // TODO: Where does this address come from?
-    samu_packet_t* query = address_space_map(&address_space_memory, query_addr, &query_len, true);
-    samu_packet_t* reply = address_space_map(&address_space_memory, reply_addr, &reply_len, true);
-    printf("query %p\n", query);
-    printf("reply %p\n", reply);
+    samu_packet_t *query, *reply;
+    hwaddr query_len = packet_length;
+    hwaddr reply_len = packet_length;
+
+    query = (samu_packet_t*)address_space_map(
+        &address_space_memory, query_addr, &query_len, true);
+    reply = (samu_packet_t*)address_space_map(
+        &address_space_memory, reply_addr, &reply_len, true);
     if (DEBUG_SAMU) {
         printf("SAMU Query:\n");
         qemu_hexdump(query, stdout, "#Q#", 0x100);
     }
-    memset(reply, 0, reply_len);
+    memset(reply, 0, packet_length);
     reply->command = query->command;
     reply->status = 0;
     reply->message_id = query->message_id;
@@ -370,14 +375,15 @@ static void liverpool_gc_samu_packet(LiverpoolGCState *s, uint64_t addr)
 static void liverpool_gc_samu_init(LiverpoolGCState *s, uint64_t addr)
 {
     hwaddr length;
-    samu_packet_t* packet;
-    const char* build_str =
+    samu_packet_t *packet;
+    const char *secure_kernel_build =
         "secure kernel build: Sep 26 2017 ??:??:?? (r8963:release_branches/release_05.000)\n";
 
     length = 0x1000;
     packet = address_space_map(&address_space_memory, addr, &length, true);
     memset(packet, 0, length);
-    liverpool_gc_samu_packet_io_write(s, packet, SAMU_CMD_IO_WRITE_FD_STDOUT, build_str, strlen(build_str));
+    liverpool_gc_samu_packet_io_write(s, packet, SAMU_CMD_IO_WRITE_FD_STDOUT,
+        (char*)secure_kernel_build, strlen(secure_kernel_build));
     address_space_unmap(&address_space_memory, packet, addr, length, true);
 }
 
@@ -437,7 +443,7 @@ static void liverpool_gc_mmio_write(
             break;
         default:
             index_ix = s->mmio[mmSAM_IX_INDEX];
-            printf("mmSAM_IX_DATA_write { index: %X, value: %X }\n", index_ix, value);
+            DPRINTF("mmSAM_IX_DATA_write { index: %X, value: %llX }\n", index_ix, value);
             s->samu_ix[index_ix] = value;
         }
         return;
@@ -446,7 +452,7 @@ static void liverpool_gc_mmio_write(
         switch (s->mmio[mmSAM_SAB_IX_INDEX]) {
         default:
             index_ix = s->mmio[mmSAM_SAB_IX_INDEX];
-            printf("mmSAM_SAB_IX_DATA_write { index: %X, value: %X }\n", index_ix, value);
+            DPRINTF("mmSAM_SAB_IX_DATA_write { index: %X, value: %llX }\n", index_ix, value);
             s->samu_sab_ix[index_ix] = value;
         }
         return;
@@ -501,7 +507,7 @@ static void liverpool_gc_mmio_write(
         liverpool_gc_ucode_load(s, mmSDMA1_UCODE_ADDR, value);
         break;
     default:
-        DPRINTF("liverpool_gc_mmio_write: { addr: %lX, size: %X, value: %lX }\n", addr, size, value);
+        DPRINTF("liverpool_gc_mmio_write: { addr: %llX, size: %X, value: %llX }\n", addr, size, value);
         s->mmio[index] = value;
     }
 }
