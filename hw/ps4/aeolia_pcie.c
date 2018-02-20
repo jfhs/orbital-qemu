@@ -29,21 +29,22 @@
 #include "hw/i386/pc.h"
 
 #include "aeolia/aeolia_hpet.h"
-#include "aeolia_pcie_sflash.h"
+#include "aeolia/aeolia_sflash.h"
 
 // MMIO
 #define APCIE_RTC_STATUS              0x100
 #define APCIE_RTC_STATUS__BATTERY_OK  0x100
 #define APCIE_RTC_STATUS__CLOCK_OK      0x4
-#define APCIE_CHIP_ID0 0x1104
-#define APCIE_CHIP_ID1 0x1108
-#define APCIE_CHIP_REV 0x110C
+#define APCIE_CHIP_ID0               0x1104
+#define APCIE_CHIP_ID1               0x1108
+#define APCIE_CHIP_REV               0x110C
 
-#define WDT_TIMER0 0x81028
-#define WDT_TIMER1 0x8102C
-#define WDT_UNK81000 0x81000 // R/W
-#define WDT_UNK81084 0x81084 // R/W
+#define WDT_TIMER0                  0x81028
+#define WDT_TIMER1                  0x8102C
+#define WDT_UNK81000                0x81000 // R/W
+#define WDT_UNK81084                0x81084 // R/W
 
+#define APCIE_ICC_BASE                                    0x184000
 
 #define APCIE_ICC_BASE                                    0x184000
 #define APCIE_ICC_SIZE                                      0x1000
@@ -56,18 +57,19 @@
 #define APCIE_ICC_REPLY                                     0x4000
 #define APCIE_ICC_EVENT                                     0x8000
 
-#define APCIE_PCIE_BASE                                   0x1C8000
-#define APCIE_PCIE_SIZE                                     0x1000
-#define APCIE_PCIE_REG(x)                   (APCIE_PCIE_BASE + (x))
-#define APCIE_PCIE_REG_MSI_FNC4_IRQ_STA       APCIE_PCIE_REG(0x43C)
-#define APCIE_PCIE_REG_UNK49C                 APCIE_PCIE_REG(0x49C)
-#define APCIE_PCIE_REG_UNK4A0                 APCIE_PCIE_REG(0x4A0)
-#define APCIE_PCIE_REG_UNK4BC                 APCIE_PCIE_REG(0x4BC)
-#define APCIE_PCIE_REG_UNK4C0                 APCIE_PCIE_REG(0x4C0)
-#define APCIE_PCIE_REG_UNK54C                 APCIE_PCIE_REG(0x54C)
-#define APCIE_PCIE_REG_UNK554                 APCIE_PCIE_REG(0x554)
-#define APCIE_PCIE_REG_UNK56C                 APCIE_PCIE_REG(0x56C)
-#define APCIE_PCIE_REG_UNK5A4                 APCIE_PCIE_REG(0x5A4)
+#define APCIE_MSI_BASE                                           0x1C8000
+#define APCIE_MSI_SIZE                                             0x1000
+#define APCIE_MSI_REG(x)                           (APCIE_MSI_BASE + (x))
+#define APCIE_MSI_REG_MSI_FNC4_IRQ_STA               APCIE_MSI_REG(0x43C)
+#define APCIE_MSI_REG_UNK49C                         APCIE_MSI_REG(0x49C)
+#define APCIE_MSI_REG_UNK4A0                         APCIE_MSI_REG(0x4A0)
+#define APCIE_MSI_REG_UNK4BC                         APCIE_MSI_REG(0x4BC)
+#define APCIE_MSI_REG_UNK4C0                         APCIE_MSI_REG(0x4C0)
+#define APCIE_MSI_REG_VECTOR(x)            (APCIE_MSI_REG(0x540) + 4*(x))
+#define APCIE_MSI_REG_VECTOR_ICC                APCIE_MSI_REG_VECTOR(0x3)
+#define APCIE_MSI_REG_VECTOR_HPET               APCIE_MSI_REG_VECTOR(0x5)
+#define APCIE_MSI_REG_VECTOR_SFLASH             APCIE_MSI_REG_VECTOR(0xB)
+#define APCIE_MSI_REG_UNK5A4                         APCIE_MSI_REG(0x5A4)
 
 #define ICC_CMD_QUERY_SERVICE                                 0x01
 #define ICC_CMD_QUERY_SERVICE_VERSION                       0x0000
@@ -106,16 +108,32 @@
 #define AEOLIA_PCIE(obj) \
     OBJECT_CHECK(AeoliaPCIEState, (obj), TYPE_AEOLIA_PCIE)
 
+#define DEBUG_APCIE 1
+
+#define DPRINTF(...) \
+do { \
+    if (DEBUG_APCIE) { \
+        fprintf(stderr, "apcie (%s:%d): ", __FUNCTION__, __LINE__); \
+        fprintf(stderr, __VA_ARGS__); \
+    } \
+} while (0)
+
 typedef struct AeoliaPCIEState {
     /*< private >*/
     PCIDevice parent_obj;
     /*< public >*/
     MemoryRegion iomem[3];
     SysBusDevice* hpet;
+    AddressSpace* iommu_as;
 
     // Peripherals
+    BlockDriverState *sflash;
     uint32_t sflash_offset;
     uint32_t sflash_data;
+    uint32_t sflash_cmd;
+    uint32_t sflash_status;
+    uint32_t sflash_dma_addr;
+    uint32_t sflash_dma_size;
     uint32_t sflash_unkC3000;
 
     uint32_t icc_doorbell;
@@ -126,7 +144,13 @@ typedef struct AeoliaPCIEState {
     uint32_t msi_data_fn5;
     uint32_t msi_addr_fn4;
     uint32_t msi_addr_fn5;
-    uint32_t msi_data_fn4dev3;
+    uint32_t msi_vector_icc;
+    uint32_t msi_vector_hpet;
+    uint32_t msi_vector_sflash;
+    uint32_t msi_vector_rtc;
+    uint32_t msi_vector_uart0;
+    uint32_t msi_vector_uart1;
+    uint32_t msi_vector_twsi;
 } AeoliaPCIEState;
 
 /* helpers */
@@ -188,14 +212,61 @@ static const MemoryRegionOps aeolia_pcie_1_ops = {
 };
 
 /* Aeolia PCIe Peripherals */
+static void sflash_erase(AeoliaPCIEState *s, uint32_t offset, uint32_t size)
+{
+    printf("sflash_erase(offset: %X, size: %X)\n", offset, size);
+}
+
+static void sflash_read(AeoliaPCIEState *s, uint32_t value)
+{
+    void *dma_data;
+    uint32_t dma_addr = s->sflash_dma_addr;
+    uint32_t dma_size = s->sflash_dma_size & ~0x80000000;
+
+    printf("DMA transfer of %#x bytes from %#x to %x\n",
+        dma_size, s->sflash_offset, dma_addr);
+    dma_data = address_space_map(s->iommu_as, dma_addr, &dma_size, true);
+    fseek(s->sflash, s->sflash_offset, SEEK_SET);
+    fread(dma_data, 1, dma_size, s->sflash);
+    address_space_unmap(s->iommu_as, dma_data, dma_addr, dma_size, true);
+}
+
+static void sflash_doorbell(AeoliaPCIEState *s, uint32_t value)
+{
+    uint32_t opcode = value & 0xFF;
+    uint32_t flags = value >> 8;
+    printf("sflash_doorbell(%X: {op: %X, flags: %X}) with cmd=%X\n", value, opcode, flags, s->sflash_cmd);
+
+    switch (opcode) {
+#if 0
+    /* these opcodes are stored in s->sflash_cmd >> 24 */
+    case SFLASH_OP_ERA_SEC:
+        sflash_erase(s, s->sflash_offset, 0x1000);
+        break;
+    case SFLASH_OP_ERA_BLK32:
+        sflash_erase(s, s->sflash_offset, 0x8000);
+        break;
+    case SFLASH_OP_ERA_BLK:
+        sflash_erase(s, s->sflash_offset, 0x10000);
+        break;
+#endif
+    case 0x3:
+        sflash_read(s, value);
+        break;
+    }
+
+    s->sflash_status |= 1;
+    stl_le_phys(&address_space_memory,
+        s->msi_addr_fn4, s->msi_data_fn4 | s->msi_vector_sflash);
+}
 
 static void icc_send_irq(AeoliaPCIEState *s)
 {
     s->icc_status |= APCIE_ICC_IRQ_PENDING;
 
     /* Trigger MSI */
-    stl_le_phys(&address_space_memory, s->msi_addr_fn4,
-                s->msi_data_fn4 | s->msi_data_fn4dev3);
+    stl_le_phys(&address_space_memory,
+        s->msi_addr_fn4, s->msi_data_fn4 | s->msi_vector_icc);
 }
 
 static void icc_calculate_csum(aeolia_icc_message_t* msg)
@@ -369,6 +440,9 @@ static uint64_t aeolia_pcie_peripherals_read(
     case SFLASH_VENDOR:
         value = SFLASH_VENDOR_MACRONIX;
         break;
+    case SFLASH_STATUS:
+        value = s->sflash_status;
+        break;
     case SFLASH_UNKC3000_STATUS:
         value = s->sflash_unkC3000;
         break;
@@ -380,7 +454,7 @@ static uint64_t aeolia_pcie_peripherals_read(
         value = s->icc_status;
         break;
     default:
-        printf("aeolia_pcie_peripherals_read:  { addr: %lX, size: %X } => %lX\n", addr, size, value);
+        DPRINTF("{ addr: %lX, size: %X }\n", addr, size);
         value = 0;
     }
     return value;
@@ -390,6 +464,9 @@ static void aeolia_pcie_peripherals_write(
     void *opaque, hwaddr addr, uint64_t value, unsigned size)
 {
     AeoliaPCIEState *s = opaque;
+    if (addr < AEOLIA_HPET_BASE || addr >= AEOLIA_HPET_BASE + AEOLIA_HPET_SIZE) {
+        DPRINTF("{ addr: %lX, size: %X, value: %lX }\n", addr, size, value);
+    }
 
     switch (addr) {
     // HPET
@@ -403,6 +480,21 @@ static void aeolia_pcie_peripherals_write(
         break;
     case SFLASH_DATA:
         s->sflash_data = value;
+        break;
+    case SFLASH_DOORBELL:
+        sflash_doorbell(s, value);
+        break;
+    case SFLASH_CMD:
+        s->sflash_cmd = value;
+        break;
+    case SFLASH_STATUS:
+        s->sflash_status = value;
+        break;
+    case SFLASH_DMA_ADDR:
+        s->sflash_dma_addr = value;
+        break;
+    case SFLASH_DMA_SIZE:
+        s->sflash_dma_size = value;
         break;
     case SFLASH_UNKC3004:
         s->sflash_unkC3000 = (value & 1) << 2; // TODO
@@ -418,17 +510,23 @@ static void aeolia_pcie_peripherals_write(
         icc_irq_mask(s, value);
         break;
     // PCIE
-    case APCIE_PCIE_REG_UNK49C:
+    case APCIE_MSI_REG_UNK49C:
         s->msi_data_fn4 = value;
         break;
-    case APCIE_PCIE_REG_UNK4BC:
+    case APCIE_MSI_REG_UNK4BC:
         s->msi_addr_fn4 = value;
         break;
-    case APCIE_PCIE_REG_UNK54C:
-        s->msi_data_fn4dev3 = value;
+    case APCIE_MSI_REG_VECTOR_ICC:
+        s->msi_vector_icc = value;
+        break;
+    case APCIE_MSI_REG_VECTOR_HPET:
+        s->msi_vector_hpet = value;
+        break;
+    case APCIE_MSI_REG_VECTOR_SFLASH:
+        s->msi_vector_sflash = value;
         break;
     default:
-        printf("aeolia_pcie_peripherals_write: { addr: %lX, size: %X, value: %lX }\n", addr, size, value);
+        break;
     }
 }
 
@@ -441,6 +539,7 @@ static const MemoryRegionOps aeolia_pcie_peripherals_ops = {
 static void aeolia_pcie_realize(PCIDevice *dev, Error **errp)
 {
     AeoliaPCIEState *s = AEOLIA_PCIE(dev);
+    s->iommu_as = pci_device_iommu_address_space(dev);
 
     // PCI Configuration Space
     dev->config[PCI_CLASS_PROG] = 0x04;
@@ -466,6 +565,10 @@ static void aeolia_pcie_realize(PCIDevice *dev, Error **errp)
     qdev_prop_set_uint8(DEVICE(s->hpet), "timers", 4);
     qdev_prop_set_uint32(DEVICE(s->hpet), HPET_INTCAP, 0x10);
     qdev_init_nofail(DEVICE(s->hpet));
+
+    /* sflash */
+    s->sflash = fopen("sflash.bin", "r+");
+    assert(s->sflash);
 }
 
 static void aeolia_pcie_class_init(ObjectClass *klass, void *data)

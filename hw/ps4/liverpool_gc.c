@@ -39,7 +39,7 @@
 #define PCIR64(dev, reg) (*(uint64_t*)(&dev->config[reg]))
 
 #define DEBUG_GC 0
-#define DEBUG_SAMU 1
+#define DEBUG_SAMU 0
 
 #define DPRINTF(...) \
 do { \
@@ -202,7 +202,7 @@ static uint64_t liverpool_gc_mmio_read(
         return s->samu_sab_ix[index_ix];
     }
 
-    printf("liverpool_gc_mmio_read:  { addr: %lX, size: %X }\n", addr, size);
+    DPRINTF("liverpool_gc_mmio_read:  { addr: %lX, size: %X }\n", addr, size);
     return s->mmio[index];
 }
 
@@ -501,7 +501,7 @@ static void liverpool_gc_mmio_write(
         liverpool_gc_ucode_load(s, mmSDMA1_UCODE_ADDR, value);
         break;
     default:
-        printf("liverpool_gc_mmio_write: { addr: %lX, size: %X, value: %lX }\n", addr, size, value);
+        DPRINTF("liverpool_gc_mmio_write: { addr: %lX, size: %X, value: %lX }\n", addr, size, value);
         s->mmio[index] = value;
     }
 }
