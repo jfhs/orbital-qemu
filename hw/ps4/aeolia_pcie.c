@@ -108,7 +108,7 @@
 #define AEOLIA_PCIE(obj) \
     OBJECT_CHECK(AeoliaPCIEState, (obj), TYPE_AEOLIA_PCIE)
 
-#define DEBUG_APCIE 1
+#define DEBUG_APCIE 0
 
 #define DPRINTF(...) \
 do { \
@@ -127,7 +127,7 @@ typedef struct AeoliaPCIEState {
     AddressSpace* iommu_as;
 
     // Peripherals
-    BlockDriverState *sflash;
+    FILE *sflash;
     uint32_t sflash_offset;
     uint32_t sflash_data;
     uint32_t sflash_cmd;
@@ -164,14 +164,14 @@ void aeolia_pcie_set_icc_data(PCIDevice* dev, char* icc_data)
 static uint64_t aeolia_pcie_0_read
     (void *opaque, hwaddr addr, unsigned size)
 {
-    printf("aeolia_pcie_0_read:  { addr: %lX, size: %X }\n", addr, size);
+    printf("aeolia_pcie_0_read:  { addr: %llX, size: %X }\n", addr, size);
     return 0;
 }
 
 static void aeolia_pcie_0_write
     (void *opaque, hwaddr addr, uint64_t value, unsigned size)
 {
-    printf("aeolia_pcie_0_write: { addr: %lX, size: %X, value: %lX }\n", addr, size, value);
+    printf("aeolia_pcie_0_write: { addr: %llX, size: %X, value: %llX }\n", addr, size, value);
 }
 
 static const MemoryRegionOps aeolia_pcie_0_ops = {
@@ -195,14 +195,14 @@ static uint64_t aeolia_pcie_1_read
     case APCIE_CHIP_REV:
         return 0x00000300;
     }
-    printf("aeolia_pcie_1_read:  { addr: %lX, size: %X }\n", addr, size);
+    printf("aeolia_pcie_1_read:  { addr: %llX, size: %X }\n", addr, size);
     return 0;
 }
 
 static void aeolia_pcie_1_write
     (void *opaque, hwaddr addr, uint64_t value, unsigned size)
 {
-    printf("aeolia_pcie_1_write: { addr: %lX, size: %X, value: %lX }\n", addr, size, value);
+    printf("aeolia_pcie_1_write: { addr: %llX, size: %X, value: %llX }\n", addr, size, value);
 }
 
 static const MemoryRegionOps aeolia_pcie_1_ops = {
@@ -305,7 +305,7 @@ typedef struct icc_query_board_version_t {
 static void icc_query_board_version(
     AeoliaPCIEState *s, aeolia_icc_message_t* reply)
 {
-    icc_query_board_version_t* data = &reply->data;
+    icc_query_board_version_t* data = (void*)&reply->data;
 
     data->emc_version_major = 0x0002;
     data->emc_version_minor = 0x0018;
@@ -455,7 +455,7 @@ static uint64_t aeolia_pcie_peripherals_read(
         value = s->icc_status;
         break;
     default:
-        DPRINTF("{ addr: %lX, size: %X }\n", addr, size);
+        DPRINTF("{ addr: %llX, size: %X }\n", addr, size);
         value = 0;
     }
     return value;
@@ -466,7 +466,7 @@ static void aeolia_pcie_peripherals_write(
 {
     AeoliaPCIEState *s = opaque;
     if (addr < AEOLIA_HPET_BASE || addr >= AEOLIA_HPET_BASE + AEOLIA_HPET_SIZE) {
-        DPRINTF("{ addr: %lX, size: %X, value: %lX }\n", addr, size, value);
+        DPRINTF("{ addr: %llX, size: %X, value: %llX }\n", addr, size, value);
     }
 
     switch (addr) {

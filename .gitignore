@@ -208,6 +208,7 @@ trace-ust-all.h
 trace-ust-all.c
 
 # Orbital
+.vscode
 # NOTE: These sources are temporarily locked since they might lead
 # to Sony patching stuff, people getting angry and I got no time for drama.
 /hw/ps4/liverpool/lvp_gc_samu.h

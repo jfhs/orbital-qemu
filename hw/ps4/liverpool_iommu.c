@@ -648,7 +648,7 @@ static void liverpool_iommu_mmio_trace(hwaddr addr, unsigned size)
 static uint64_t liverpool_iommu_mmio_read(void *opaque, hwaddr addr, unsigned size)
 {
     LiverpoolIOMMUState *s = opaque;
-    printf("liverpool_iommu_mmio_read:  { addr: %lX, size: %X }\n", addr, size);
+    DPRINTF("{ addr: %llX, size: %X }\n", addr, size);
     uint64_t val = -1;
     if (addr + size > AMDVI_MMIO_SIZE) {
         //trace_liverpool_iommu_mmio_read_invalid(AMDVI_MMIO_SIZE, addr, size);
@@ -801,7 +801,7 @@ static void liverpool_iommu_mmio_write(void *opaque, hwaddr addr, uint64_t val,
 {
     LiverpoolIOMMUState *s = opaque;
     unsigned long offset = addr & 0x07;
-    printf("liverpool_iommu_mmio_write: { addr: %lX, size: %X, value: %llX }\n", addr, size, val);
+    DPRINTF("{ addr: %llX, size: %X, value: %llX }\n", addr, size, val);
 
     if (addr + size > AMDVI_MMIO_SIZE) {
         /*trace_liverpool_iommu_mmio_write("error: addr outside region: max ",
@@ -1273,14 +1273,13 @@ static const TypeInfo liverpool_iommu_info = {
 static void liverpool_iommu_pci_realize(PCIDevice *dev, Error **errp)
 {
     LiverpoolIOMMUPCIState *s = LIVERPOOL_IOMMU_PCI(dev);
-    int ret;
 
     dev->config[PCI_INTERRUPT_LINE] = 0xFF;
     dev->config[PCI_INTERRUPT_PIN] = 0x01;
 
-    s->iommu = qdev_create(NULL, TYPE_LIVERPOOL_IOMMU);
+    s->iommu = LIVERPOOL_IOMMU(qdev_create(NULL, TYPE_LIVERPOOL_IOMMU));
     s->iommu->pci = dev;
-    qdev_init_nofail(s->iommu);
+    qdev_init_nofail(DEVICE(s->iommu));
 }
 
 static void liverpool_iommu_pci_class_init(ObjectClass *oc, void *data)
