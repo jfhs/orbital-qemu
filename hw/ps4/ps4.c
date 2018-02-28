@@ -57,7 +57,7 @@
 #endif
 
 /* Hardware initialization */
-#define MAX_SATA_PORTS 1
+#define MAX_SATA_PORTS 2
 
 #define TYPE_PS4_MACHINE MACHINE_TYPE_NAME("ps4")
 
@@ -405,7 +405,7 @@ static void ps4_init(MachineState *machine)
         pcms->vmport = xen_enabled() ? ON_OFF_AUTO_OFF : ON_OFF_AUTO_ON;
     }
 
-    /* init basic PC hardware */
+    /* init basic PS4 hardware */
     ps4_basic_device_init(isa_bus, pcms->gsi, &rtc_state, 0xff0104);
 
     /* connect pm stuff to lpc */
@@ -421,11 +421,12 @@ static void ps4_init(MachineState *machine)
 
     ahci = s->aeolia_ahci;
     idebus[0] = qdev_get_child_bus(&ahci->qdev, "ide.0");
+    idebus[1] = qdev_get_child_bus(&ahci->qdev, "ide.1");
     g_assert(MAX_SATA_PORTS == ahci_get_num_ports(ahci));
     ide_drive_get(hd, ahci_get_num_ports(ahci));
     ahci_ide_create_devs(ahci, hd);
 
-    pc_cmos_init(pcms, idebus[0], NULL, rtc_state);
+    pc_cmos_init(pcms, idebus[0], idebus[1], rtc_state);
     pc_pci_device_init(pci_bus);
 
     if (pcms->acpi_nvdimm_state.is_enabled) {

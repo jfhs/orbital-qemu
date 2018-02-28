@@ -59,7 +59,7 @@ static void aeolia_ahci_realize(PCIDevice *dev, Error **errp)
     int sata_cap_offset;
     int ret;
 
-    ahci_realize(&d->ahci, DEVICE(dev), pci_device_iommu_address_space(dev), 1);
+    ahci_realize(&d->ahci, DEVICE(dev), pci_device_iommu_address_space(dev), 2);
 
     pci_config_set_prog_interface(dev->config, AHCI_PROGMODE_MAJOR_REV_1);
 
