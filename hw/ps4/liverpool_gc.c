@@ -25,7 +25,6 @@
 
 #include "liverpool_gc_mmio.h"
 #include "liverpool/lvp_gc_samu.h"
-#include "ps4_keys.h"
 
 #include "ui/console.h"
 #include "hw/display/vga.h"
@@ -40,7 +39,6 @@
 #define PCIR64(dev, reg) (*(uint64_t*)(&dev->config[reg]))
 
 #define DEBUG_GC 0
-#define DEBUG_SAMU 0
 
 #define DPRINTF(...) \
 do { \
@@ -80,7 +78,7 @@ typedef struct LiverpoolGCState {
     /* samu */
     uint32_t samu_ix[0x80];
     uint32_t samu_sab_ix[0x40];
-    uint8_t samu_slots[SAMU_SLOT_COUNT][SAMU_SLOT_SIZE];
+    samu_state_t samu;
 } LiverpoolGCState;
 
 /* Liverpool GC ??? */
@@ -221,172 +219,6 @@ static void liverpool_gc_ih_rb_push(LiverpoolGCState *s, uint32_t value)
     stl_le_phys(&address_space_memory, wptr_addr, s->mmio[mmIH_RB_WPTR]);
 }
 
-static void liverpool_gc_samu_packet_io_write(LiverpoolGCState *s,
-    samu_packet_t* reply, int fd, void* buffer, size_t size)
-{
-    reply->command = SAMU_CMD_IO_WRITE;
-    reply->status = 0;
-    reply->data.io_write.fd = fd;
-    reply->data.io_write.size = size;
-    memcpy(&reply->data.io_write.data, buffer, size);
-}
-
-static void liverpool_gc_samu_packet_spawn(LiverpoolGCState *s,
-    const samu_packet_t* query, samu_packet_t* reply)
-{
-}
-
-/* samu ccp */
-static void liverpool_gc_samu_packet_ccp_aes(LiverpoolGCState *s,
-    const samu_command_service_ccp_t* query_ccp, samu_command_service_ccp_t* reply_ccp)
-{
-    uint64_t data_size;
-    uint64_t in_addr, out_addr;
-    uint32_t in_slot, out_slot, key_slot, iv_slot;
-    void    *in_data,*out_data,*key_data,*iv_data;
-    hwaddr   in_size, out_size, key_size, iv_size;
-
-    data_size = query_ccp->aes.data_size;
-
-    in_addr = query_ccp->aes.in_addr;
-    in_data = address_space_map(&address_space_memory, in_addr, &in_size, true);
-
-    if (query_ccp->opcode & SAMU_CMD_SERVICE_CCP_OP_AES_FLAG_SLOT_OUT) {
-        out_slot = *(uint32_t*)&query_ccp->aes.out_addr;
-        out_data = s->samu_slots[out_slot];
-    } else {
-        out_addr = query_ccp->aes.out_addr;
-        out_data = address_space_map(&address_space_memory, out_addr, &out_size, true);
-    }
-
-    if (query_ccp->opcode & SAMU_CMD_SERVICE_CCP_OP_AES_FLAG_SLOT_KEY) {
-        key_slot = *(uint32_t*)&query_ccp->aes.key;
-        key_data = s->samu_slots[key_slot];
-    } else {
-        key_data = query_ccp->aes.key;
-    }
-
-    // TODO/HACK: We don't have keys, so use hardcoded blobs or copy things around raw
-    if (!memcmp(in_data, "\x78\x7B\x65\x95\x4F\x9F\x89\x59", 8)) {
-        assert(sizeof(SCE_EAP_HDD_KEY) <= data_size);
-        memcpy(out_data, SCE_EAP_HDD_KEY, sizeof(SCE_EAP_HDD_KEY));
-    } else {
-        memcpy(out_data, in_data, data_size);
-    }
-
-    address_space_unmap(&address_space_memory, in_data, in_addr, in_size, true);
-    if (!(query_ccp->opcode & SAMU_CMD_SERVICE_CCP_OP_AES_FLAG_SLOT_OUT)) {
-        address_space_unmap(&address_space_memory, out_data, out_addr, out_size, true);
-    }
-}
-
-static void liverpool_gc_samu_packet_ccp_hmac(LiverpoolGCState *s,
-    const samu_command_service_ccp_t* query_ccp, samu_command_service_ccp_t* reply_ccp)
-{
-
-}
-
-static void liverpool_gc_samu_packet_ccp(LiverpoolGCState *s,
-    const samu_packet_t* query, samu_packet_t* reply)
-{
-    const
-    samu_command_service_ccp_t *query_ccp = &query->data.service_ccp;
-    samu_command_service_ccp_t *reply_ccp = &reply->data.service_ccp;
-
-    reply_ccp->opcode = query_ccp->opcode;
-    reply_ccp->status = query_ccp->status;
-    uint32_t ccp_op = query_ccp->opcode >> 24;
-    switch (ccp_op) {
-    case SAMU_CMD_SERVICE_CCP_OP_AES:
-        liverpool_gc_samu_packet_ccp_aes(s, query_ccp, reply_ccp);
-        break;
-    case SAMU_CMD_SERVICE_CCP_OP_HMAC:
-        liverpool_gc_samu_packet_ccp_hmac(s, query_ccp, reply_ccp);
-        break;
-    case SAMU_CMD_SERVICE_CCP_OP_AES_INSITU:
-    case SAMU_CMD_SERVICE_CCP_OP_XTS:
-    case SAMU_CMD_SERVICE_CCP_OP_SHA:
-    case SAMU_CMD_SERVICE_CCP_OP_RSA:
-    case SAMU_CMD_SERVICE_CCP_OP_PASS:
-    case SAMU_CMD_SERVICE_CCP_OP_ECC:
-    case SAMU_CMD_SERVICE_CCP_OP_ZLIB:
-    case SAMU_CMD_SERVICE_CCP_OP_TRNG:
-    case SAMU_CMD_SERVICE_CCP_OP_SNVS:
-        printf("Unimplemented SAMU CCP opcode: %d\n", ccp_op);
-        break;
-    default:
-        printf("Unknown SAMU CCP opcode: %d\n", ccp_op);
-    }
-}
-
-static void liverpool_gc_samu_packet_mailbox(LiverpoolGCState *s,
-    const samu_packet_t* query, samu_packet_t* reply)
-{
-}
-
-static void liverpool_gc_samu_packet_rand(LiverpoolGCState *s,
-    const samu_packet_t* query, samu_packet_t* reply)
-{
-}
-
-static void liverpool_gc_samu_packet(LiverpoolGCState *s, uint64_t addr)
-{
-    uint64_t packet_length = 0x1000;
-    uint64_t query_addr = addr;
-    uint64_t reply_addr = addr & 0xFFF00000; // TODO: Where does this address come from?
-    samu_packet_t *query, *reply;
-    hwaddr query_len = packet_length;
-    hwaddr reply_len = packet_length;
-
-    query = (samu_packet_t*)address_space_map(
-        &address_space_memory, query_addr, &query_len, true);
-    reply = (samu_packet_t*)address_space_map(
-        &address_space_memory, reply_addr, &reply_len, true);
-    if (DEBUG_SAMU) {
-        printf("SAMU Query:\n");
-        qemu_hexdump(query, stdout, "#Q#", 0x100);
-    }
-    memset(reply, 0, packet_length);
-    reply->command = query->command;
-    reply->status = 0;
-    reply->message_id = query->message_id;
-    reply->extended_msgs = query->extended_msgs;
-
-    switch (query->command) {
-    case SAMU_CMD_SERVICE_SPAWN:
-        liverpool_gc_samu_packet_spawn(s, query, reply);
-        break;
-    case SAMU_CMD_SERVICE_CCP:
-        liverpool_gc_samu_packet_ccp(s, query, reply);
-        break;
-    case SAMU_CMD_SERVICE_MAILBOX:
-        liverpool_gc_samu_packet_mailbox(s, query, reply);
-        break;
-    case SAMU_CMD_SERVICE_RAND:
-        liverpool_gc_samu_packet_rand(s, query, reply);
-        break;
-    default:
-        printf("Unknown SAMU command %d\n", query->command);
-    }
-    address_space_unmap(&address_space_memory, query, query_addr, query_len, true);
-    address_space_unmap(&address_space_memory, reply, reply_addr, reply_len, true);
-}
-
-static void liverpool_gc_samu_init(LiverpoolGCState *s, uint64_t addr)
-{
-    hwaddr length;
-    samu_packet_t *packet;
-    const char *secure_kernel_build =
-        "secure kernel build: Sep 26 2017 ??:??:?? (r8963:release_branches/release_05.000)\n";
-
-    length = 0x1000;
-    packet = address_space_map(&address_space_memory, addr, &length, true);
-    memset(packet, 0, length);
-    liverpool_gc_samu_packet_io_write(s, packet, SAMU_CMD_IO_WRITE_FD_STDOUT,
-        (char*)secure_kernel_build, strlen(secure_kernel_build));
-    address_space_unmap(&address_space_memory, packet, addr, length, true);
-}
-
 static void liverpool_gc_samu_doorbell(LiverpoolGCState *s, uint32_t value)
 {
     uint64_t packet;
@@ -402,9 +234,9 @@ static void liverpool_gc_samu_doorbell(LiverpoolGCState *s, uint32_t value)
     printf("liverpool_gc_samu_doorbell: { flags: %llX, paddr: %llX }\n", packet >> 48, paddr);
 
     if (packet & SAMU_DOORBELL_FLAG_INIT) {
-        liverpool_gc_samu_init(s, paddr);
+        liverpool_gc_samu_init(&s->samu, paddr);
     } else {
-        liverpool_gc_samu_packet(s, paddr);
+        liverpool_gc_samu_packet(&s->samu, paddr);
     }
 
     uint32_t command = ldl_le_phys(&address_space_memory, paddr);

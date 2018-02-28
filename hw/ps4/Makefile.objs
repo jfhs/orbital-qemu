@@ -8,6 +8,7 @@ obj-y += aeolia_pcie.o
 obj-y += aeolia_sdhci.o
 obj-y += aeolia_uart.o
 obj-y += aeolia_xhci.o
+obj-y += liverpool/
 obj-y += liverpool_func.o
 obj-y += liverpool_gc.o
 obj-y += liverpool_hdac.o
