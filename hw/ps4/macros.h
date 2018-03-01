@@ -39,6 +39,9 @@
 #define GET_MASK(hi, lo) \
     (((1 << ((hi)-(lo)+1)) - 1) << (lo))
 
+#define EXTRACT(value, field) \
+    (((value) & field(GET_MASK)) >> field(GET_LO))
+
 #define MMIO_READ(...) \
     __MACRO_DISPATCH(MMIO_READ, __VA_ARGS__)(__VA_ARGS__)
 #define MMIO_READ2(mmio, addr) \
