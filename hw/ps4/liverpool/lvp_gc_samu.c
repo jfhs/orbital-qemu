@@ -257,7 +257,7 @@ static void trace_samu_packet_ccp_aes_insitu(
 static void trace_samu_packet_ccp_xts(
     const samu_command_service_ccp_t* command)
 {
-    TRACE_SUBCOMMAND("num-sectors:  0x%X\n", command->xts.num_sectors);
+    TRACE_SUBCOMMAND("num-sectors: 0x%X\n", command->xts.num_sectors);
     TRACE_SUBCOMMAND("in-addr:  0x%llX\n", command->xts.in_addr);
     TRACE_SUBCOMMAND("out-addr: 0x%llX\n", command->xts.out_addr);
     TRACE_SUBCOMMAND("start-sector: 0x%llX\n", command->xts.start_sector);

@@ -46,6 +46,8 @@
 #include "crypto/init.h"
 #include "trace/control.h"
 
+#include "qemu-img-ps4.h"
+
 #define QEMU_IMG_VERSION "qemu-img version " QEMU_FULL_VERSION \
                           "\n" QEMU_COPYRIGHT "\n"
 
@@ -547,6 +549,108 @@ static int img_create(int argc, char **argv)
 
 fail:
     g_free(options);
+    return 1;
+}
+
+static int img_create_ps4(int argc, char **argv)
+{
+
+    int c, ret, optind_old;
+    uint64_t size = -1;
+    const char *fmt = "raw";
+    const char *cache = "writeback";
+    const char *filename;
+    bool quiet = false;
+    bool force_share = false;
+    bool writethrough;
+    BlockBackend* blk;
+    int flags = BDRV_O_RDWR;
+
+    /* Create disk image */
+    optind_old = optind;
+    if (img_create(argc, argv)) {
+        goto fail;
+    }
+    optind = optind_old;
+
+    for(;;) {
+        static const struct option long_options[] = {
+            {"help", no_argument, 0, 'h'},
+            {"object", required_argument, 0, OPTION_OBJECT},
+            {0, 0, 0, 0}
+        };
+        c = getopt_long(argc, argv, ":F:b:f:ho:qu", long_options, NULL);
+        if (c == -1) {
+            break;
+        }
+        switch(c) {
+        case ':':
+            missing_argument(argv[optind - 1]);
+            break;
+        case '?':
+            unrecognized_option(argv[optind - 1]);
+            break;
+        case 'h':
+            help();
+            break;
+        case 'f':
+            fmt = optarg;
+            break;
+        case 'q':
+            quiet = true;
+            break;
+        case 'u':
+            flags |= BDRV_O_NO_BACKING;
+            break;
+        }
+    }
+
+    ret = bdrv_parse_cache_mode(cache, &flags, &writethrough);
+    if (ret < 0) {
+        error_report("Invalid cache option: %s", cache);
+        goto fail;
+    }
+
+    /* Open created image */
+    filename = (optind < argc) ? argv[optind++] : NULL;
+    if (optind > argc) {
+        error_exit("Expecting image file name");
+    }
+    blk = img_open(false, filename, fmt, flags, writethrough, quiet, force_share);
+    if (!blk) {
+        goto fail;
+    }
+
+    /* Get image size, if specified */
+    if (optind < argc) {
+        int64_t sval;
+
+        sval = cvtnum(argv[optind++]);
+        if (sval < 0) {
+            if (sval == -ERANGE) {
+                error_report("Image size must be less than 8 EiB!");
+            } else {
+                error_report("Invalid image size specified! You may use k, M, "
+                      "G, T, P or E suffixes for ");
+                error_report("kilobytes, megabytes, gigabytes, terabytes, "
+                             "petabytes and exabytes.");
+            }
+            goto fail;
+        }
+        size = (uint64_t)sval;
+    }
+    if (optind != argc) {
+        error_exit("Unexpected argument: %s", argv[optind]);
+    }
+
+    /* Write partitions */
+    if (generate_hdd_ps4(blk, size)) {
+        goto fail;
+    }
+    blk_unref(blk);
+    return 0;
+
+fail:
     return 1;
 }
 
