@@ -18,11 +18,23 @@
  */
 
 #include "lvp_gc_samu.h"
+#include "crypto/random.h"
 #include "hw/pci/pci.h"
 #include "hw/hw.h"
 
 #include "hw/ps4/macros.h"
 #include "hw/ps4/ps4_keys.h"
+
+/* SAMU secure kernel (based on 5.00) */
+#define MODULE_AC_MGR     "80010006"
+#define MODULE_AUTH_MGR   "80010008"
+#define MODULE_IDATA_MGR  "80010009"
+#define MODULE_KEY_MGR    "8001000B"
+
+#define AUTHID_AC_MGR     0x3E00000000000003ULL
+#define AUTHID_AUTH_MGR   0x3E00000000000005ULL
+#define AUTHID_IDATA_MGR  0x3E00000000000006ULL
+#define AUTHID_KEY_MGR    0x3E00000000000007ULL
 
 /* SAMU debugging */
 #define DEBUG_SAMU 1
@@ -47,8 +59,7 @@ do { \
 #define TRACE_SUBCOMMAND(...)  printf(TRACE_PREFIX_SUBCOMMAND __VA_ARGS__)
 
 #define TRACE_HEXDUMP_PREFIX \
-    printf(prefix); if (row == 0) { printf(name); } else { for (int i = 0; i < name_len; i++) puts(" "); }
-
+    printf(prefix); if (row == 0) { printf(name); } else { for (int i = 0; i < name_len; i++) printf(" "); }
 
 typedef void (*trace_flags_t)(uint32_t);
 typedef void (*trace_opcode_t)(const samu_command_service_ccp_t*);
@@ -396,13 +407,14 @@ static void trace_samu_packet_ccp(
 static void trace_samu_packet_mailbox(
     const samu_command_service_mailbox_t* command)
 {
-    TRACE_COMMAND("???\n");
+    TRACE_COMMAND("unk_00: %llX\n", command->unk_00);
+    TRACE_COMMAND("module_id: %llX\n", command->module_id);
 }
 
 static void trace_samu_packet_rand(
     const samu_command_service_rand_t* command)
 {
-    TRACE_COMMAND("???\n");
+    TRACE_COMMAND("(nothing)\n");
 }
 
 static void trace_samu_packet(const samu_packet_t* packet)
@@ -447,7 +459,19 @@ static void samu_packet_io_write(samu_state_t *s,
 static void samu_packet_spawn(samu_state_t *s,
     const samu_packet_t* query, samu_packet_t* reply)
 {
-    DPRINTF("unimplemented");
+    const
+    samu_command_service_spawn_t *query_spawn = &query->data.service_spawn;
+    samu_command_service_spawn_t *reply_spawn = &reply->data.service_spawn;
+    uint64_t module_id; // TODO: Is this really the authentication ID?
+
+    if (!strncmp(query_spawn->name, MODULE_AUTH_MGR, 8)) {
+        module_id = AUTHID_AUTH_MGR;
+    }
+    if (!strncmp(query_spawn->name, MODULE_KEY_MGR, 8)) {
+        module_id = AUTHID_KEY_MGR;
+    }
+    reply_spawn->args[0] = (uint32_t)(module_id >> 32);
+    reply_spawn->args[1] = (uint32_t)(module_id);
 }
 
 /* samu ccp */
@@ -643,7 +667,11 @@ static void samu_packet_mailbox(samu_state_t *s,
 static void samu_packet_rand(samu_state_t *s,
     const samu_packet_t* query, samu_packet_t* reply)
 {
-    DPRINTF("unimplemented");
+    const
+    samu_command_service_rand_t *query_rand = &query->data.service_rand;
+    samu_command_service_rand_t *reply_rand = &query->data.service_rand; // TODO: Why is the same address reused?
+
+    qcrypto_random_bytes(reply_rand->data, 0x10, &error_fatal);
 }
 
 void liverpool_gc_samu_packet(samu_state_t *s, uint64_t addr)

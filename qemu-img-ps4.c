@@ -197,14 +197,14 @@ static void generate_hdd_gpt_partitions(
         GPT_PART_GUID_SCE("\x0F\x00\x00\x00"), 6 GB, 0, NULL);
 }
 
-static void generate_hdd_gpt(BlockBackend* blk, uint64_t size)
+static void generate_hdd_gpt(BlockBackend* blk, uint64_t size,
+    gpt_partition_t* gpt_partitions)
 {
     uint32_t i, crc;
     uint32_t last_lba, backup_lba;
-    uint32_t parts_padding;
+    uint32_t parts_padding, parts_length;
     gpt_header_t gpt_primary;
     gpt_header_t gpt_secondary;
-    gpt_partition_t gpt_partitions[32];
     char empty_sector[LBA_SIZE] = {};
 
     assert_align_nz(size, LBA_SIZE);
@@ -213,7 +213,6 @@ static void generate_hdd_gpt(BlockBackend* blk, uint64_t size)
     last_lba -= 1;   // Skip backup GPT header
     last_lba -= 32;  // Skip backup GPT partitions
 
-    memset(&gpt_partitions, 0, sizeof(gpt_partitions));
     memset(&gpt_primary, 0, sizeof(gpt_primary));
     memcpy(&gpt_primary.signature, "EFI PART", sizeof(gpt_primary.signature));
     memcpy(&gpt_primary.disk_guid, GPT_PART_GUID_SCE("\x00\x00\x00\x00"), 16);
@@ -230,8 +229,9 @@ static void generate_hdd_gpt(BlockBackend* blk, uint64_t size)
     generate_hdd_gpt_partitions(&gpt_primary, gpt_partitions, size);
 
     crc = 0;
+    parts_length = gpt_primary.parts_count;
     parts_padding = LBA_SIZE - sizeof(gpt_partition_t);
-    for (int i = 0; i < gpt_primary.parts_count; i++) {
+    for (int i = 0; i < parts_length; i++) {
         crc = crc32(crc, (uint8_t*)&gpt_partitions[i], sizeof(gpt_partition_t));
         crc = crc32(crc, (uint8_t*)&empty_sector[0], parts_padding);
     }
@@ -255,7 +255,7 @@ static void generate_hdd_gpt(BlockBackend* blk, uint64_t size)
         &gpt_primary, gpt_primary.size, 0);
     blk_pwrite(blk, lba_offset(gpt_secondary.current_lba),
         &gpt_secondary, gpt_secondary.size, 0);
-    for (i = 0; i < countof(gpt_partitions); i++) {
+    for (i = 0; i < parts_length; i++) {
         blk_pwrite(blk, lba_offset(gpt_primary.parts_lba + i),
             &(gpt_partitions[i]), gpt_primary.parts_size, 0);
         blk_pwrite(blk, lba_offset(gpt_secondary.parts_lba + i),
@@ -263,9 +263,33 @@ static void generate_hdd_gpt(BlockBackend* blk, uint64_t size)
     }
 }
 
+/* SCE */
+static void generate_hdd_sce_da0x6(BlockBackend* blk, uint64_t size,
+    gpt_partition_t* part)
+{
+    const char magic[] = "SONY COMPUTER ENTERTAINMENT INC.";
+    blk_pwrite(blk, lba_offset(part->first_lba), magic, strlen(magic), 0);
+}
+
+static void generate_hdd_sce(BlockBackend* blk, uint64_t size,
+    gpt_partition_t* gpt_partitions)
+{
+    int i;
+
+    for (i = 0; i < 32; i++) {
+        if (!memcmp(gpt_partitions[i].type_guid, GPT_TYPE_GUID_SCE_SWAP, 16)) {
+            generate_hdd_sce_da0x6(blk, size, &gpt_partitions[i]);
+        }
+    }
+}
+
 int generate_hdd_ps4(BlockBackend* blk, uint64_t size)
 {
+    gpt_partition_t gpt_partitions[32];
+    memset(&gpt_partitions, 0, sizeof(gpt_partitions));
+
     generate_hdd_mbr(blk, size);
-    generate_hdd_gpt(blk, size);
+    generate_hdd_gpt(blk, size, gpt_partitions);
+    generate_hdd_sce(blk, size, gpt_partitions);
     return 0;
 }
