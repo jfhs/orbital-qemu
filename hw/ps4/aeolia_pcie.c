@@ -74,16 +74,17 @@
 #define ICC_CMD_QUERY_SERVICE                                 0x01
 #define ICC_CMD_QUERY_SERVICE_VERSION                       0x0000
 #define ICC_CMD_QUERY_BOARD                                   0x02
-#define ICC_CMD_QUERY_BOARD_FLAG_BOARD_ID                   0x0005
-#define ICC_CMD_QUERY_BOARD_FLAG_VERSION                    0x0006
-#define ICC_CMD_QUERY_BOARD_FLAG_HDMI_CONFIGURATION         0x0016
+#define ICC_CMD_QUERY_BOARD_OP_BOARD_ID                     0x0005
+#define ICC_CMD_QUERY_BOARD_OP_VERSION                      0x0006
+#define ICC_CMD_QUERY_BOARD_OP_HDMI_CONFIGURATION           0x0016
 #define ICC_CMD_QUERY_NVRAM                                   0x03
-#define ICC_CMD_QUERY_NVRAM_FLAG_WRITE                      0x0000
-#define ICC_CMD_QUERY_NVRAM_FLAG_READ                       0x0001
+#define ICC_CMD_QUERY_NVRAM_OP_WRITE                        0x0000
+#define ICC_CMD_QUERY_NVRAM_OP_READ                         0x0001
 #define ICC_CMD_QUERY_UNK04                                   0x04 // icc_power_init
 #define ICC_CMD_QUERY_BUTTONS                                 0x08
-#define ICC_CMD_QUERY_BUTTONS_FLAG_STATE                    0x0000
-#define ICC_CMD_QUERY_BUTTONS_FLAG_LIST                     0x0001
+#define ICC_CMD_QUERY_BUTTONS_OP_STATE                      0x0000
+#define ICC_CMD_QUERY_BUTTONS_OP_LIST                       0x0001
+#define ICC_CMD_QUERY_BUZZER                                  0x09
 #define ICC_CMD_QUERY_SAVE_CONTEXT                            0x0B // thermal
 #define ICC_CMD_QUERY_LOAD_CONTEXT                            0x0C
 #define ICC_CMD_QUERY_UNK0D                                   0x0D // icc_configuration_get_devlan_setting
@@ -287,6 +288,7 @@ static void icc_calculate_csum(aeolia_icc_message_t* msg)
 static void icc_query_board_id(
     AeoliaPCIEState *s, aeolia_icc_message_t* reply)
 {
+    printf("qemu: ICC: icc_query_board_id\n");
 }
 
 typedef struct icc_query_board_version_t {
@@ -315,6 +317,12 @@ static void icc_query_board_version(
     reply->result = 0;
     reply->length = sizeof(aeolia_icc_message_t) +
                     sizeof(icc_query_board_version_t);
+}
+
+static void icc_query_buttons_state(
+    AeoliaPCIEState *s, aeolia_icc_message_t* reply)
+{
+    printf("qemu: ICC: icc_query_buttons_state\n");
 }
 
 static void icc_query(AeoliaPCIEState *s)
@@ -351,10 +359,10 @@ static void icc_query(AeoliaPCIEState *s)
         break;
     case ICC_CMD_QUERY_BOARD:
         switch (query->minor) {
-        case ICC_CMD_QUERY_BOARD_FLAG_BOARD_ID:
+        case ICC_CMD_QUERY_BOARD_OP_BOARD_ID:
             icc_query_board_id(s, reply);
             break;
-        case ICC_CMD_QUERY_BOARD_FLAG_VERSION:
+        case ICC_CMD_QUERY_BOARD_OP_VERSION:
             icc_query_board_version(s, reply);
             break;
         default:
@@ -363,8 +371,17 @@ static void icc_query(AeoliaPCIEState *s)
         break;
     case ICC_CMD_QUERY_BUTTONS:
         switch (query->minor) {
+        case ICC_CMD_QUERY_BUTTONS_OP_STATE:
+            icc_query_buttons_state(s, reply);
+            break;
         default:
             printf("qemu: ICC: Unknown buttons query 0x%04X!\n", query->minor);
+        }
+        break;
+    case ICC_CMD_QUERY_BUZZER:
+        switch (query->minor) {
+        default:
+            printf("qemu: ICC: Unknown buzzer query 0x%04X!\n", query->minor);
         }
         break;
     case ICC_CMD_QUERY_UNK0D:
@@ -376,7 +393,10 @@ static void icc_query(AeoliaPCIEState *s)
 #if 0
     case ICC_CMD_QUERY_NVRAM:
         switch (query->minor) {
-        case ICC_CMD_QUERY_NVRAM_FLAG_READ:
+        case ICC_CMD_QUERY_NVRAM_OP_WRITE:
+            icc_query_nvram_write(s, reply);
+            break;
+        case ICC_CMD_QUERY_NVRAM_OP_READ:
             icc_query_nvram_read(s, reply);
             break;
         default:
