@@ -24,6 +24,7 @@
 #include "hw/pci/pci.h"
 
 #include "liverpool_gc_mmio.h"
+#include "liverpool/lvp_gc_gfx.h"
 #include "liverpool/lvp_gc_samu.h"
 
 #include "ui/console.h"
@@ -64,12 +65,7 @@ typedef struct LiverpoolGCState {
     uint32_t mmio[0x10000];
 
     /* gfx */
-    uint8_t cp_pfp_ucode[0x8000];
-    uint8_t cp_ce_ucode[0x8000];
-    uint8_t cp_me_ram[0x8000];
-    uint8_t cp_mec_me1_ucode[0x8000];
-    uint8_t cp_mec_me2_ucode[0x8000];
-    uint8_t rlc_gpm_ucode[0x8000];
+    gfx_state_t gfx;
 
     /* oss */
     uint8_t sdma0_ucode[0x8000];
@@ -134,24 +130,24 @@ static void liverpool_gc_ucode_load(
 
     switch (mm_index) {
     case mmCP_PFP_UCODE_ADDR:
-        data = s->cp_pfp_ucode;
-        size = sizeof(s->cp_pfp_ucode);
+        data = s->gfx.cp_pfp_ucode;
+        size = sizeof(s->gfx.cp_pfp_ucode);
         break;
     case mmCP_CE_UCODE_ADDR:
-        data = s->cp_ce_ucode;
-        size = sizeof(s->cp_ce_ucode);
+        data = s->gfx.cp_ce_ucode;
+        size = sizeof(s->gfx.cp_ce_ucode);
         break;
     case mmCP_MEC_ME1_UCODE_ADDR:
-        data = s->cp_mec_me1_ucode;
-        size = sizeof(s->cp_mec_me1_ucode);
+        data = s->gfx.cp_mec_me1_ucode;
+        size = sizeof(s->gfx.cp_mec_me1_ucode);
         break;
     case mmCP_MEC_ME2_UCODE_ADDR:
-        data = s->cp_mec_me2_ucode;
-        size = sizeof(s->cp_mec_me2_ucode);
+        data = s->gfx.cp_mec_me2_ucode;
+        size = sizeof(s->gfx.cp_mec_me2_ucode);
         break;
     case mmRLC_GPM_UCODE_ADDR:
-        data = s->rlc_gpm_ucode;
-        size = sizeof(s->rlc_gpm_ucode);
+        data = s->gfx.rlc_gpm_ucode;
+        size = sizeof(s->gfx.rlc_gpm_ucode);
         break;
     case mmSDMA0_UCODE_ADDR:
         data = s->sdma0_ucode;
@@ -169,6 +165,38 @@ static void liverpool_gc_ucode_load(
     assert(offset < size);
     stl_le_p(&data[offset], mm_value);
     s->mmio[mm_index] += 4;
+}
+
+static void liverpool_gc_cp_update_ring(
+    LiverpoolGCState *s, uint32_t mm_index, uint32_t mm_value)
+{
+    uint64_t rb_index, base, size;
+
+    // TODO: Can be optimized via bitmasking and shifts
+    switch (mm_index) {
+    case mmCP_RB0_BASE:
+    case mmCP_RB0_CNTL:
+        rb_index = 0;
+        break;
+    case mmCP_RB1_BASE:
+    case mmCP_RB1_CNTL:
+        rb_index = 1;
+        break;
+    }
+
+    if (rb_index == 0) {
+        base = s->mmio[mmCP_RB0_BASE];
+        size = s->mmio[mmCP_RB0_CNTL] & 0x3F;
+    }
+    if (rb_index == 1) {
+        base = s->mmio[mmCP_RB1_BASE];
+        size = s->mmio[mmCP_RB1_CNTL] & 0x3F;
+    }
+    if (base && size) {
+        size = (1 << size) * 8;
+        base = liverpool_gc_memory_translate(s, base << 8);
+        liverpool_gc_gfx_cp_set_ring_location(&s->gfx, rb_index, base, size);
+    }
 }
 
 static uint64_t liverpool_gc_mmio_read(
@@ -190,6 +218,15 @@ static uint64_t liverpool_gc_mmio_read(
         return 1;
     case mmACP_UNK512F_:
         return 0xFFFFFFFF;
+    /* gfx */
+    case mmCP_RB0_RPTR:
+        return s->gfx.cp_rb[0].rptr;
+    case mmCP_RB1_RPTR:
+        return s->gfx.cp_rb[1].rptr;
+    case mmCP_RB0_WPTR:
+        return s->gfx.cp_rb[0].wptr;
+    case mmCP_RB1_WPTR:
+        return s->gfx.cp_rb[1].wptr;
     /* samu */
     case mmSAM_IX_DATA:
         index_ix = s->mmio[mmSAM_IX_INDEX];
@@ -295,6 +332,7 @@ static void liverpool_gc_mmio_write(
     }
 
     // Direct registers
+    s->mmio[index] = value;
     switch (index) {
     case mmACP_SOFT_RESET:
         mmio[mmACP_SOFT_RESET] = (value << 16);
@@ -305,8 +343,8 @@ static void liverpool_gc_mmio_write(
         break;
     case mmCP_ME_RAM_DATA: {
         uint32_t offset = mmio[mmCP_ME_RAM_WADDR];
-        assert(offset < sizeof(s->cp_me_ram));
-        stl_le_p(&s->cp_me_ram[offset], value);
+        assert(offset < sizeof(s->gfx.cp_me_ram));
+        stl_le_p(&s->gfx.cp_me_ram[offset], value);
         mmio[mmCP_ME_RAM_WADDR] += 4;
         break;
     }
@@ -322,6 +360,24 @@ static void liverpool_gc_mmio_write(
     case mmRLC_GPM_UCODE_DATA:
         liverpool_gc_ucode_load(s, mmRLC_GPM_UCODE_ADDR, value);
         break;
+    case mmCP_RB0_BASE:
+    case mmCP_RB1_BASE:
+    case mmCP_RB0_CNTL:
+    case mmCP_RB1_CNTL:
+        liverpool_gc_cp_update_ring(s, index, value);
+        break;
+    case mmCP_RB0_RPTR:
+        s->gfx.cp_rb[0].rptr = value;
+        break;
+    case mmCP_RB1_RPTR:
+        s->gfx.cp_rb[1].rptr = value;
+        break;
+    case mmCP_RB0_WPTR:
+        s->gfx.cp_rb[0].wptr = value;
+        break;
+    case mmCP_RB1_WPTR:
+        s->gfx.cp_rb[1].wptr = value;
+        break;
     /* oss */
     case mmSRBM_GFX_CNTL: {
         uint32_t me = REG_GET_FIELD(value, SRBM_GFX_CNTL, MEID);
@@ -329,7 +385,6 @@ static void liverpool_gc_mmio_write(
         uint32_t queue = REG_GET_FIELD(value, SRBM_GFX_CNTL, QUEUEID);
         uint32_t vmid = REG_GET_FIELD(value, SRBM_GFX_CNTL, VMID);
         DPRINTF("liverpool_gc_mmio_write: mmSRBM_GFX_CNTL { me: %d, pipe: %d, queue: %d, vmid: %d }\n", me, pipe, queue, vmid);
-        s->mmio[index] = value;
         break;
     }
     case mmSDMA0_UCODE_DATA:
@@ -340,7 +395,6 @@ static void liverpool_gc_mmio_write(
         break;
     default:
         DPRINTF("liverpool_gc_mmio_write: { addr: %llX, size: %X, value: %llX }\n", addr, size, value);
-        s->mmio[index] = value;
     }
 }
 
@@ -382,6 +436,10 @@ static void liverpool_gc_realize(PCIDevice *dev, Error **errp)
     vga_init(vga, OBJECT(dev), pci_address_space(dev),
         pci_address_space_io(dev), true);
     vga->con = graphic_console_init(DEVICE(dev), 0, vga->hw_ops, vga);
+
+    // Command Processor
+    qemu_thread_create(&s->gfx.cp_thread, "lvp-gfx-cp",
+        liverpool_gc_gfx_cp_thread, &s->gfx, QEMU_THREAD_JOINABLE);
 }
 
 static void liverpool_gc_exit(PCIDevice *dev)
