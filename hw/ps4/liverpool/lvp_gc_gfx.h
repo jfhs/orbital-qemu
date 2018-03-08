@@ -24,6 +24,9 @@
 #include "qemu/thread.h"
 #include "exec/hwaddr.h"
 
+/* forward declarations */
+typedef struct gart_state_t gart_state_t;
+
 typedef struct gfx_ring_t {
     uint64_t base;
     uint64_t size;
@@ -37,6 +40,7 @@ typedef struct gfx_ring_t {
 /* GFX State */
 typedef struct gfx_state_t {
     QemuThread cp_thread;
+    gart_state_t* gart;
 
     /* cp */
     gfx_ring_t cp_rb[2];

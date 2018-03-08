@@ -24,6 +24,7 @@
 #include "hw/pci/pci.h"
 
 #include "liverpool_gc_mmio.h"
+#include "liverpool/lvp_gc_gart.h"
 #include "liverpool/lvp_gc_gfx.h"
 #include "liverpool/lvp_gc_samu.h"
 
@@ -63,6 +64,7 @@ typedef struct LiverpoolGCState {
     MemoryRegion iomem[3];
     VGACommonState vga;
     uint32_t mmio[0x10000];
+    gart_state_t gart;
 
     /* gfx */
     gfx_state_t gfx;
@@ -96,29 +98,6 @@ static const MemoryRegionOps liverpool_gc_ops = {
     .write = liverpool_gc_write,
     .endianness = DEVICE_LITTLE_ENDIAN,
 };
-
-/* Liverpool GC Memory */
-
-static uint64_t liverpool_gc_memory_translate(LiverpoolGCState *s, uint64_t addr) {
-    int vmid = 0;
-    uint64_t pde_base, pde_index, pde;
-    uint64_t pte_base, pte_index, pte;
-    uint64_t translated_addr;
-
-    if (vmid < 8) {
-        pde_base = s->mmio[mmVM_CONTEXT0_PAGE_TABLE_BASE_ADDR + (vmid - 0)] << 12;
-    } else {
-		pde_base = s->mmio[mmVM_CONTEXT8_PAGE_TABLE_BASE_ADDR + (vmid - 8)] << 12;
-	}
-
-    pde_index = (addr >> 23) & 0xFFFFF; /* TODO: What's the mask? */
-    pte_index = (addr >> 12) & 0x7FF;
-    pde = ldq_le_phys(&address_space_memory, pde_base + pde_index * 8);
-    pte_base = (pde & ~0xFF);
-    pte = ldq_le_phys(&address_space_memory, pte_base + pte_index * 8);
-    translated_addr = (pte & ~0xFFF) | (addr & 0xFFF);
-    return translated_addr;
-}
 
 /* Liverpool GC MMIO */
 static void liverpool_gc_ucode_load(
@@ -167,6 +146,26 @@ static void liverpool_gc_ucode_load(
     s->mmio[mm_index] += 4;
 }
 
+static void liverpool_gc_gart_update_pde(
+    LiverpoolGCState *s, uint32_t mm_index, uint32_t mm_value)
+{
+    int vmid;
+    uint64_t pde_base;
+
+    switch (mm_index) {
+    case mmVM_CONTEXT0_PAGE_TABLE_BASE_ADDR ...
+         mmVM_CONTEXT7_PAGE_TABLE_BASE_ADDR:
+        vmid = mm_index - mmVM_CONTEXT0_PAGE_TABLE_BASE_ADDR + 0;
+        break;
+    case mmVM_CONTEXT8_PAGE_TABLE_BASE_ADDR ...
+         mmVM_CONTEXT15_PAGE_TABLE_BASE_ADDR:
+        vmid = mm_index - mmVM_CONTEXT8_PAGE_TABLE_BASE_ADDR + 8;
+        break;
+    }
+    pde_base = ((uint64_t)mm_value << 12);
+    liverpool_gc_gart_set_pde(&s->gart, vmid, pde_base);
+}
+
 static void liverpool_gc_cp_update_ring(
     LiverpoolGCState *s, uint32_t mm_index, uint32_t mm_value)
 {
@@ -194,7 +193,7 @@ static void liverpool_gc_cp_update_ring(
     }
     if (base && size) {
         size = (1 << size) * 8;
-        base = liverpool_gc_memory_translate(s, base << 8);
+        base = (base << 8);
         liverpool_gc_gfx_cp_set_ring_location(&s->gfx, rb_index, base, size);
     }
 }
@@ -246,14 +245,12 @@ static void liverpool_gc_ih_rb_push(LiverpoolGCState *s, uint32_t value)
 {
     // Push value
     uint64_t addr = ((uint64_t)s->mmio[mmIH_RB_BASE] << 8) + s->mmio[mmIH_RB_WPTR];
-    addr = liverpool_gc_memory_translate(s, addr);
-    stl_le_phys(&address_space_memory, addr, value);
+    stl_le_phys(s->gart.as[0], addr, value);
     s->mmio[mmIH_RB_WPTR] += 4;
     s->mmio[mmIH_RB_WPTR] &= 0x1FFFF; // IH_RB is 0x20000 bytes in size
     // Update WPTR
     uint64_t wptr_addr = ((uint64_t)s->mmio[mmIH_RB_WPTR_ADDR_HI] << 32) + s->mmio[mmIH_RB_WPTR_ADDR_LO];
-    wptr_addr = liverpool_gc_memory_translate(s, wptr_addr);
-    stl_le_phys(&address_space_memory, wptr_addr, s->mmio[mmIH_RB_WPTR]);
+    stl_le_phys(s->gart.as[0], wptr_addr, s->mmio[mmIH_RB_WPTR]);
 }
 
 static void liverpool_gc_samu_doorbell(LiverpoolGCState *s, uint32_t value)
@@ -336,6 +333,13 @@ static void liverpool_gc_mmio_write(
     switch (index) {
     case mmACP_SOFT_RESET:
         mmio[mmACP_SOFT_RESET] = (value << 16);
+        break;
+    /* gmc */
+    case mmVM_CONTEXT0_PAGE_TABLE_BASE_ADDR ...
+         mmVM_CONTEXT7_PAGE_TABLE_BASE_ADDR:
+    case mmVM_CONTEXT8_PAGE_TABLE_BASE_ADDR ...
+         mmVM_CONTEXT15_PAGE_TABLE_BASE_ADDR:
+        liverpool_gc_gart_update_pde(s, index, value);
         break;
     /* gfx */
     case mmCP_PFP_UCODE_DATA:
@@ -429,6 +433,9 @@ static void liverpool_gc_realize(PCIDevice *dev, Error **errp)
     pci_register_bar(dev, 0, PCI_BASE_ADDRESS_SPACE_MEMORY, &s->iomem[0]);
     pci_register_bar(dev, 2, PCI_BASE_ADDRESS_SPACE_MEMORY, &s->iomem[1]);
     pci_register_bar(dev, 5, PCI_BASE_ADDRESS_SPACE_MEMORY, &s->iomem[2]);
+
+    // GART
+    s->gfx.gart = &s->gart;
 
     // VGA
     VGACommonState *vga = &s->vga;
