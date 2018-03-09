@@ -27,6 +27,6 @@
 
 #include "qemu/typedefs.h"
 
-int generate_hdd_ps4(BlockBackend* blk, uint64_t size);
+int generate_hdd_ps4(BlockBackend* blk, const char* data_path, uint64_t size);
 
 #endif /* QEMU_IMG_PS4_H */

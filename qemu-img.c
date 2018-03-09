@@ -68,6 +68,7 @@ enum {
     OPTION_SIZE = 264,
     OPTION_PREALLOCATION = 265,
     OPTION_SHRINK = 266,
+    OPTION_DATA = 267,
 };
 
 typedef enum OutputFormat {
@@ -555,27 +556,24 @@ fail:
 static int img_create_ps4(int argc, char **argv)
 {
 
-    int c, ret, optind_old;
+    int c, ret;
     uint64_t size = -1;
     const char *fmt = "raw";
     const char *cache = "writeback";
     const char *filename;
+    const char *data_path = NULL;
+    char *options = NULL;
     bool quiet = false;
     bool force_share = false;
     bool writethrough;
     BlockBackend* blk;
-    int flags = BDRV_O_RDWR;
-
-    /* Create disk image */
-    optind_old = optind;
-    if (img_create(argc, argv)) {
-        goto fail;
-    }
-    optind = optind_old;
+    Error *local_err = NULL;
+    int flags = BDRV_O_RDWR | BDRV_O_NO_BACKING;
 
     for(;;) {
         static const struct option long_options[] = {
             {"help", no_argument, 0, 'h'},
+            {"data", required_argument, 0, OPTION_DATA},
             {"object", required_argument, 0, OPTION_OBJECT},
             {0, 0, 0, 0}
         };
@@ -596,13 +594,30 @@ static int img_create_ps4(int argc, char **argv)
         case 'f':
             fmt = optarg;
             break;
+        case 'o':
+            if (!is_valid_option_list(optarg)) {
+                error_report("Invalid option list: %s", optarg);
+                goto fail;
+            }
+            if (!options) {
+                options = g_strdup(optarg);
+            } else {
+                char *old_options = options;
+                options = g_strdup_printf("%s,%s", options, optarg);
+                g_free(old_options);
+            }
+            break;
         case 'q':
             quiet = true;
             break;
-        case 'u':
-            flags |= BDRV_O_NO_BACKING;
-            break;
+        case OPTION_DATA:
+            data_path = optarg;
         }
+    }
+
+    if (!data_path) {
+        error_report("Please specify a folder with the PS4 HDD data (--data)");
+        goto fail;
     }
 
     ret = bdrv_parse_cache_mode(cache, &flags, &writethrough);
@@ -611,16 +626,11 @@ static int img_create_ps4(int argc, char **argv)
         goto fail;
     }
 
-    /* Open created image */
+    /* Get image filename */
     filename = (optind < argc) ? argv[optind++] : NULL;
     if (optind > argc) {
         error_exit("Expecting image file name");
     }
-    blk = img_open(false, filename, fmt, flags, writethrough, quiet, force_share);
-    if (!blk) {
-        goto fail;
-    }
-
     /* Get image size, if specified */
     if (optind < argc) {
         int64_t sval;
@@ -643,8 +653,20 @@ static int img_create_ps4(int argc, char **argv)
         error_exit("Unexpected argument: %s", argv[optind]);
     }
 
+    /* Create image */
+    bdrv_img_create(filename, fmt, NULL, NULL,
+        options, size, flags, quiet, &local_err);
+    if (local_err) {
+        error_reportf_err(local_err, "%s: ", filename);
+        goto fail;
+    }
+    /* Open image */
+    blk = img_open(false, filename, fmt, flags, writethrough, quiet, force_share);
+    if (!blk) {
+        goto fail;
+    }
     /* Write partitions */
-    if (generate_hdd_ps4(blk, size)) {
+    if (generate_hdd_ps4(blk, data_path, size)) {
         goto fail;
     }
     blk_unref(blk);

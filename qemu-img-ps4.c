@@ -271,8 +271,30 @@ static void generate_hdd_sce_da0x6(BlockBackend* blk, uint64_t size,
     blk_pwrite(blk, lba_offset(part->first_lba), magic, strlen(magic), 0);
 }
 
+static void generate_hdd_sce_partition_img(BlockBackend* blk, uint64_t size,
+    gpt_partition_t* part, const char* data_dir, const char* data_name)
+{
+    const path[256];
+    const buffer[4096];
+    size_t offset;
+    size_t count;
+    FILE* file;
+
+    snprintf(path, sizeof(path), "%s/%s", data_dir, data_name);
+    file = fopen(path, "rb");
+    if (!file) {
+        printf("Couldn't open file: %s", path);
+        exit(1);
+    }
+    offset = lba_offset(part->first_lba);
+    while (count = fread(buffer, 1, sizeof(buffer), file)) {
+        blk_pwrite(blk, offset, buffer, count, 0);
+        offset += count;
+    }
+}
+
 static void generate_hdd_sce(BlockBackend* blk, uint64_t size,
-    gpt_partition_t* gpt_partitions)
+    gpt_partition_t* gpt_partitions, const char* data_dir)
 {
     int i;
 
@@ -280,16 +302,24 @@ static void generate_hdd_sce(BlockBackend* blk, uint64_t size,
         if (!memcmp(gpt_partitions[i].type_guid, GPT_TYPE_GUID_SCE_SWAP, 16)) {
             generate_hdd_sce_da0x6(blk, size, &gpt_partitions[i]);
         }
+        if (!memcmp(gpt_partitions[i].type_guid, GPT_TYPE_GUID_SCE_SYSTEM, 16)) {
+            generate_hdd_sce_partition_img(blk, size,
+                &gpt_partitions[i], data_dir, "system.img");
+        }
+        if (!memcmp(gpt_partitions[i].type_guid, GPT_TYPE_GUID_SCE_SYSTEM_EX, 16)) {
+            generate_hdd_sce_partition_img(blk, size,
+                &gpt_partitions[i], data_dir, "system_ex.img");
+        }
     }
 }
 
-int generate_hdd_ps4(BlockBackend* blk, uint64_t size)
+int generate_hdd_ps4(BlockBackend* blk, const char* data_dir, uint64_t size)
 {
     gpt_partition_t gpt_partitions[32];
     memset(&gpt_partitions, 0, sizeof(gpt_partitions));
 
     generate_hdd_mbr(blk, size);
     generate_hdd_gpt(blk, size, gpt_partitions);
-    generate_hdd_sce(blk, size, gpt_partitions);
+    generate_hdd_sce(blk, size, gpt_partitions, data_dir);
     return 0;
 }

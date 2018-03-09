@@ -53,9 +53,9 @@ STEXI
 ETEXI
 
 DEF("create-ps4", img_create_ps4,
-    "create-ps4 [-q] [--object objectdef] [-f fmt] [-b backing_file] [-F backing_fmt] [-u] [-o options] filename [size]")
+    "create-ps4 [-q] [--object objectdef] [-f fmt] [-u] [-o options] [--data path] filename [size]")
 STEXI
-@item create-ps4 [--object @var{objectdef}] [-q] [-f @var{fmt}] [-b @var{backing_file}] [-F @var{backing_fmt}] [-u] [-o @var{options}] @var{filename} [@var{size}]
+@item create-ps4 [--object @var{objectdef}] [-q] [-f @var{fmt}] [-o @var{options}] [--data @var{path}] @var{filename} [@var{size}]
 ETEXI
 
 DEF("dd", img_dd,
