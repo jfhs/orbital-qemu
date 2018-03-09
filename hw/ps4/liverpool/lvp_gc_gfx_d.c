@@ -22,7 +22,9 @@
 #include "hw/ps4/macros.h"
 
 /* CP debugging */
-#define DEBUG_CP 0
+#define DEBUG_CP 1
+
+#define DEBUG_CP_MAX_DATA 8
 
 #define TRACE_PREFIX_TYPE        ""
 #define TRACE_PREFIX_PACKET      "  "
@@ -191,10 +193,10 @@ static void trace_pm4_packet0(const uint32_t *packet)
     TRACE_PACKET("reg: 0x%04X\n", reg);
     TRACE_PACKET("count: %d\n", count);
     TRACE_PACKET("data:\n");
-    for (uint32_t i = 1; i <= min(count, 8); i++) {
+    for (uint32_t i = 1; i <= min(count, DEBUG_CP_MAX_DATA); i++) {
         TRACE_DATA("- %08X\n", packet[i]);
     }
-    if (count < min(count, 8)) {
+    if (count > DEBUG_CP_MAX_DATA) {
         TRACE_DATA("- ...\n");
     }
 }
@@ -224,10 +226,10 @@ static void trace_pm4_packet3(const uint32_t *packet)
     TRACE_PACKET("it-operation: %s (0x%02X)\n", trace_pm4_it_opcode(itop), itop);
     TRACE_PACKET("count: %d\n", count);
     TRACE_PACKET("data:\n");
-    for (uint32_t i = 1; i <= min(count, 8); i++) {
+    for (uint32_t i = 1; i <= min(count, DEBUG_CP_MAX_DATA); i++) {
         TRACE_DATA("- %08X\n", packet[i]);
     }
-    if (count < min(count, 8)) {
+    if (count > DEBUG_CP_MAX_DATA) {
         TRACE_DATA("- ...\n");
     }
 }

@@ -436,6 +436,7 @@ static void liverpool_gc_realize(PCIDevice *dev, Error **errp)
 
     // GART
     s->gfx.gart = &s->gart;
+    s->gfx.mmio = &s->mmio[0];
 
     // VGA
     VGACommonState *vga = &s->vga;

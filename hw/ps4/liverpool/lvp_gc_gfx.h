@@ -40,7 +40,8 @@ typedef struct gfx_ring_t {
 /* GFX State */
 typedef struct gfx_state_t {
     QemuThread cp_thread;
-    gart_state_t* gart;
+    gart_state_t *gart;
+    uint32_t *mmio;
 
     /* cp */
     gfx_ring_t cp_rb[2];

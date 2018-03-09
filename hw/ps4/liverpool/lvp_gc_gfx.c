@@ -79,6 +79,34 @@ static void cp_handle_pm4_it_indirect_buffer(
     address_space_unmap(gart->as[vmid], mapped_ib, ib_base, mapped_size, true);
 }
 
+static void cp_handle_pm4_it_set_config_reg(
+    gfx_state_t *s, const uint32_t *packet, uint32_t count)
+{
+    uint32_t i;
+    uint32_t reg_offset, reg_count; 
+
+    reg_offset = packet[1] & 0xFFFF;
+    reg_count = count - 1;
+    assert(reg_offset + reg_count <= 0x1000);
+    for (i = 0; i < reg_count; i++) {
+        s->mmio[0x2000 + reg_offset] = packet[2 + i];
+    }
+}
+
+static void cp_handle_pm4_it_set_context_reg(
+    gfx_state_t *s, const uint32_t *packet, uint32_t count)
+{
+    uint32_t i;
+    uint32_t reg_offset, reg_count; 
+
+    reg_offset = packet[1] & 0xFFFF;
+    reg_count = count - 1;
+    assert(reg_offset + reg_count <= 0x400);
+    for (i = 0; i < reg_count; i++) {
+        s->mmio[0xA000 + reg_offset] = packet[2 + i];
+    }
+}
+
 /* cp packet types */
 static uint32_t cp_handle_pm4_type0(gfx_state_t *s, const uint32_t *packet)
 {
@@ -111,6 +139,12 @@ static uint32_t cp_handle_pm4_type3(gfx_state_t *s, const uint32_t *packet)
     switch (itop) {
     case PM4_IT_INDIRECT_BUFFER:
         cp_handle_pm4_it_indirect_buffer(s, packet);
+        break;
+    case PM4_IT_SET_CONFIG_REG:
+        cp_handle_pm4_it_set_config_reg(s, packet, count);
+        break;
+    case PM4_IT_SET_CONTEXT_REG:
+        cp_handle_pm4_it_set_context_reg(s, packet, count);
         break;
     }
     return count + 1;
