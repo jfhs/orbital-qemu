@@ -20,15 +20,49 @@
 #include "aeolia.h"
 #include "qemu/osdep.h"
 #include "hw/pci/pci.h"
+#include "hw/pci/msi.h"
+
+#define AEOLIA_SDHCI(obj) OBJECT_CHECK(AeoliaSDHCIState, (obj), TYPE_AEOLIA_SDHCI)
 
 typedef struct AeoliaSDHCIState {
+    /*< private >*/
     PCIDevice parent_obj;
+    /*< public >*/
+    MemoryRegion iomem;
 } AeoliaSDHCIState;
+
+static uint64_t aeolia_sdhci_read(
+    void *opaque, hwaddr addr, unsigned size)
+{
+    return 0;
+}
+
+static void aeolia_sdhci_write(
+    void *opaque, hwaddr addr, uint64_t value, unsigned size)
+{
+}
+
+static const MemoryRegionOps aeolia_sdhci_ops = {
+    .read = aeolia_sdhci_read,
+    .write = aeolia_sdhci_write,
+    .endianness = DEVICE_LITTLE_ENDIAN,
+};
 
 static void aeolia_sdhci_realize(PCIDevice *dev, Error **errp)
 {
+    AeoliaSDHCIState *s = AEOLIA_SDHCI(dev);
+
     // PCI Configuration Space
     dev->config[PCI_CLASS_PROG] = 0x03;
+    msi_init(dev, 0x50, 1, true, false, NULL);
+    if (pci_is_express(dev)) {
+        pcie_endpoint_cap_init(dev, 0x70);
+    }
+
+    // Memory
+    memory_region_init_io(&s->iomem, OBJECT(dev),
+        &aeolia_sdhci_ops, s, "aeolia-sdhci-mem", 0x1000);
+    pci_register_bar(dev, 0, PCI_BASE_ADDRESS_SPACE_MEMORY, &s->iomem);
 }
 
 static void aeolia_sdhci_class_init(ObjectClass *klass, void *data)

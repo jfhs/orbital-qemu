@@ -20,15 +20,49 @@
 #include "aeolia.h"
 #include "qemu/osdep.h"
 #include "hw/pci/pci.h"
+#include "hw/pci/msi.h"
+
+#define AEOLIA_GBE(obj) OBJECT_CHECK(AeoliaGBEState, (obj), TYPE_AEOLIA_GBE)
 
 typedef struct AeoliaGBEState {
+    /*< private >*/
     PCIDevice parent_obj;
+    /*< public >*/
+    MemoryRegion iomem;
 } AeoliaGBEState;
+
+static uint64_t aeolia_gbe_read(
+    void *opaque, hwaddr addr, unsigned size)
+{
+    return 0;
+}
+
+static void aeolia_gbe_write(
+    void *opaque, hwaddr addr, uint64_t value, unsigned size)
+{
+}
+
+static const MemoryRegionOps aeolia_gbe_ops = {
+    .read = aeolia_gbe_read,
+    .write = aeolia_gbe_write,
+    .endianness = DEVICE_LITTLE_ENDIAN,
+};
 
 static void aeolia_gbe_realize(PCIDevice *dev, Error **errp)
 {
+    AeoliaGBEState *s = AEOLIA_GBE(dev);
+
     // PCI Configuration Space
     dev->config[PCI_CLASS_PROG] = 0x01;
+    msi_init(dev, 0x50, 1, true, false, NULL);
+    if (pci_is_express(dev)) {
+        pcie_endpoint_cap_init(dev, 0x70);
+    }
+
+    // Memory
+    memory_region_init_io(&s->iomem, OBJECT(dev),
+        &aeolia_gbe_ops, s, "aeolia-gbe-mem", 0x4000);
+    pci_register_bar(dev, 0, PCI_BASE_ADDRESS_SPACE_MEMORY, &s->iomem);
 }
 
 static void aeolia_gbe_class_init(ObjectClass *klass, void *data)

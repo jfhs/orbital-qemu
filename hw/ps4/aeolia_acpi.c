@@ -22,7 +22,7 @@
 
 #include "aeolia.h"
 #include "qemu/osdep.h"
-#include "hw/hw.h"
+#include "hw/pci/pci.h"
 #include "hw/pci/msi.h"
 
 #define AEOLIA_ACPI(obj) OBJECT_CHECK(AeoliaACPIState, (obj), TYPE_AEOLIA_ACPI)
@@ -31,7 +31,7 @@ typedef struct AeoliaACPIState {
     /*< private >*/
     PCIDevice parent_obj;
     /*< public >*/
-    MemoryRegion iomem[3];
+    MemoryRegion iomem[2];
 } AeoliaACPIState;
 
 static uint64_t aeolia_acpi_read(
@@ -56,6 +56,7 @@ static void aeolia_acpi_realize(PCIDevice *dev, Error **errp)
     AeoliaACPIState *s = AEOLIA_ACPI(dev);
 
     // PCI Configuration Space
+    dev->config[PCI_CLASS_PROG] = 0x00;
     msi_init(dev, 0x50, 1, true, false, NULL);
     if (pci_is_express(dev)) {
         pcie_endpoint_cap_init(dev, 0x70);

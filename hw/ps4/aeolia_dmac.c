@@ -20,15 +20,53 @@
 #include "aeolia.h"
 #include "qemu/osdep.h"
 #include "hw/pci/pci.h"
+#include "hw/pci/msi.h"
+
+#define AEOLIA_DMAC(obj) OBJECT_CHECK(AeoliaDMACState, (obj), TYPE_AEOLIA_DMAC)
 
 typedef struct AeoliaDMACState {
+    /*< private >*/
     PCIDevice parent_obj;
+    /*< public >*/
+    MemoryRegion iomem[2];
 } AeoliaDMACState;
+
+static uint64_t aeolia_dmac_read(
+    void *opaque, hwaddr addr, unsigned size)
+{
+    return 0;
+}
+
+static void aeolia_dmac_write(
+    void *opaque, hwaddr addr, uint64_t value, unsigned size)
+{
+}
+
+static const MemoryRegionOps aeolia_dmac_ops = {
+    .read = aeolia_dmac_read,
+    .write = aeolia_dmac_write,
+    .endianness = DEVICE_LITTLE_ENDIAN,
+};
 
 static void aeolia_dmac_realize(PCIDevice *dev, Error **errp)
 {
+    AeoliaDMACState *s = AEOLIA_DMAC(dev);
+
     // PCI Configuration Space
     dev->config[PCI_CLASS_PROG] = 0x05;
+    msi_init(dev, 0x50, 1, true, false, NULL);
+    if (pci_is_express(dev)) {
+        pcie_endpoint_cap_init(dev, 0x70);
+    }
+
+    // Memory
+    memory_region_init_io(&s->iomem[0], OBJECT(dev),
+        &aeolia_dmac_ops, s, "aeolia-dmac-0", 0x1000);
+    memory_region_init_io(&s->iomem[1], OBJECT(dev),
+        &aeolia_dmac_ops, s, "aeolia-dmac-1", 0x1000);
+
+    pci_register_bar(dev, 0, PCI_BASE_ADDRESS_SPACE_MEMORY, &s->iomem[0]);
+    pci_register_bar(dev, 2, PCI_BASE_ADDRESS_SPACE_MEMORY, &s->iomem[1]);
 }
 
 static void aeolia_dmac_class_init(ObjectClass *klass, void *data)
