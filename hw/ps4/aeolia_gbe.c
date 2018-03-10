@@ -24,6 +24,10 @@
 
 #define AEOLIA_GBE(obj) OBJECT_CHECK(AeoliaGBEState, (obj), TYPE_AEOLIA_GBE)
 
+#define AGBE_DEVICE_ID   0x11B
+#define AGBE_DEVICE_REV  0x11A
+#define AGBE_UNK2880     0x2880
+
 typedef struct AeoliaGBEState {
     /*< private >*/
     PCIDevice parent_obj;
@@ -34,12 +38,25 @@ typedef struct AeoliaGBEState {
 static uint64_t aeolia_gbe_read(
     void *opaque, hwaddr addr, unsigned size)
 {
+    switch (addr) {
+    case AGBE_DEVICE_ID:
+        assert(size == 1);
+        return 0xBD;
+    case AGBE_DEVICE_REV:
+        assert(size == 1);
+        return 0x00; // TODO
+    case AGBE_UNK2880:
+        assert(size == 2);
+        return 0x10; // TODO
+    }
+    printf("aeolia_gbe_read { addr: %llX, size: %X }\n", addr, size);
     return 0;
 }
 
 static void aeolia_gbe_write(
     void *opaque, hwaddr addr, uint64_t value, unsigned size)
 {
+    printf("aeolia_gbe_write { addr: %llX, size: %X, value: %llX }\n", addr, size, value);
 }
 
 static const MemoryRegionOps aeolia_gbe_ops = {
