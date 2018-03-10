@@ -34,50 +34,41 @@ typedef struct AeoliaACPIState {
     MemoryRegion iomem[3];
 } AeoliaACPIState;
 
-static uint64_t aeolia_ram_read(void *opaque, hwaddr addr,
-                              unsigned size)
+static uint64_t aeolia_acpi_read(
+    void *opaque, hwaddr addr, unsigned size)
 {
     return 0;
 }
 
-static void aeolia_ram_write(void *opaque, hwaddr addr,
-                           uint64_t value, unsigned size)
+static void aeolia_acpi_write(
+    void *opaque, hwaddr addr, uint64_t value, unsigned size)
 {
 }
 
-static const MemoryRegionOps aeolia_ram_ops = {
-    .read = aeolia_ram_read,
-    .write = aeolia_ram_write,
+static const MemoryRegionOps aeolia_acpi_ops = {
+    .read = aeolia_acpi_read,
+    .write = aeolia_acpi_write,
     .endianness = DEVICE_LITTLE_ENDIAN,
 };
 
-static int aeolia_acpi_init(PCIDevice *dev)
+static void aeolia_acpi_realize(PCIDevice *dev, Error **errp)
 {
     AeoliaACPIState *s = AEOLIA_ACPI(dev);
-    uint8_t *pci_conf = dev->config;
 
     // PCI Configuration Space
-    dev->config[PCI_CLASS_PROG] = 0x00;
-    pci_set_word(pci_conf + PCI_COMMAND, PCI_COMMAND_IO | PCI_COMMAND_MEMORY |
-                 PCI_COMMAND_MASTER | PCI_COMMAND_SPECIAL);
-
-    /* Aeolia Area */
-    memory_region_init_io(&s->iomem[0], OBJECT(dev), &aeolia_ram_ops, (void*)"acpi-0",
-                          "aeolia-acpi-0", 0x2000000);
-    pci_register_bar(dev, 0, PCI_BASE_ADDRESS_SPACE_MEMORY, &s->iomem[0]);
-    memory_region_init_io(&s->iomem[1], OBJECT(dev), &aeolia_ram_ops, (void*)"acpi-1",
-                          "aeolia-acpi-1", 0x100);
-    pci_register_bar(dev, 1, PCI_BASE_ADDRESS_SPACE_MEMORY, &s->iomem[1]);
-    memory_region_init_io(&s->iomem[2], OBJECT(dev), &aeolia_ram_ops, (void*)"acpi-2",
-                          "aeolia-acpi-2", 0x100);
-    pci_register_bar(dev, 2, PCI_BASE_ADDRESS_SPACE_MEMORY, &s->iomem[2]);
-
-    if (pci_is_express(dev)) {
-        pcie_endpoint_cap_init(dev, 0xa0);
-    }
     msi_init(dev, 0x50, 1, true, false, NULL);
+    if (pci_is_express(dev)) {
+        pcie_endpoint_cap_init(dev, 0x70);
+    }
 
-    return 0;
+    // Memory
+    memory_region_init_io(&s->iomem[0], OBJECT(dev),
+        &aeolia_acpi_ops, s, "aeolia-acpi-mem", 0x2000000);
+    memory_region_init_io(&s->iomem[1], OBJECT(dev),
+        &aeolia_acpi_ops, s, "aeolia-acpi-io", 0x100);
+
+    pci_register_bar(dev, 0, PCI_BASE_ADDRESS_SPACE_MEMORY, &s->iomem[0]);
+    pci_register_bar(dev, 2, PCI_BASE_ADDRESS_SPACE_IO, &s->iomem[1]);
 }
 
 static void aeolia_acpi_class_init(ObjectClass *klass, void *data)
@@ -89,7 +80,7 @@ static void aeolia_acpi_class_init(ObjectClass *klass, void *data)
     pc->revision = 0;
     pc->is_express = true;
     pc->class_id = PCI_CLASS_SYSTEM_OTHER;
-    pc->init = aeolia_acpi_init;
+    pc->realize = aeolia_acpi_realize;
 }
 
 static const TypeInfo aeolia_acpi_info = {

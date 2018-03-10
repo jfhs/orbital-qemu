@@ -162,15 +162,15 @@ void aeolia_pcie_set_icc_data(PCIDevice* dev, char* icc_data)
 }
 
 /* Aeolia PCIe Unk0 */
-static uint64_t aeolia_pcie_0_read
-    (void *opaque, hwaddr addr, unsigned size)
+static uint64_t aeolia_pcie_0_read(
+    void *opaque, hwaddr addr, unsigned size)
 {
     printf("aeolia_pcie_0_read:  { addr: %llX, size: %X }\n", addr, size);
     return 0;
 }
 
-static void aeolia_pcie_0_write
-    (void *opaque, hwaddr addr, uint64_t value, unsigned size)
+static void aeolia_pcie_0_write(
+    void *opaque, hwaddr addr, uint64_t value, unsigned size)
 {
     printf("aeolia_pcie_0_write: { addr: %llX, size: %X, value: %llX }\n", addr, size, value);
 }
