@@ -124,7 +124,7 @@ static void aeolia_mem_realize(PCIDevice *dev, Error **errp)
     // Memory
     memory_region_init_io(&s->iomem[0], OBJECT(dev),
         &aeolia_mem_ops, s, "aeolia-mem-0", 0x1000);
-    // TODO: Setting this to 0x40000000 will cause the emulator to hang
+    // TODO: Setting this to 0x40000000 will cause the kernel to crash
     memory_region_init_io(&s->iomem[1], OBJECT(dev),
         &aeolia_mem_ops, s, "aeolia-mem-1", 0x10000000 /* 0x40000000 */);
     memory_region_init_io(&s->iomem[2], OBJECT(dev),

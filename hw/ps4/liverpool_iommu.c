@@ -1188,9 +1188,7 @@ static void liverpool_iommu_init(LiverpoolIOMMUState *s)
     liverpool_iommu_set_quad(s, AMDVI_MMIO_STATUS, 0, 0x98, 0x67);
 
     /* Reset device ident */
-    pci_config_set_vendor_id(s->pci->config, PCI_VENDOR_ID_AMD);
     pci_config_set_prog_interface(s->pci->config, 00);
-    pci_config_set_device_id(s->pci->config, s->devid);
     pci_config_set_class(s->pci->config, 0x0806);
 
     /* Reset AMDVI specific capabilities, all r/o */
@@ -1248,7 +1246,6 @@ static void liverpool_iommu_realize(DeviceState *dev, Error **err)
     sysbus_init_mmio(SYS_BUS_DEVICE(s), &s->mmio);
     sysbus_mmio_map(SYS_BUS_DEVICE(s), 0, AMDVI_BASE_ADDR);
     pci_setup_iommu(bus, liverpool_iommu_host_dma_iommu, s);
-    s->devid = object_property_get_int(OBJECT(s->pci), "addr", err);
     msi_init(s->pci, 0, 1, true, false, err);
     liverpool_iommu_init(s);
 }
