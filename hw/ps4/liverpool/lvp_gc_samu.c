@@ -674,15 +674,15 @@ static void samu_packet_rand(samu_state_t *s,
     qcrypto_random_bytes(reply_rand->data, 0x10, &error_fatal);
 }
 
-void liverpool_gc_samu_packet(samu_state_t *s, uint64_t addr)
+void liverpool_gc_samu_packet(samu_state_t *s,
+    uint64_t query_addr, uint64_t reply_addr)
 {
     uint64_t packet_length = 0x1000;
-    uint64_t query_addr = addr;
-    uint64_t reply_addr = addr & 0xFFF00000; // TODO: Where does this address come from?
     samu_packet_t *query, *reply;
     hwaddr query_len = packet_length;
     hwaddr reply_len = packet_length;
 
+    reply_addr = query_addr & 0xFFF00000; // TODO: Where does this address come from?
     query = (samu_packet_t*)address_space_map(
         &address_space_memory, query_addr, &query_len, true);
     reply = (samu_packet_t*)address_space_map(

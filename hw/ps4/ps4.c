@@ -582,7 +582,7 @@ static void ps4_init(MachineState *machine)
     pci_bus = phb->bus;
     s->pci_bus = pci_bus;
 
-   /* create ISA bus */
+    /* create ISA bus */
     lpc = pci_create_simple_multifunction(pci_bus, PCI_DEVFN(ICH9_LPC_DEV,
                                           ICH9_LPC_FUNC), true,
                                           TYPE_ICH9_LPC_DEVICE);

@@ -255,25 +255,29 @@ static void liverpool_gc_ih_rb_push(LiverpoolGCState *s, uint32_t value)
 
 static void liverpool_gc_samu_doorbell(LiverpoolGCState *s, uint32_t value)
 {
-    uint64_t packet;
-    uint64_t paddr;
+    uint64_t query_addr;
+    uint64_t reply_addr;
     uint64_t msi_addr;
     uint32_t msi_data;
     PCIDevice* dev;
 
     assert(value == 1);
-    packet = s->samu_ix[ixSAM_PADDR_HI];
-    packet = s->samu_ix[ixSAM_PADDR_LO] | (packet << 32);
-    paddr = packet & 0xFFFFFFFFFFFFULL;
-    printf("liverpool_gc_samu_doorbell: { flags: %llX, paddr: %llX }\n", packet >> 48, paddr);
+    query_addr = s->samu_ix[ixSAM_IH_CPU_AM32_INT_CTX_HIGH];
+    query_addr = s->samu_ix[ixSAM_IH_CPU_AM32_INT_CTX_LOW] | (query_addr << 32);
+    query_addr &= 0xFFFFFFFFFFFFULL;
+    reply_addr = s->samu_ix[ixSAM_IH_AM32_CPU_INT_CTX_HIGH];
+    reply_addr = s->samu_ix[ixSAM_IH_AM32_CPU_INT_CTX_LOW] | (reply_addr << 32);
+    reply_addr &= 0xFFFFFFFFFFFFULL;
+    printf("liverpool_gc_samu_doorbell: { flags: %llX, query: %llX, reply: %llX }\n",
+        query_addr >> 48, query_addr, reply_addr);
 
-    if (packet & SAMU_DOORBELL_FLAG_INIT) {
-        liverpool_gc_samu_init(&s->samu, paddr);
+    uint32_t command = ldl_le_phys(&address_space_memory, query_addr);
+    if (command == 0) {
+        liverpool_gc_samu_init(&s->samu, query_addr);
     } else {
-        liverpool_gc_samu_packet(&s->samu, paddr);
+        liverpool_gc_samu_packet(&s->samu, query_addr, reply_addr);
     }
 
-    uint32_t command = ldl_le_phys(&address_space_memory, paddr);
     if (command == SAMU_CMD_SERVICE_RAND) {
         return;
     }
@@ -282,7 +286,7 @@ static void liverpool_gc_samu_doorbell(LiverpoolGCState *s, uint32_t value)
     liverpool_gc_ih_rb_push(s, 0 /* TODO */);
     liverpool_gc_ih_rb_push(s, 0 /* TODO */);
     liverpool_gc_ih_rb_push(s, 0 /* TODO */);
-    s->samu_ix[ixSAM_INTST] |= 1;
+    s->samu_ix[ixSAM_IH_AM32_CPU_INT_STATUS] |= 1;
 
     /* Trigger MSI */
     dev = PCI_DEVICE(s);
@@ -304,7 +308,7 @@ static void liverpool_gc_mmio_write(
     switch (index) {
     case mmSAM_IX_DATA:
         switch (s->mmio[mmSAM_IX_INDEX]) {
-        case ixSAM_DOORBELL:
+        case ixSAM_IH_CPU_AM32_INT:
             liverpool_gc_samu_doorbell(s, value);
             break;
         default:
@@ -437,13 +441,6 @@ static void liverpool_gc_realize(PCIDevice *dev, Error **errp)
     // GART
     s->gfx.gart = &s->gart;
     s->gfx.mmio = &s->mmio[0];
-
-    // VGA
-    VGACommonState *vga = &s->vga;
-    vga_common_init(vga, OBJECT(dev), true);
-    vga_init(vga, OBJECT(dev), pci_address_space(dev),
-        pci_address_space_io(dev), true);
-    vga->con = graphic_console_init(DEVICE(dev), 0, vga->hw_ops, vga);
 
     // Command Processor
     qemu_thread_create(&s->gfx.cp_thread, "lvp-gfx-cp",

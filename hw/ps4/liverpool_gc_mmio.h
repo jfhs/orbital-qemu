@@ -81,15 +81,14 @@
 // SAMU IX
 #define ixSAM_RST_HOST_SOFT_RESET                        0x00000001
 #define ixSAM_CGC_HOST_CTRL                              0x00000003
-#define ixSAM_DOORBELL                                   0x00000032
-#define ixSAM_PADDR_HI                                   0x00000033
-#define ixSAM_PADDR_LO                                   0x00000034
-#define ixSAM_UNK35                                      0x00000035
-#define ixSAM_UNK36                                      0x00000036
-#define ixSAM_UNK37                                      0x00000037
-#define ixSAM_SCRATCH_0                                  0x00000038
-#define ixSAM_BUSY                                       0x0000004A
-#define ixSAM_INTST                                      0x0000004B
+#define ixSAM_IH_CPU_AM32_INT                            0x00000032
+#define ixSAM_IH_CPU_AM32_INT_CTX_HIGH                   0x00000033
+#define ixSAM_IH_CPU_AM32_INT_CTX_LOW                    0x00000034
+#define ixSAM_IH_AM32_CPU_INT_CTX_HIGH                   0x00000035
+#define ixSAM_IH_AM32_CPU_INT_CTX_LOW                    0x00000036
+#define ixSAM_IH_AM32_CPU_INT_ACK                        0x00000037
+#define ixSAM_IH_CPU_AM32_INT_STATUS                     0x0000004A
+#define ixSAM_IH_AM32_CPU_INT_STATUS                     0x0000004B
 #define ixSAM_RST_HOST_SOFT_RST_RDY                      0x00000051
 
 // SAMU SAB IX
