@@ -1,7 +1,7 @@
 /*
  * QEMU model of Liverpool's Secure Asset Management Unit (SAMU) device.
  *
- * Copyright (c) 2017 Alexandro Sanchez Bach
+ * Copyright (c) 2017-2018 Alexandro Sanchez Bach
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -38,6 +38,9 @@ do { \
 } while (0)
 
 /* SAMU secure kernel (based on 5.00) */
+#define MODULE_ERR_OK        0x0
+#define MODULE_ERR_FFFFFFDC  0xFFFFFFDC
+
 #define MODULE_AC_MGR     "80010006"
 #define MODULE_AUTH_MGR   "80010008"
 #define MODULE_IDATA_MGR  "80010009"
@@ -48,12 +51,18 @@ do { \
 #define AUTHID_IDATA_MGR  0x3E00000000000006ULL
 #define AUTHID_KEY_MGR    0x3E00000000000007ULL
 
-#define AUTHMGR_VERIFY_HEADER        1
-#define AUTHMGR_LOAD_SELF_SEGMENT    2
-#define AUTHMGR_LOAD_SELF_BLOCK      6
-#define AUTHMGR_INVOKE_CHECK         9
+#define AUTHMGR_VERIFY_HEADER        0x01
+#define AUTHMGR_LOAD_SELF_SEGMENT    0x02
+#define AUTHMGR_LOAD_SELF_BLOCK      0x06
+#define AUTHMGR_INVOKE_CHECK         0x09
+#define AUTHMGR_IS_LOADABLE          0x16
 
 typedef struct authmgr_verify_header_t {
+    uint64_t addr;
+    uint32_t unk_08;
+    uint32_t unk_0C;
+    uint32_t unk_10;
+    uint32_t unk_1C; // out
 } authmgr_verify_header_t;
 
 typedef struct authmgr_load_self_segment_t {
@@ -67,6 +76,19 @@ typedef struct authmgr_load_self_block_t {
 
 typedef struct authmgr_invoke_check_t {
 } authmgr_invoke_check_t;
+
+typedef struct authmgr_is_loadable_t {
+    /* <input> */
+    uint32_t path_id; // @ 0xA8
+    uint32_t unk_04;  // @ 0xA4
+    uint32_t unk_08;  // @ 0xA0: comes from authmgr_verify_header_t::unk_1C
+    uint16_t unk_0C;  // @ 0x9C
+    uint16_t unk_0E;  // @ 0x9A: related to sceSblAIMgrIsTestKit / sceSblAIMgrIsDevKit
+    uint64_t addr_10; // @ 0x98: physical address of AuthMgr context #2
+    uint64_t addr_18; // @ 0x90: previous address + 0x88
+    /* <output> */
+    uint32_t unk_20;  // @ 0x88
+} authmgr_is_loadable_t;
 
 /* Secure Kernel emulation (based on 5.00) */
 static void samu_authmgr_verify_header(
@@ -89,6 +111,12 @@ static void samu_authmgr_load_self_block(
 
 static void samu_authmgr_invoke_check(
     const authmgr_invoke_check_t* query, authmgr_invoke_check_t* reply)
+{
+    DPRINTF("unimplemented");
+}
+
+static void samu_authmgr_is_loadable(
+    const authmgr_is_loadable_t* query, authmgr_is_loadable_t* reply)
 {
     DPRINTF("unimplemented");
 }
@@ -316,7 +344,7 @@ static void samu_packet_mailbox(samu_state_t *s,
     reply_mb->unk_00 = query_mb->unk_00;
     reply_mb->module_id = query_mb->module_id;
     reply_mb->function_id = query_mb->function_id;
-    reply_mb->reserved = 0;
+    reply_mb->retval = MODULE_ERR_OK;
 
     switch (query_mb->module_id) {
     case AUTHID_AUTH_MGR:
@@ -340,6 +368,11 @@ static void samu_packet_mailbox(samu_state_t *s,
             samu_authmgr_invoke_check(
                 (authmgr_invoke_check_t*)&query_mb->data,
                 (authmgr_invoke_check_t*)&reply_mb->data);
+            break;
+        case AUTHMGR_IS_LOADABLE:
+            samu_authmgr_is_loadable(
+                (authmgr_is_loadable_t*)&query_mb->data,
+                (authmgr_is_loadable_t*)&reply_mb->data);
             break;
         default:
             DPRINTF("Unknown Function ID: 0x%X", query_mb->function_id);
