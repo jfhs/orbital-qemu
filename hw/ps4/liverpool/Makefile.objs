@@ -1,4 +1,5 @@
 obj-y += lvp_gc_gart.o
 obj-y += lvp_gc_gfx_d.o
 obj-y += lvp_gc_gfx.o
+obj-y += lvp_gc_samu_d.o
 obj-y += lvp_gc_samu.o
