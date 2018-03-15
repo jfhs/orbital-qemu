@@ -48,10 +48,50 @@ do { \
 #define AUTHID_IDATA_MGR  0x3E00000000000006ULL
 #define AUTHID_KEY_MGR    0x3E00000000000007ULL
 
-#define AUTHID_AUTH_MGR__VERIFY_HEADER        1
-#define AUTHID_AUTH_MGR__LOAD_SELF_SEGMENT    2
-#define AUTHID_AUTH_MGR__LOAD_SELF_BLOCK      6
-#define AUTHID_AUTH_MGR__INVOKE_CHECK         9
+#define AUTHMGR_VERIFY_HEADER        1
+#define AUTHMGR_LOAD_SELF_SEGMENT    2
+#define AUTHMGR_LOAD_SELF_BLOCK      6
+#define AUTHMGR_INVOKE_CHECK         9
+
+typedef struct authmgr_verify_header_t {
+} authmgr_verify_header_t;
+
+typedef struct authmgr_load_self_segment_t {
+    uint64_t addr;
+    uint32_t unk_08;
+    uint32_t unk_0C;
+} authmgr_load_self_segment_t;
+
+typedef struct authmgr_load_self_block_t {
+} authmgr_load_self_block_t;
+
+typedef struct authmgr_invoke_check_t {
+} authmgr_invoke_check_t;
+
+/* Secure Kernel emulation (based on 5.00) */
+static void samu_authmgr_verify_header(
+    const authmgr_verify_header_t* query, authmgr_verify_header_t* reply)
+{
+    DPRINTF("unimplemented");
+}
+
+static void samu_authmgr_load_self_segment(
+    const authmgr_load_self_segment_t* query, authmgr_load_self_segment_t* reply)
+{
+    DPRINTF("unimplemented");
+}
+
+static void samu_authmgr_load_self_block(
+    const authmgr_load_self_block_t* query, authmgr_load_self_block_t* reply)
+{
+    DPRINTF("unimplemented");
+}
+
+static void samu_authmgr_invoke_check(
+    const authmgr_invoke_check_t* query, authmgr_invoke_check_t* reply)
+{
+    DPRINTF("unimplemented");
+}
 
 /* SAMU emulation */
 static void samu_packet_io_write(samu_state_t *s,
@@ -278,6 +318,54 @@ static void samu_packet_mailbox(samu_state_t *s,
     reply_mb->function_id = query_mb->function_id;
     reply_mb->reserved = 0;
 
+    switch (query_mb->module_id) {
+    case AUTHID_AUTH_MGR:
+        switch (query_mb->function_id) {
+        case AUTHMGR_VERIFY_HEADER:
+            samu_authmgr_verify_header(
+                (authmgr_verify_header_t*)&query_mb->data,
+                (authmgr_verify_header_t*)&reply_mb->data);
+            break;
+        case AUTHMGR_LOAD_SELF_SEGMENT:
+            samu_authmgr_load_self_segment(
+                (authmgr_load_self_segment_t*)&query_mb->data,
+                (authmgr_load_self_segment_t*)&reply_mb->data);
+            break;      
+        case AUTHMGR_LOAD_SELF_BLOCK:
+            samu_authmgr_load_self_block(
+                (authmgr_load_self_block_t*)&query_mb->data,
+                (authmgr_load_self_block_t*)&reply_mb->data);
+            break;
+        case AUTHMGR_INVOKE_CHECK:
+            samu_authmgr_invoke_check(
+                (authmgr_invoke_check_t*)&query_mb->data,
+                (authmgr_invoke_check_t*)&reply_mb->data);
+            break;
+        default:
+            DPRINTF("Unknown Function ID: 0x%X", query_mb->function_id);
+        }
+        break;
+    case AUTHID_AC_MGR:
+        switch (query_mb->function_id) {
+        default:
+            DPRINTF("Unknown Function ID: 0x%X", query_mb->function_id);
+        }
+        break;
+    case AUTHID_IDATA_MGR:
+        switch (query_mb->function_id) {
+        default:
+            DPRINTF("Unknown Function ID: 0x%X", query_mb->function_id);
+        }
+        break;
+    case AUTHID_KEY_MGR:
+        switch (query_mb->function_id) {
+        default:
+            DPRINTF("Unknown Function ID: 0x%X", query_mb->function_id);
+        }
+        break;
+    default:
+        DPRINTF("Unknown Module ID: 0x%llX", query_mb->module_id);
+    }
 }
 
 static void samu_packet_rand(samu_state_t *s,
