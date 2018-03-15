@@ -189,6 +189,8 @@ static uint64_t aeolia_pcie_1_read
     case APCIE_RTC_STATUS:
         return APCIE_RTC_STATUS__BATTERY_OK |
                APCIE_RTC_STATUS__CLOCK_OK;
+    case 0x210:
+        return 0x18080; /* check 0xFFFFFFFF82833286 @ 5.00 */
     case APCIE_CHIP_ID0:
         return 0x41B30130;
     case APCIE_CHIP_ID1:
@@ -455,7 +457,7 @@ static uint64_t aeolia_pcie_peripherals_read(
     case WDT_TIMER0:
     case WDT_TIMER1:
         value = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL); // TODO
-        value /= 10000000LL; // TODO: What's the appropiate factor
+        value /= 100LL; // TODO: What's the appropiate factor
         break;
     // SFlash
     case SFLASH_VENDOR:
