@@ -39,7 +39,9 @@ do { \
 
 /* SAMU secure kernel (based on 5.00) */
 #define MODULE_ERR_OK        0x0
+#define MODULE_ERR_FFFFFFDA  0xFFFFFFDA
 #define MODULE_ERR_FFFFFFDC  0xFFFFFFDC
+#define MODULE_ERR_FFFFFFEA  0xFFFFFFEA
 
 #define MODULE_AC_MGR     "80010006"
 #define MODULE_AUTH_MGR   "80010008"
@@ -50,6 +52,19 @@ do { \
 #define AUTHID_AUTH_MGR   0x3E00000000000005ULL
 #define AUTHID_IDATA_MGR  0x3E00000000000006ULL
 #define AUTHID_KEY_MGR    0x3E00000000000007ULL
+
+#define ACMGR_PATH_INVALID              0
+#define ACMGR_PATH_SYSTEM               1
+#define ACMGR_PATH_SYSTEM_EX            2
+#define ACMGR_PATH_UPDATE               3
+#define ACMGR_PATH_PREINST              4
+#define ACMGR_PATH_PREINST2             5
+#define ACMGR_PATH_PFSMNT               6
+#define ACMGR_PATH_USB                  7
+#define ACMGR_PATH_HOST                 8
+#define ACMGR_PATH_ROOT                 9
+#define ACMGR_PATH_DIAG                10
+#define ACMGR_PATH_RDIAG               11
 
 #define AUTHMGR_VERIFY_HEADER        0x01
 #define AUTHMGR_LOAD_SELF_SEGMENT    0x02
@@ -66,9 +81,14 @@ typedef struct authmgr_verify_header_t {
 } authmgr_verify_header_t;
 
 typedef struct authmgr_load_self_segment_t {
-    uint64_t addr;
-    uint32_t unk_08;
-    uint32_t unk_0C;
+    uint64_t chunk_table_addr; // @ 0xA8
+    uint32_t unk_08;  // @ 0xA0
+    uint32_t unk_0C;  // @ 0x9C
+    uint64_t zero_10; // @ 0x98
+    uint64_t zero_18; // @ 0x90
+    uint32_t zero_20; // @ 0x88
+    uint32_t zero_24; // @ 0x84
+    uint32_t unk_28;  // @ 0x80
 } authmgr_load_self_segment_t;
 
 typedef struct authmgr_load_self_block_t {
