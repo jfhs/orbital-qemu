@@ -79,6 +79,10 @@ typedef struct samu_packet_t {
 /* debugging */
 void trace_samu_packet(const samu_packet_t* packet);
 
+/* crypto */
+void liverpool_gc_samu_fakedecrypt(uint8_t *out_buffer,
+    const uint8_t *in_buffer, uint64_t in_length);
+
 void liverpool_gc_samu_init(samu_state_t *s,
     uint64_t query_addr);
 void liverpool_gc_samu_packet(samu_state_t *s,

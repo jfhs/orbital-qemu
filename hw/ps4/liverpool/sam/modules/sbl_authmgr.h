@@ -38,6 +38,7 @@ typedef struct authmgr_chunk_table_t {
     uint64_t data_addr;
     uint64_t data_size;
     uint64_t num_entries;
+    uint64_t reserved;
     authmgr_chunk_entry_t entries[0];
 } authmgr_chunk_table_t;
 
@@ -56,12 +57,12 @@ typedef struct authmgr_load_self_segment_t {
     /* <input> */
     uint64_t chunk_table_addr;  // @ 0xA8
     uint32_t segment_index;     // @ 0xA0
-    uint32_t unk_0C;  // @ 0x9C
-    uint64_t zero_10; // @ 0x98
-    uint64_t zero_18; // @ 0x90
-    uint32_t zero_20; // @ 0x88
-    uint32_t zero_24; // @ 0x84
-    uint32_t unk_28;  // @ 0x80
+    uint32_t unk_0C;            // @ 0x9C
+    uint64_t zero_10;           // @ 0x98
+    uint64_t zero_18;           // @ 0x90
+    uint32_t zero_20;           // @ 0x88
+    uint32_t zero_24;           // @ 0x84
+    uint32_t context_id;        // @ 0x80
     /* <output> */
 } authmgr_load_self_segment_t;
 
@@ -89,15 +90,15 @@ typedef struct authmgr_is_loadable_t {
 } authmgr_is_loadable_t;
 
 /* functions */
-void samu_authmgr_verify_header(
+void sbl_authmgr_verify_header(
     const authmgr_verify_header_t *query, authmgr_verify_header_t *reply);
-void samu_authmgr_load_self_segment(
+void sbl_authmgr_load_self_segment(
     const authmgr_load_self_segment_t *query, authmgr_load_self_segment_t *reply);
-void samu_authmgr_load_self_block(
+void sbl_authmgr_load_self_block(
     const authmgr_load_self_block_t *query, authmgr_load_self_block_t *reply);
-void samu_authmgr_invoke_check(
+void sbl_authmgr_invoke_check(
     const authmgr_invoke_check_t *query, authmgr_invoke_check_t *reply);
-void samu_authmgr_is_loadable(
+void sbl_authmgr_is_loadable(
     const authmgr_is_loadable_t *query, authmgr_is_loadable_t *reply);
 
 #endif /* HW_PS4_LIVERPOOL_SAM_MODULES_SBL_AUTHMGR_H */

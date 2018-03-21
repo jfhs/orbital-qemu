@@ -56,7 +56,7 @@ do { \
 #define AUTHID_KEY_MGR    0x3E00000000000007ULL
 
 /* Fake-crypto */
-static void fake_decrypt(uint8_t *out_buffer,
+void liverpool_gc_samu_fakedecrypt(uint8_t *out_buffer,
     const uint8_t *in_buffer, uint64_t in_length)
 {
     int ret;
@@ -156,7 +156,7 @@ static void samu_packet_ccp_aes(samu_state_t *s,
     }
 
     // TODO/HACK: We don't have keys, so use hardcoded blobs instead
-    fake_decrypt(out_data, in_data, data_size);
+    liverpool_gc_samu_fakedecrypt(out_data, in_data, data_size);
 
     address_space_unmap(&address_space_memory, in_data, in_addr, in_size, true);
     if (!(query_ccp->opcode & CCP_FLAG_SLOT_OUT)) {
@@ -318,27 +318,27 @@ static void samu_packet_mailbox(samu_state_t *s,
     case AUTHID_AUTH_MGR:
         switch (query_mb->function_id) {
         case AUTHMGR_VERIFY_HEADER:
-            samu_authmgr_verify_header(
+            sbl_authmgr_verify_header(
                 (authmgr_verify_header_t*)&query_mb->data,
                 (authmgr_verify_header_t*)&reply_mb->data);
             break;
         case AUTHMGR_LOAD_SELF_SEGMENT:
-            samu_authmgr_load_self_segment(
+            sbl_authmgr_load_self_segment(
                 (authmgr_load_self_segment_t*)&query_mb->data,
                 (authmgr_load_self_segment_t*)&reply_mb->data);
             break;      
         case AUTHMGR_LOAD_SELF_BLOCK:
-            samu_authmgr_load_self_block(
+            sbl_authmgr_load_self_block(
                 (authmgr_load_self_block_t*)&query_mb->data,
                 (authmgr_load_self_block_t*)&reply_mb->data);
             break;
         case AUTHMGR_INVOKE_CHECK:
-            samu_authmgr_invoke_check(
+            sbl_authmgr_invoke_check(
                 (authmgr_invoke_check_t*)&query_mb->data,
                 (authmgr_invoke_check_t*)&reply_mb->data);
             break;
         case AUTHMGR_IS_LOADABLE:
-            samu_authmgr_is_loadable(
+            sbl_authmgr_is_loadable(
                 (authmgr_is_loadable_t*)&query_mb->data,
                 (authmgr_is_loadable_t*)&reply_mb->data);
             break;

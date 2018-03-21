@@ -18,9 +18,13 @@
  */
 
 #include "sbl_authmgr.h"
+#include "hw/ps4/liverpool/lvp_gc_samu.h"
+#include "exec/address-spaces.h"
+
+#define CHUNK_TABLE_MAX_SIZE 0x4000
 
 /* debugging */
-#define DEBUG_AUTHMGR 0
+#define DEBUG_AUTHMGR 1
 
 #define DPRINTF(...) \
 do { \
@@ -32,31 +36,61 @@ do { \
 } while (0)
 
 /* functions */
-void samu_authmgr_verify_header(
+void sbl_authmgr_verify_header(
     const authmgr_verify_header_t *query, authmgr_verify_header_t *reply)
 {
     DPRINTF("unimplemented");
 }
 
-void samu_authmgr_load_self_segment(
+void sbl_authmgr_load_self_segment(
     const authmgr_load_self_segment_t *query, authmgr_load_self_segment_t *reply)
 {
-    DPRINTF("unimplemented");
+    size_t i;
+    authmgr_chunk_table_t *chunk_table;
+    authmgr_chunk_entry_t *chunk_entry;
+    uint8_t *segment_data;
+    hwaddr mapped_table_size;
+    hwaddr mapped_segment_size;
+
+    DPRINTF("Handling table @ %llX", query->chunk_table_addr);
+    mapped_table_size = CHUNK_TABLE_MAX_SIZE;
+    chunk_table = address_space_map(&address_space_memory,
+        query->chunk_table_addr, &mapped_table_size, false);
+
+    DPRINTF("Processing table:");
+    DPRINTF(" - data_addr: %llX", chunk_table->data_addr);
+    DPRINTF(" - data_size: %llX", chunk_table->data_size);
+    DPRINTF(" - num_entries: %lld", chunk_table->num_entries);
+
+    for (i = 0; i < chunk_table->num_entries; i++) {
+        chunk_entry = &chunk_table->entries[i];
+        DPRINTF("Decrypting segment @ %llX (0x%llX bytes)",
+            chunk_entry->data_addr, chunk_entry->data_size);
+        mapped_segment_size = chunk_entry->data_size;
+        segment_data = address_space_map(&address_space_memory,
+            chunk_entry->data_addr, &mapped_segment_size, true);
+        liverpool_gc_samu_fakedecrypt(segment_data,
+            segment_data, chunk_entry->data_size);
+        address_space_unmap(&address_space_memory, segment_data,
+            chunk_entry->data_addr, mapped_segment_size, true);
+    }
+    address_space_unmap(&address_space_memory, chunk_table,
+        query->chunk_table_addr, mapped_table_size, false);
 }
 
-void samu_authmgr_load_self_block(
+void sbl_authmgr_load_self_block(
     const authmgr_load_self_block_t *query, authmgr_load_self_block_t *reply)
 {
     DPRINTF("unimplemented");
 }
 
-void samu_authmgr_invoke_check(
+void sbl_authmgr_invoke_check(
     const authmgr_invoke_check_t *query, authmgr_invoke_check_t *reply)
 {
     DPRINTF("unimplemented");
 }
 
-void samu_authmgr_is_loadable(
+void sbl_authmgr_is_loadable(
     const authmgr_is_loadable_t *query, authmgr_is_loadable_t *reply)
 {
     DPRINTF("unimplemented");
