@@ -51,7 +51,7 @@ do { \
 typedef void (*trace_flags_t)(uint32_t);
 typedef void (*trace_opcode_t)(const samu_command_service_ccp_t*);
 
-static void trace_hexdump(char* name, char* prefix, char* data, size_t size)
+static void trace_hexdump(char* name, char* prefix, uint8_t* data, size_t size)
 {
     int row = 0;
     size_t name_len = strlen(name);

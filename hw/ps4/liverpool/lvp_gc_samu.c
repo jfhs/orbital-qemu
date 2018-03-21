@@ -18,12 +18,12 @@
  */
 
 #include "lvp_gc_samu.h"
+#include "crypto/hash.h"
 #include "crypto/random.h"
 #include "hw/pci/pci.h"
 #include "hw/hw.h"
 
 #include "hw/ps4/macros.h"
-#include "hw/ps4/ps4_keys.h"
 
 /* SAMU debugging */
 #define DEBUG_SAMU 1
@@ -110,40 +110,77 @@ typedef struct authmgr_is_loadable_t {
     uint32_t unk_20;  // @ 0x88
 } authmgr_is_loadable_t;
 
+/* Fake-crypto */
+static void fake_decrypt(uint8_t *out_buffer,
+    const uint8_t *in_buffer, uint64_t in_length)
+{
+    int ret;
+    char filename[256];
+    char hashstr[33];
+    char hashchr;
+    uint8_t *hash;
+    size_t hashlen = 0;
+    size_t out_length;
+    FILE *file;
+
+    /* compute filename of decrypted blob */
+    ret = qcrypto_hash_bytes(QCRYPTO_HASH_ALG_MD5,
+        in_buffer, in_length, &hash, &hashlen, NULL);
+    memset(hashstr, 0, sizeof(hashstr));
+    for (int i = 0; i < 16; i++) {
+        hashchr = (hash[i] >> 4) & 0xF;
+        hashstr[2*i+0] = hashchr >= 0xA ? hashchr + 0x37 : hashchr + 0x30;
+        hashchr = (hash[i] >> 0) & 0xF;
+        hashstr[2*i+1] = hashchr >= 0xA ? hashchr + 0x37 : hashchr + 0x30;
+    }
+    snprintf(filename, sizeof(filename), "crypto/%s.bin", hashstr);
+
+    /* return decrypted blob contents */
+    file = fopen(filename, "rb");
+    if (!file) {
+        error_report("Could not find decrypted blob: %s", filename);
+        return;
+    }
+    fseek(file, 0, SEEK_END);
+    out_length = ftell(file);
+    fseek(file, 0, SEEK_SET); 
+    fread(out_buffer, 1, out_length, file);
+}
+
 /* Secure Kernel emulation (based on 5.00) */
 static void samu_authmgr_verify_header(
-    const authmgr_verify_header_t* query, authmgr_verify_header_t* reply)
+    const authmgr_verify_header_t *query, authmgr_verify_header_t *reply)
 {
     DPRINTF("unimplemented");
 }
 
 static void samu_authmgr_load_self_segment(
-    const authmgr_load_self_segment_t* query, authmgr_load_self_segment_t* reply)
+    const authmgr_load_self_segment_t *query, authmgr_load_self_segment_t *reply)
 {
     DPRINTF("unimplemented");
 }
 
 static void samu_authmgr_load_self_block(
-    const authmgr_load_self_block_t* query, authmgr_load_self_block_t* reply)
+    const authmgr_load_self_block_t *query, authmgr_load_self_block_t *reply)
 {
     DPRINTF("unimplemented");
 }
 
 static void samu_authmgr_invoke_check(
-    const authmgr_invoke_check_t* query, authmgr_invoke_check_t* reply)
+    const authmgr_invoke_check_t *query, authmgr_invoke_check_t *reply)
 {
     DPRINTF("unimplemented");
 }
 
 static void samu_authmgr_is_loadable(
-    const authmgr_is_loadable_t* query, authmgr_is_loadable_t* reply)
+    const authmgr_is_loadable_t *query, authmgr_is_loadable_t *reply)
 {
     DPRINTF("unimplemented");
 }
 
 /* SAMU emulation */
 static void samu_packet_io_write(samu_state_t *s,
-    samu_packet_t* reply, int fd, void* buffer, size_t size)
+    samu_packet_t *reply, int fd, void *buffer, size_t size)
 {
     reply->command = SAMU_CMD_IO_WRITE;
     reply->status = 0;
@@ -153,7 +190,7 @@ static void samu_packet_io_write(samu_state_t *s,
 }
 
 static void samu_packet_spawn(samu_state_t *s,
-    const samu_packet_t* query, samu_packet_t* reply)
+    const samu_packet_t *query, samu_packet_t *reply)
 {
     const
     samu_command_service_spawn_t *query_spawn = &query->data.service_spawn;
@@ -172,7 +209,7 @@ static void samu_packet_spawn(samu_state_t *s,
 
 /* samu ccp */
 static void samu_packet_ccp_aes(samu_state_t *s,
-    const samu_command_service_ccp_t* query_ccp, samu_command_service_ccp_t* reply_ccp)
+    const samu_command_service_ccp_t *query_ccp, samu_command_service_ccp_t *reply_ccp)
 {
     uint64_t data_size;
     uint64_t in_addr, out_addr;
@@ -202,13 +239,8 @@ static void samu_packet_ccp_aes(samu_state_t *s,
         key_data = query_ccp->aes.key;
     }
 
-    // TODO/HACK: We don't have keys, so use hardcoded blobs or copy things around raw
-    if (!memcmp(in_data, "\x78\x7B\x65\x95\x4F\x9F\x89\x59", 8)) {
-        assert(sizeof(SCE_EAP_HDD_KEY) <= data_size);
-        memcpy(out_data, SCE_EAP_HDD_KEY, sizeof(SCE_EAP_HDD_KEY));
-    } else {
-        memcpy(out_data, in_data, data_size);
-    }
+    // TODO/HACK: We don't have keys, so use hardcoded blobs instead
+    fake_decrypt(out_data, in_data, data_size);
 
     address_space_unmap(&address_space_memory, in_data, in_addr, in_size, true);
     if (!(query_ccp->opcode & CCP_FLAG_SLOT_OUT)) {
@@ -217,13 +249,13 @@ static void samu_packet_ccp_aes(samu_state_t *s,
 }
 
 static void samu_packet_ccp_aes_insitu(samu_state_t *s,
-    const samu_command_service_ccp_t* query_ccp, samu_command_service_ccp_t* reply_ccp)
+    const samu_command_service_ccp_t *query_ccp, samu_command_service_ccp_t *reply_ccp)
 {
     DPRINTF("unimplemented");
 }
 
 static void samu_packet_ccp_xts(samu_state_t *s,
-    const samu_command_service_ccp_t* query_ccp, samu_command_service_ccp_t* reply_ccp)
+    const samu_command_service_ccp_t *query_ccp, samu_command_service_ccp_t *reply_ccp)
 {
     uint64_t data_size;
     uint64_t in_addr, out_addr;
@@ -257,55 +289,55 @@ static void samu_packet_ccp_xts(samu_state_t *s,
 }
 
 static void samu_packet_ccp_sha(samu_state_t *s,
-    const samu_command_service_ccp_t* query_ccp, samu_command_service_ccp_t* reply_ccp)
+    const samu_command_service_ccp_t *query_ccp, samu_command_service_ccp_t *reply_ccp)
 {
     DPRINTF("unimplemented");
 }
 
 static void samu_packet_ccp_rsa(samu_state_t *s,
-    const samu_command_service_ccp_t* query_ccp, samu_command_service_ccp_t* reply_ccp)
+    const samu_command_service_ccp_t *query_ccp, samu_command_service_ccp_t *reply_ccp)
 {
     DPRINTF("unimplemented");
 }
 
 static void samu_packet_ccp_pass(samu_state_t *s,
-    const samu_command_service_ccp_t* query_ccp, samu_command_service_ccp_t* reply_ccp)
+    const samu_command_service_ccp_t *query_ccp, samu_command_service_ccp_t *reply_ccp)
 {
     DPRINTF("unimplemented");
 }
 
 static void samu_packet_ccp_ecc(samu_state_t *s,
-    const samu_command_service_ccp_t* query_ccp, samu_command_service_ccp_t* reply_ccp)
+    const samu_command_service_ccp_t *query_ccp, samu_command_service_ccp_t *reply_ccp)
 {
     DPRINTF("unimplemented");
 }
 
 static void samu_packet_ccp_zlib(samu_state_t *s,
-    const samu_command_service_ccp_t* query_ccp, samu_command_service_ccp_t* reply_ccp)
+    const samu_command_service_ccp_t *query_ccp, samu_command_service_ccp_t *reply_ccp)
 {
     DPRINTF("unimplemented");
 }
 
 static void samu_packet_ccp_trng(samu_state_t *s,
-    const samu_command_service_ccp_t* query_ccp, samu_command_service_ccp_t* reply_ccp)
+    const samu_command_service_ccp_t *query_ccp, samu_command_service_ccp_t *reply_ccp)
 {
     DPRINTF("unimplemented");
 }
 
 static void samu_packet_ccp_hmac(samu_state_t *s,
-    const samu_command_service_ccp_t* query_ccp, samu_command_service_ccp_t* reply_ccp)
+    const samu_command_service_ccp_t *query_ccp, samu_command_service_ccp_t *reply_ccp)
 {
     DPRINTF("unimplemented");
 }
 
 static void samu_packet_ccp_snvs(samu_state_t *s,
-    const samu_command_service_ccp_t* query_ccp, samu_command_service_ccp_t* reply_ccp)
+    const samu_command_service_ccp_t *query_ccp, samu_command_service_ccp_t *reply_ccp)
 {
     DPRINTF("unimplemented");
 }
 
 static void samu_packet_ccp(samu_state_t *s,
-    const samu_packet_t* query, samu_packet_t* reply)
+    const samu_packet_t *query, samu_packet_t *reply)
 {
     const
     samu_command_service_ccp_t *query_ccp = &query->data.service_ccp;
@@ -355,7 +387,7 @@ static void samu_packet_ccp(samu_state_t *s,
 }
 
 static void samu_packet_mailbox(samu_state_t *s,
-    const samu_packet_t* query, samu_packet_t* reply)
+    const samu_packet_t *query, samu_packet_t *reply)
 {
     const
     samu_command_service_mailbox_t *query_mb = &query->data.service_mailbox;
@@ -422,7 +454,7 @@ static void samu_packet_mailbox(samu_state_t *s,
 }
 
 static void samu_packet_rand(samu_state_t *s,
-    const samu_packet_t* query, samu_packet_t* reply)
+    const samu_packet_t *query, samu_packet_t *reply)
 {
     const
     samu_command_service_rand_t *query_rand = &query->data.service_rand;

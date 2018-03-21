@@ -212,4 +212,3 @@ trace-ust-all.c
 # NOTE: These sources are temporarily locked since they might lead
 # to Sony patching stuff, people getting angry and I got no time for drama.
 /hw/ps4/liverpool/lvp_gc_samu_private.h
-/hw/ps4/ps4_keys.h
