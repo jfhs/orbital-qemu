@@ -20,10 +20,9 @@
 #include "lvp_gc_samu.h"
 #include "crypto/hash.h"
 #include "crypto/random.h"
+#include "hw/ps4/macros.h"
 #include "hw/pci/pci.h"
 #include "hw/hw.h"
-
-#include "hw/ps4/macros.h"
 
 /* SAMU debugging */
 #define DEBUG_SAMU 1
@@ -37,7 +36,10 @@ do { \
     } \
 } while (0)
 
-/* SAMU secure kernel (based on 5.00) */
+/* SAMU Secure Kernel emulation (based on 5.00) */
+#include "sam/modules/sbl_acmgr.h"
+#include "sam/modules/sbl_authmgr.h"
+
 #define MODULE_ERR_OK        0x0
 #define MODULE_ERR_FFFFFFDA  0xFFFFFFDA
 #define MODULE_ERR_FFFFFFDC  0xFFFFFFDC
@@ -52,63 +54,6 @@ do { \
 #define AUTHID_AUTH_MGR   0x3E00000000000005ULL
 #define AUTHID_IDATA_MGR  0x3E00000000000006ULL
 #define AUTHID_KEY_MGR    0x3E00000000000007ULL
-
-#define ACMGR_PATH_INVALID              0
-#define ACMGR_PATH_SYSTEM               1
-#define ACMGR_PATH_SYSTEM_EX            2
-#define ACMGR_PATH_UPDATE               3
-#define ACMGR_PATH_PREINST              4
-#define ACMGR_PATH_PREINST2             5
-#define ACMGR_PATH_PFSMNT               6
-#define ACMGR_PATH_USB                  7
-#define ACMGR_PATH_HOST                 8
-#define ACMGR_PATH_ROOT                 9
-#define ACMGR_PATH_DIAG                10
-#define ACMGR_PATH_RDIAG               11
-
-#define AUTHMGR_VERIFY_HEADER        0x01
-#define AUTHMGR_LOAD_SELF_SEGMENT    0x02
-#define AUTHMGR_LOAD_SELF_BLOCK      0x06
-#define AUTHMGR_INVOKE_CHECK         0x09
-#define AUTHMGR_IS_LOADABLE          0x16
-
-typedef struct authmgr_verify_header_t {
-    uint64_t addr;
-    uint32_t unk_08;
-    uint32_t unk_0C;
-    uint32_t unk_10;
-    uint32_t unk_1C; // out
-} authmgr_verify_header_t;
-
-typedef struct authmgr_load_self_segment_t {
-    uint64_t chunk_table_addr; // @ 0xA8
-    uint32_t unk_08;  // @ 0xA0
-    uint32_t unk_0C;  // @ 0x9C
-    uint64_t zero_10; // @ 0x98
-    uint64_t zero_18; // @ 0x90
-    uint32_t zero_20; // @ 0x88
-    uint32_t zero_24; // @ 0x84
-    uint32_t unk_28;  // @ 0x80
-} authmgr_load_self_segment_t;
-
-typedef struct authmgr_load_self_block_t {
-} authmgr_load_self_block_t;
-
-typedef struct authmgr_invoke_check_t {
-} authmgr_invoke_check_t;
-
-typedef struct authmgr_is_loadable_t {
-    /* <input> */
-    uint32_t path_id; // @ 0xA8
-    uint32_t unk_04;  // @ 0xA4
-    uint32_t unk_08;  // @ 0xA0: comes from authmgr_verify_header_t::unk_1C
-    uint16_t unk_0C;  // @ 0x9C
-    uint16_t unk_0E;  // @ 0x9A: related to sceSblAIMgrIsTestKit / sceSblAIMgrIsDevKit
-    uint64_t addr_10; // @ 0x98: physical address of AuthMgr context #2
-    uint64_t addr_18; // @ 0x90: previous address + 0x88
-    /* <output> */
-    uint32_t unk_20;  // @ 0x88
-} authmgr_is_loadable_t;
 
 /* Fake-crypto */
 static void fake_decrypt(uint8_t *out_buffer,
@@ -139,6 +84,7 @@ static void fake_decrypt(uint8_t *out_buffer,
     file = fopen(filename, "rb");
     if (!file) {
         error_report("Could not find decrypted blob: %s", filename);
+        qemu_hexdump(in_buffer, stdout, "", in_length > 0x80 ? 0x80 : in_length);
         return;
     }
     fseek(file, 0, SEEK_END);
@@ -147,36 +93,6 @@ static void fake_decrypt(uint8_t *out_buffer,
     fread(out_buffer, 1, out_length, file);
 }
 
-/* Secure Kernel emulation (based on 5.00) */
-static void samu_authmgr_verify_header(
-    const authmgr_verify_header_t *query, authmgr_verify_header_t *reply)
-{
-    DPRINTF("unimplemented");
-}
-
-static void samu_authmgr_load_self_segment(
-    const authmgr_load_self_segment_t *query, authmgr_load_self_segment_t *reply)
-{
-    DPRINTF("unimplemented");
-}
-
-static void samu_authmgr_load_self_block(
-    const authmgr_load_self_block_t *query, authmgr_load_self_block_t *reply)
-{
-    DPRINTF("unimplemented");
-}
-
-static void samu_authmgr_invoke_check(
-    const authmgr_invoke_check_t *query, authmgr_invoke_check_t *reply)
-{
-    DPRINTF("unimplemented");
-}
-
-static void samu_authmgr_is_loadable(
-    const authmgr_is_loadable_t *query, authmgr_is_loadable_t *reply)
-{
-    DPRINTF("unimplemented");
-}
 
 /* SAMU emulation */
 static void samu_packet_io_write(samu_state_t *s,
