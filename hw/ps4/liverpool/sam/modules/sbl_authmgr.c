@@ -3,6 +3,8 @@
  *
  * Copyright (c) 2017-2018 Alexandro Sanchez Bach
  *
+ * Partially based on research from: flatz
+ *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
@@ -81,6 +83,10 @@ void sbl_authmgr_load_self_segment(
 void sbl_authmgr_load_self_block(
     const authmgr_load_self_block_t *query, authmgr_load_self_block_t *reply)
 {
+    DPRINTF("Handling block @ %llX", query->pages_ptr);
+    DPRINTF(" - segment_index: %d", query->segment_index);
+    DPRINTF(" - context_id: %d", query->context_id);
+    DPRINTF(" - context_id: %d", query->context_id);
     DPRINTF("unimplemented");
 }
 
@@ -93,5 +99,21 @@ void sbl_authmgr_invoke_check(
 void sbl_authmgr_is_loadable(
     const authmgr_is_loadable_t *query, authmgr_is_loadable_t *reply)
 {
-    DPRINTF("unimplemented");
+    self_auth_info_t *auth_info_old;
+    self_auth_info_t *auth_info_new;
+    hwaddr auth_info_old_mapsize = sizeof(self_auth_info_t);
+    hwaddr auth_info_new_mapsize = sizeof(self_auth_info_t);
+
+    auth_info_old = address_space_map(&address_space_memory,
+        query->auth_info_old_addr, &auth_info_old_mapsize, false);
+    auth_info_new = address_space_map(&address_space_memory,
+        query->auth_info_new_addr, &auth_info_new_mapsize, true);
+
+    DPRINTF("unimplemented (default action: copy)");
+    memcpy(auth_info_new, auth_info_old, sizeof(self_auth_info_t));
+
+    address_space_unmap(&address_space_memory, auth_info_old,
+        query->auth_info_old_addr, auth_info_old_mapsize, false);
+    address_space_unmap(&address_space_memory, auth_info_new,
+        query->auth_info_new_addr, auth_info_new_mapsize, true);
 }

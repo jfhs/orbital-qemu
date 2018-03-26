@@ -83,7 +83,7 @@ void liverpool_gc_samu_fakedecrypt(uint8_t *out_buffer,
     /* return decrypted blob contents */
     file = fopen(filename, "rb");
     if (!file) {
-        error_report("Could not find decrypted blob: %s", filename);
+        printf("qemu: samu-fakedecrypt: Could not find decrypted blob: %s\n", filename);
         qemu_hexdump(in_buffer, stdout, "", in_length > 0x80 ? 0x80 : in_length);
         return;
     }

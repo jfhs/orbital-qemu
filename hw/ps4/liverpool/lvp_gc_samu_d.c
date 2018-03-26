@@ -51,7 +51,7 @@ do { \
 typedef void (*trace_flags_t)(uint32_t);
 typedef void (*trace_opcode_t)(const samu_command_service_ccp_t*);
 
-static void trace_hexdump(char* name, char* prefix, uint8_t* data, size_t size)
+static void trace_hexdump(const char* name, char* prefix, uint8_t* data, size_t size)
 {
     int row = 0;
     size_t name_len = strlen(name);
@@ -266,7 +266,11 @@ static void trace_samu_packet_ccp_xts(
 static void trace_samu_packet_ccp_sha(
     const samu_command_service_ccp_t* command)
 {
-    TRACE_SUBCOMMAND("???\n");
+    TRACE_SUBCOMMAND("data-size: 0x%llX\n", command->sha.data_size);
+    TRACE_SUBCOMMAND("in-addr:   0x%llX\n", command->sha.in_addr);
+    TRACE_SUBCOMMAND("out-addr:  0x%llX\n", command->sha.out_addr);
+    trace_hexdump("hash:", TRACE_PREFIX_SUBCOMMAND,
+        command->sha.hash, 0x20);
 }
 
 static void trace_samu_packet_ccp_rsa(

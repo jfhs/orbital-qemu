@@ -3,6 +3,8 @@
  *
  * Copyright (c) 2017-2018 Alexandro Sanchez Bach
  *
+ * Partially based on research from: flatz
+ * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
@@ -42,32 +44,52 @@ typedef struct authmgr_chunk_table_t {
     authmgr_chunk_entry_t entries[0];
 } authmgr_chunk_table_t;
 
+typedef struct self_auth_info_t {
+    uint64_t data_addr;
+    uint64_t data_size;
+} self_auth_info_t;
+
 /* arguments */
 typedef struct authmgr_verify_header_t {
     /* <input> */
-    uint64_t addr;
-    uint32_t unk_08;
-    uint32_t unk_0C;
-    uint32_t unk_10;
+    uint64_t header_addr;        // @ 0xA8
+    uint32_t header_size;        // @ 0xA0
+    uint32_t zero_0C;            // @ 0x9C
+    uint32_t zero_10;            // @ 0x98
     /* <output> */
-    uint32_t unk_1C; // out
+    uint32_t context_id;         // @ 0x94
+    /* <???> */
+    uint64_t unk_18;             // @ 0x90
+    uint32_t unk_20;             // @ 0x88 (actually, uint16_t)
+    uint32_t key_id;             // @ 0x84
+    uint8_t key[0x10];           // @ 0x80
 } authmgr_verify_header_t;
 
 typedef struct authmgr_load_self_segment_t {
     /* <input> */
-    uint64_t chunk_table_addr;  // @ 0xA8
-    uint32_t segment_index;     // @ 0xA0
-    uint32_t unk_0C;            // @ 0x9C
-    uint64_t zero_10;           // @ 0x98
-    uint64_t zero_18;           // @ 0x90
-    uint32_t zero_20;           // @ 0x88
-    uint32_t zero_24;           // @ 0x84
-    uint32_t context_id;        // @ 0x80
+    uint64_t chunk_table_addr;   // @ 0xA8
+    uint32_t segment_index;      // @ 0xA0
+    uint32_t unk_0C;             // @ 0x9C
+    uint64_t zero_10;            // @ 0x98
+    uint64_t zero_18;            // @ 0x90
+    uint32_t zero_20;            // @ 0x88
+    uint32_t zero_24;            // @ 0x84
+    uint32_t context_id;         // @ 0x80
     /* <output> */
 } authmgr_load_self_segment_t;
 
 typedef struct authmgr_load_self_block_t {
     /* <input> */
+    uint64_t pages_ptr;
+    uint32_t segment_index;
+    uint32_t context_id;
+    uint8_t digest[0x20];
+    uint32_t block_idx;
+    uint32_t data_offset;
+    uint32_t data_size;
+    uint64_t data_start_ptr;
+    uint64_t data_end_ptr;
+    uint32_t zero;
     /* <output> */
 } authmgr_load_self_block_t;
 
@@ -78,13 +100,13 @@ typedef struct authmgr_invoke_check_t {
 
 typedef struct authmgr_is_loadable_t {
     /* <input> */
-    uint32_t path_id; // @ 0xA8
-    uint32_t unk_04;  // @ 0xA4
-    uint32_t unk_08;  // @ 0xA0: comes from authmgr_verify_header_t::unk_1C
-    uint16_t unk_0C;  // @ 0x9C
-    uint16_t unk_0E;  // @ 0x9A: related to sceSblAIMgrIsTestKit / sceSblAIMgrIsDevKit
-    uint64_t addr_10; // @ 0x98: physical address of AuthMgr context #2
-    uint64_t addr_18; // @ 0x90: previous address + 0x88
+    uint32_t path_id;            // @ 0xA8
+    uint32_t zero_04;            // @ 0xA4
+    uint32_t context_id;         // @ 0xA0
+    uint16_t is_elf;             // @ 0x9C
+    uint16_t is_devkit;          // @ 0x9A
+    uint64_t auth_info_old_addr; // @ 0x98
+    uint64_t auth_info_new_addr; // @ 0x90
     /* <output> */
     uint32_t unk_20;  // @ 0x88
 } authmgr_is_loadable_t;
