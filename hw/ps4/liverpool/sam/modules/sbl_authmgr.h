@@ -42,9 +42,23 @@
 #define AUTHMGR_SM_PLT_VERI_R1C2_GEN_R2     0x102
 #define AUTHMGR_SM_PLT_RESULT               0x103
 #define AUTHMGR_SM_PLT_GET_KDS_MAC          0x110
+#define AUTHMGR_SM_SRTC_READ1               0x200
+#define AUTHMGR_SM_SRTC_READ2               0x201
 #define AUTHMGR_SM_SRTC_DRIFT_GET1          0x280
 #define AUTHMGR_SM_SRTC_DRIFT_GET2          0x281
-#define AUTHMGR_SM_CHECK_UP_SETUP           0x300
+#define AUTHMGR_SM_SRTC_DRIFT_SET1          0x290
+#define AUTHMGR_SM_SRTC_DRIFT_SET2          0x291
+#define AUTHMGR_SM_SRTC_DRIFT_SET3          0x292
+#define AUTHMGR_SM_SRTC_DRIFT_CLEAR1        0x2A0
+#define AUTHMGR_SM_SRTC_DRIFT_CLEAR2        0x2A1
+#define AUTHMGR_SM_SRTC_DRIFT_CLEAR3        0x2A2
+#define AUTHMGR_SM_SRTC_DRIFT_UPDATE1       0x2B0
+#define AUTHMGR_SM_SRTC_DRIFT_UPDATE2       0x2B1
+#define AUTHMGR_SM_SRTC_DRIFT_UPDATE3       0x2B2
+#define AUTHMGR_SM_SRTC_READ_PRE1           0x2C0
+#define AUTHMGR_SM_SRTC_READ_PRE2           0x2C1
+#define AUTHMGR_SM_CHECKUP_SETUP            0x300
+#define AUTHMGR_SM_CHECKUP_CHECK            0x301
 
 /* structures */
 typedef struct authmgr_chunk_entry_t {
