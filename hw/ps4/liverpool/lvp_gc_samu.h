@@ -21,7 +21,7 @@
 #define HW_PS4_LIVERPOOL_GC_SAMU_H
 
 #include "qemu/osdep.h"
-#include "lvp_gc_samu_private.h"
+#include "lvp_gc_samu_.h"
 
 #define SAMU_SLOT_SIZE   0x10
 #define SAMU_SLOT_COUNT  0x200 /* TODO */

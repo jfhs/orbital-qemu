@@ -24,11 +24,27 @@
 
 #include "qemu/osdep.h"
 
-#define AUTHMGR_VERIFY_HEADER        0x01
-#define AUTHMGR_LOAD_SELF_SEGMENT    0x02
-#define AUTHMGR_LOAD_SELF_BLOCK      0x06
-#define AUTHMGR_INVOKE_CHECK         0x09
-#define AUTHMGR_IS_LOADABLE          0x16
+#define AUTHMGR_SM_VERIFY_HEADER              0x1
+#define AUTHMGR_SM_LOAD_SELF_SEGMENT          0x2
+#define AUTHMGR_SM_FINALIZE                   0x5
+#define AUTHMGR_SM_LOAD_SELF_BLOCK            0x6
+#define AUTHMGR_SM_INVOKE_CHECK               0x9
+#define AUTHMGR_SM_DRIVE_DATA                 0xB
+#define AUTHMGR_SM_DRIVE_CLEAR_KEY            0xE
+#define AUTHMGR_SM_GEN_ACT_HEADER            0x10
+#define AUTHMGR_SM_GEN_ACT_REQUEST           0x11
+#define AUTHMGR_SM_DRIVE_CLEAR_SESSION_KEY   0x15
+#define AUTHMGR_SM_IS_LOADABLE               0x16
+#define AUTHMGR_SM_VERIFY_PUP_EXPIRATION     0x17
+#define AUTHMGR_SM_GEN_PASS_CODE_DATA        0x18
+#define AUTHMGR_SM_CHECK_PASS_CODE_DATA      0x19
+#define AUTHMGR_SM_PLT_GEN_C1               0x101
+#define AUTHMGR_SM_PLT_VERI_R1C2_GEN_R2     0x102
+#define AUTHMGR_SM_PLT_RESULT               0x103
+#define AUTHMGR_SM_PLT_GET_KDS_MAC          0x110
+#define AUTHMGR_SM_SRTC_DRIFT_GET1          0x280
+#define AUTHMGR_SM_SRTC_DRIFT_GET2          0x281
+#define AUTHMGR_SM_CHECK_UP_SETUP           0x300
 
 /* structures */
 typedef struct authmgr_chunk_entry_t {

@@ -111,7 +111,7 @@ static void samu_packet_spawn(samu_state_t *s,
     const
     samu_command_service_spawn_t *query_spawn = &query->data.service_spawn;
     samu_command_service_spawn_t *reply_spawn = &reply->data.service_spawn;
-    uint64_t module_id; // TODO: Is this really the authentication ID?
+    uint64_t module_id; // TODO: The module ID is just an increasing number starting from 0, not an authentication ID
 
     if (!strncmp(query_spawn->name, MODULE_AUTH_MGR, 8)) {
         module_id = AUTHID_AUTH_MGR;
@@ -317,27 +317,27 @@ static void samu_packet_mailbox(samu_state_t *s,
     switch (query_mb->module_id) {
     case AUTHID_AUTH_MGR:
         switch (query_mb->function_id) {
-        case AUTHMGR_VERIFY_HEADER:
+        case AUTHMGR_SM_VERIFY_HEADER:
             sbl_authmgr_verify_header(
                 (authmgr_verify_header_t*)&query_mb->data,
                 (authmgr_verify_header_t*)&reply_mb->data);
             break;
-        case AUTHMGR_LOAD_SELF_SEGMENT:
+        case AUTHMGR_SM_LOAD_SELF_SEGMENT:
             sbl_authmgr_load_self_segment(
                 (authmgr_load_self_segment_t*)&query_mb->data,
                 (authmgr_load_self_segment_t*)&reply_mb->data);
             break;      
-        case AUTHMGR_LOAD_SELF_BLOCK:
+        case AUTHMGR_SM_LOAD_SELF_BLOCK:
             sbl_authmgr_load_self_block(
                 (authmgr_load_self_block_t*)&query_mb->data,
                 (authmgr_load_self_block_t*)&reply_mb->data);
             break;
-        case AUTHMGR_INVOKE_CHECK:
+        case AUTHMGR_SM_INVOKE_CHECK:
             sbl_authmgr_invoke_check(
                 (authmgr_invoke_check_t*)&query_mb->data,
                 (authmgr_invoke_check_t*)&reply_mb->data);
             break;
-        case AUTHMGR_IS_LOADABLE:
+        case AUTHMGR_SM_IS_LOADABLE:
             sbl_authmgr_is_loadable(
                 (authmgr_is_loadable_t*)&query_mb->data,
                 (authmgr_is_loadable_t*)&reply_mb->data);
