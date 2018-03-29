@@ -24,6 +24,8 @@
 #include "hw/pci/pci.h"
 #include "hw/hw.h"
 
+#include <zlib.h>
+
 /* SAMU debugging */
 #define DEBUG_SAMU 1
 
@@ -231,18 +233,42 @@ static void samu_packet_ccp_ecc(samu_state_t *s,
 static void samu_packet_ccp_zlib(samu_state_t *s,
     const samu_command_service_ccp_t *query_ccp, samu_command_service_ccp_t *reply_ccp)
 {
+    int ret;
     uint8_t *in_data;
     uint8_t *out_data;
     hwaddr in_mapsize = query_ccp->zlib.in_size;
     hwaddr out_mapsize = query_ccp->zlib.out_size;
+    z_stream stream;
 
     in_data = address_space_map(&address_space_memory,
         query_ccp->zlib.in_addr, &in_mapsize, false);
     out_data = address_space_map(&address_space_memory,
         query_ccp->zlib.out_addr, &out_mapsize, true);
 
-    DPRINTF("unimplemented");
+    memset(&stream, 0, sizeof(stream));
+    stream.next_in = in_data;
+    stream.avail_in = query_ccp->zlib.in_size;
+    stream.next_out = out_data;
+    stream.avail_out = query_ccp->zlib.out_size;
 
+    ret = inflateInit2(&stream, MAX_WBITS);
+    if (ret != Z_OK) {
+        DPRINTF("inflateInit2 failed (%d).\n", ret);
+        goto error;
+    }
+    ret = inflate(&stream, Z_FINISH);
+    if (ret != Z_STREAM_END) {
+        DPRINTF("inflate failed (%d).\n", ret);
+        inflateEnd(&stream);
+        goto error;
+    }
+    ret = inflateEnd(&stream);
+    if (ret != Z_OK) {
+        DPRINTF("inflateEnd failed (%d).\n", ret);
+        goto error;
+    }
+
+error:
     address_space_unmap(&address_space_memory, in_data,
         query_ccp->zlib.in_addr, in_mapsize, false);
     address_space_unmap(&address_space_memory, out_data,
