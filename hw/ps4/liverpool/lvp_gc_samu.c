@@ -231,7 +231,22 @@ static void samu_packet_ccp_ecc(samu_state_t *s,
 static void samu_packet_ccp_zlib(samu_state_t *s,
     const samu_command_service_ccp_t *query_ccp, samu_command_service_ccp_t *reply_ccp)
 {
+    uint8_t *in_data;
+    uint8_t *out_data;
+    hwaddr in_mapsize = query_ccp->zlib.in_size;
+    hwaddr out_mapsize = query_ccp->zlib.out_size;
+
+    in_data = address_space_map(&address_space_memory,
+        query_ccp->zlib.in_addr, &in_mapsize, false);
+    out_data = address_space_map(&address_space_memory,
+        query_ccp->zlib.out_addr, &out_mapsize, true);
+
     DPRINTF("unimplemented");
+
+    address_space_unmap(&address_space_memory, in_data,
+        query_ccp->zlib.in_addr, in_mapsize, false);
+    address_space_unmap(&address_space_memory, out_data,
+        query_ccp->zlib.out_addr, out_mapsize, true);
 }
 
 static void samu_packet_ccp_trng(samu_state_t *s,

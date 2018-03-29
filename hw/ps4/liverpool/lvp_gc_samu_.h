@@ -120,8 +120,10 @@ typedef struct samu_command_service_ccp_t {
         } rng;
 
         struct {
+            uint32_t unk_08;
             uint32_t in_size;
             uint32_t out_size;
+            uint32_t unk_14;
             uint64_t in_addr;
             uint64_t out_addr;
         } zlib;

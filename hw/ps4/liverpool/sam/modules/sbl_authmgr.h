@@ -75,9 +75,16 @@ typedef struct authmgr_chunk_table_t {
 } authmgr_chunk_table_t;
 
 typedef struct self_auth_info_t {
-    uint64_t data_addr;
-    uint64_t data_size;
+    uint64_t auth_id;
+    uint64_t caps[4];
+    uint64_t attrs[4];
+    uint8_t unk[0x40];
 } self_auth_info_t;
+
+typedef struct self_block_extent_t {
+    uint32_t offset;
+    uint32_t size;
+} self_block_extent_t;
 
 /* arguments */
 typedef struct authmgr_verify_header_t {
@@ -110,15 +117,16 @@ typedef struct authmgr_load_self_segment_t {
 
 typedef struct authmgr_load_self_block_t {
     /* <input> */
-    uint64_t pages_ptr;
+    uint64_t output_addr;
     uint32_t segment_index;
     uint32_t context_id;
     uint8_t digest[0x20];
-    uint32_t block_idx;
+    self_block_extent_t extent;
+    uint32_t block_index;
     uint32_t data_offset;
     uint32_t data_size;
-    uint64_t data_start_ptr;
-    uint64_t data_end_ptr;
+    uint64_t data_input1_addr;
+    uint64_t data_input2_addr;
     uint32_t zero;
     /* <output> */
 } authmgr_load_self_block_t;

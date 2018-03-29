@@ -34,6 +34,10 @@
 #define TRACE_PACKET(...)  printf(TRACE_PREFIX_PACKET __VA_ARGS__)
 #define TRACE_DATA(...)    printf(TRACE_PREFIX_DATA __VA_ARGS__)
 
+/* Helpers */
+#define min(a, b) (((a) < (b)) ? (a) : (b))
+#define max(a, b) (((a) > (b)) ? (a) : (b))
+
 static const char* trace_pm4_it_opcode(uint32_t opcode)
 {
     switch (opcode){

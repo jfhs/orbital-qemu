@@ -83,11 +83,71 @@ void sbl_authmgr_load_self_segment(
 void sbl_authmgr_load_self_block(
     const authmgr_load_self_block_t *query, authmgr_load_self_block_t *reply)
 {
-    DPRINTF("Handling block @ %llX", query->pages_ptr);
+    bool straddled;
+    uint64_t page_size = 0x4000;
+    uint8_t *output;
+    hwaddr output_mapsize;
+    uint8_t *input;
+    uint8_t *input_page1;
+    uint8_t *input_page2;
+    hwaddr input1_mapsize = page_size;
+    hwaddr input2_mapsize = page_size;
+    uint64_t input1_straddle_size;
+    uint64_t input2_straddle_size;
+
+    DPRINTF("Decrypting block to 0x%llX", query->output_addr);
     DPRINTF(" - segment_index: %d", query->segment_index);
     DPRINTF(" - context_id: %d", query->context_id);
-    DPRINTF(" - context_id: %d", query->context_id);
-    DPRINTF("unimplemented");
+    DPRINTF(" - extent.offset: 0x%X", query->extent.offset);
+    DPRINTF(" - extent.size: 0x%X", query->extent.size);
+    DPRINTF(" - block_index: %d", query->block_index);
+    DPRINTF(" - data_offset:      0x%X", query->data_offset);
+    DPRINTF(" - data_size:        0x%X", query->data_size);
+    DPRINTF(" - data_input1_addr: 0x%llX", query->data_input1_addr);
+    DPRINTF(" - data_input2_addr: 0x%llX", query->data_input2_addr);
+
+    output_mapsize = query->data_size;
+    output = address_space_map(&address_space_memory,
+        query->output_addr, &output_mapsize, true);
+
+    straddled = (query->data_offset + query->data_size > page_size);
+    if (straddled) {
+        input_page1 = address_space_map(&address_space_memory,
+            query->data_input1_addr, &input1_mapsize, false);
+        input_page2 = address_space_map(&address_space_memory,
+            query->data_input2_addr, &input2_mapsize, false);
+
+        // TODO:
+        // Possibly inefficient, when using fake crypto,
+        // obtain hash from digest whenever possible.
+        input = malloc(query->data_size);
+        assert(input);
+        input1_straddle_size = page_size - query->data_offset;
+        input2_straddle_size = query->data_size - input1_straddle_size;
+        memcpy(input, &input_page1[query->data_offset], input1_straddle_size);
+        memcpy(input, &input_page2[0], input2_straddle_size);
+        input = &input_page1[query->data_offset];
+        liverpool_gc_samu_fakedecrypt(output, input, query->data_size);
+        free(input);
+
+        address_space_unmap(&address_space_memory, input_page1,
+            query->data_input1_addr, input1_mapsize, false);
+        address_space_unmap(&address_space_memory, input_page2,
+            query->data_input2_addr, input2_mapsize, false);
+    }
+    else {
+        input_page1 = address_space_map(&address_space_memory,
+            query->data_input1_addr, &input1_mapsize, false);
+
+        input = &input_page1[query->data_offset];
+        liverpool_gc_samu_fakedecrypt(output, input, query->data_size);
+
+        address_space_unmap(&address_space_memory, input_page1,
+            query->data_input1_addr, input1_mapsize, false);
+    }
+
+    address_space_unmap(&address_space_memory, output,
+        query->output_addr, output_mapsize, false);
 }
 
 void sbl_authmgr_invoke_check(

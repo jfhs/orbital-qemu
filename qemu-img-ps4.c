@@ -283,7 +283,7 @@ static void generate_hdd_sce_partition_img(BlockBackend* blk, uint64_t size,
     snprintf(path, sizeof(path), "%s/%s", data_dir, data_name);
     file = fopen(path, "rb");
     if (!file) {
-        printf("Couldn't open file: %s", path);
+        printf("Couldn't open file: %s\n", path);
         exit(1);
     }
     offset = lba_offset(part->first_lba);
