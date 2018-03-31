@@ -1286,7 +1286,6 @@ static void liverpool_iommu_pci_class_init(ObjectClass *oc, void *data)
     pc->vendor_id = 0x1022;
     pc->device_id = 0x1437;
     pc->revision = 1;
-    pc->is_express = true;
     pc->class_id = 0x0806;
     pc->realize = liverpool_iommu_pci_realize;
 }
@@ -1296,6 +1295,10 @@ static const TypeInfo liverpool_iommu_pci_info = {
     .parent        = TYPE_PCI_DEVICE,
     .instance_size = sizeof(PCIDevice),
     .class_init    = liverpool_iommu_pci_class_init,
+    .interfaces    = (InterfaceInfo[]) {
+        { INTERFACE_PCIE_DEVICE },
+        { }
+    },
 };
 
 static void liverpool_iommu_memory_region_class_init(ObjectClass *oc, void *data)

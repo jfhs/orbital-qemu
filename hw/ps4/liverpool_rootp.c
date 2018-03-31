@@ -37,7 +37,6 @@ static void liverpool_rootp_class_init(ObjectClass *klass, void *data)
     pc->vendor_id = 0x1022;
     pc->device_id = 0x1438;
     pc->revision = 1;
-    pc->is_express = true;
     pc->class_id = PCI_CLASS_BRIDGE_HOST;
     pc->init = liverpool_rootp_init;
 }
@@ -47,6 +46,10 @@ static const TypeInfo liverpool_rootp_info = {
     .parent        = TYPE_PCI_DEVICE,
     .instance_size = sizeof(LiverpoolRootPortState),
     .class_init    = liverpool_rootp_class_init,
+    .interfaces    = (InterfaceInfo[]) {
+        { INTERFACE_PCIE_DEVICE },
+        { }
+    },
 };
 
 static void liverpool_register_types(void)

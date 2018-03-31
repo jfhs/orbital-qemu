@@ -83,7 +83,6 @@ static void liverpool_hdac_class_init(ObjectClass *klass, void *data)
     pc->vendor_id = 0x1002;
     pc->device_id = 0x9921;
     pc->revision = 0;
-    pc->is_express = true;
     pc->class_id = PCI_CLASS_MULTIMEDIA_AUDIO;
     pc->realize = liverpool_hdac_realize;
 }
@@ -93,6 +92,10 @@ static const TypeInfo liverpool_hdac_info = {
     .parent        = TYPE_PCI_DEVICE,
     .instance_size = sizeof(LiverpoolHDACState),
     .class_init    = liverpool_hdac_class_init,
+    .interfaces    = (InterfaceInfo[]) {
+        { INTERFACE_PCIE_DEVICE },
+        { }
+    },
 };
 
 static void liverpool_register_types(void)

@@ -28,22 +28,19 @@
 #define PCIR64(dev, reg) (*(uint64_t*)(&dev->config[reg]))
 
 /* device initialization */
-static int liverpool_func0_init(PCIDevice *dev)
+static void liverpool_func0_init(PCIDevice *dev, Error **errp)
 {
-    return 0;
 }
 
-static int liverpool_func1_init(PCIDevice *dev)
+static void liverpool_func1_init(PCIDevice *dev, Error **errp)
 {
-    return 0;
 }
 
-static int liverpool_func2_init(PCIDevice *dev)
+static void liverpool_func2_init(PCIDevice *dev, Error **errp)
 {
-    return 0;
 }
 
-static int liverpool_func3_init(PCIDevice *dev)
+static void liverpool_func3_init(PCIDevice *dev, Error **errp)
 {
     /*
      * Set APU chipset version.
@@ -68,22 +65,20 @@ static int liverpool_func3_init(PCIDevice *dev)
      * - 0x00740F12 : GL T(B2)
      */
     PCIR32(dev, FUNC3_PCIR_VERSION) = 0x00710F13;
-    return 0;
 }
 
-static int liverpool_func4_init(PCIDevice *dev)
+static void liverpool_func4_init(PCIDevice *dev, Error **errp)
 {
-    return 0;
 }
 
-static int liverpool_func5_init(PCIDevice *dev)
+static void liverpool_func5_init(PCIDevice *dev, Error **errp)
 {
-    return 0;
 }
 
 /* class initialization */
 static void liverpool_func_class_init(ObjectClass *oc,
-    uint16_t dev_id, const char* dev_desc, int (*dev_init)(PCIDevice*))
+    uint16_t dev_id, const char* dev_desc,
+    void (*dev_realize)(PCIDevice*, Error **))
 {
     DeviceClass *dc = DEVICE_CLASS(oc);
     PCIDeviceClass *pc = PCI_DEVICE_CLASS(oc);
@@ -91,9 +86,8 @@ static void liverpool_func_class_init(ObjectClass *oc,
     pc->vendor_id = 0x1022;
     pc->device_id = dev_id;
     pc->revision = 1;
-    pc->is_express = true;
     pc->class_id = PCI_CLASS_NOT_DEFINED;
-    pc->init = dev_init;
+    pc->realize = dev_realize;
     dc->desc = dev_desc;
 }
 
@@ -139,6 +133,10 @@ static const TypeInfo liverpool_func0_info = {
     .parent        = TYPE_PCI_DEVICE,
     .instance_size = sizeof(PCIDevice),
     .class_init    = liverpool_func0_class_init,
+    .interfaces    = (InterfaceInfo[]) {
+        { INTERFACE_PCIE_DEVICE },
+        { }
+    },
 };
 
 static const TypeInfo liverpool_func1_info = {
@@ -146,6 +144,10 @@ static const TypeInfo liverpool_func1_info = {
     .parent        = TYPE_PCI_DEVICE,
     .instance_size = sizeof(PCIDevice),
     .class_init    = liverpool_func1_class_init,
+    .interfaces    = (InterfaceInfo[]) {
+        { INTERFACE_PCIE_DEVICE },
+        { }
+    },
 };
 
 static const TypeInfo liverpool_func2_info = {
@@ -153,6 +155,10 @@ static const TypeInfo liverpool_func2_info = {
     .parent        = TYPE_PCI_DEVICE,
     .instance_size = sizeof(PCIDevice),
     .class_init    = liverpool_func2_class_init,
+    .interfaces    = (InterfaceInfo[]) {
+        { INTERFACE_PCIE_DEVICE },
+        { }
+    },
 };
 
 static const TypeInfo liverpool_func3_info = {
@@ -160,6 +166,10 @@ static const TypeInfo liverpool_func3_info = {
     .parent        = TYPE_PCI_DEVICE,
     .instance_size = sizeof(PCIDevice),
     .class_init    = liverpool_func3_class_init,
+    .interfaces    = (InterfaceInfo[]) {
+        { INTERFACE_PCIE_DEVICE },
+        { }
+    },
 };
 
 static const TypeInfo liverpool_func4_info = {
@@ -167,6 +177,10 @@ static const TypeInfo liverpool_func4_info = {
     .parent        = TYPE_PCI_DEVICE,
     .instance_size = sizeof(PCIDevice),
     .class_init    = liverpool_func4_class_init,
+    .interfaces    = (InterfaceInfo[]) {
+        { INTERFACE_PCIE_DEVICE },
+        { }
+    },
 };
 
 static const TypeInfo liverpool_func5_info = {
@@ -174,6 +188,10 @@ static const TypeInfo liverpool_func5_info = {
     .parent        = TYPE_PCI_DEVICE,
     .instance_size = sizeof(PCIDevice),
     .class_init    = liverpool_func5_class_init,
+    .interfaces    = (InterfaceInfo[]) {
+        { INTERFACE_PCIE_DEVICE },
+        { }
+    },
 };
 
 static void liverpool_func_register_types(void)

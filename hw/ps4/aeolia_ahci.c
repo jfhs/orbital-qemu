@@ -125,7 +125,6 @@ static void aeolia_ahci_class_init(ObjectClass *oc, void *data)
     pc->vendor_id = 0x104D;
     pc->device_id = 0x909F;
     pc->revision = 0;
-    pc->is_express = true;
     pc->class_id = PCI_CLASS_STORAGE_SATA; // TODO: This should be PCI_CLASS_SYSTEM_OTHER, but it will break BIOS
     pc->realize = aeolia_ahci_realize;
     pc->exit = aeolia_ahci_exit;
@@ -139,6 +138,10 @@ static const TypeInfo aeolia_ahci_info = {
     .instance_size = sizeof(AeoliaAHCIState),
     .instance_init = aeolia_ahci_init,
     .class_init    = aeolia_ahci_class_init,
+    .interfaces    = (InterfaceInfo[]) {
+        { INTERFACE_PCIE_DEVICE },
+        { }
+    },
 };
 
 static void aeolia_register_types(void)

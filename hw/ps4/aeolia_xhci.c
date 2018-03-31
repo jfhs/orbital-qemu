@@ -82,7 +82,6 @@ static void aeolia_xhci_class_init(ObjectClass *oc, void *data)
     pc->vendor_id = 0x104D;
     pc->device_id = 0x90A4;
     pc->revision = 0;
-    pc->is_express = true;
     pc->class_id = PCI_CLASS_SYSTEM_OTHER;
     pc->realize = aeolia_xhci_realize;
 }
@@ -92,6 +91,10 @@ static const TypeInfo aeolia_xhci_info = {
     .parent        = TYPE_PCI_DEVICE,
     .instance_size = sizeof(AeoliaXHCIState),
     .class_init    = aeolia_xhci_class_init,
+    .interfaces    = (InterfaceInfo[]) {
+        { INTERFACE_PCIE_DEVICE },
+        { }
+    },
 };
 
 static void aeolia_register_types(void)

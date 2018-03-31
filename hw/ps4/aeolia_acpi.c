@@ -79,7 +79,6 @@ static void aeolia_acpi_class_init(ObjectClass *klass, void *data)
     pc->vendor_id = 0x104D;
     pc->device_id = 0x908F;
     pc->revision = 0;
-    pc->is_express = true;
     pc->class_id = PCI_CLASS_SYSTEM_OTHER;
     pc->realize = aeolia_acpi_realize;
 }
@@ -89,6 +88,10 @@ static const TypeInfo aeolia_acpi_info = {
     .parent        = TYPE_PCI_DEVICE,
     .instance_size = sizeof(AeoliaACPIState),
     .class_init    = aeolia_acpi_class_init,
+    .interfaces    = (InterfaceInfo[]) {
+        { INTERFACE_PCIE_DEVICE },
+        { }
+    },
 };
 
 static void aeolia_register_types(void)
