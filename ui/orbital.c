@@ -22,9 +22,10 @@
  * THE SOFTWARE.
  */
 
-#include "ui/orbital.h"
-#include "ui/vk-helpers.h"
 #include "qemu/osdep.h"
+#include "qemu-common.h"
+#include "ui/console.h"
+#include "ui/vk-helpers.h"
 #include "qemu/thread.h"
 #include "qemu/error-report.h"
 
@@ -90,8 +91,25 @@ void* orbital_display_main(void* arg)
     return NULL;    
 }
 
-void orbital_display_init(void)
+static void orbital_display_early_init(DisplayOptions *o)
+{
+}
+
+static void orbital_display_init(DisplayState *ds, DisplayOptions *o)
 {
     qemu_thread_create(&ui.sdl_thread, "sdl_thread",
         orbital_display_main, NULL, QEMU_THREAD_JOINABLE);
 }
+
+static QemuDisplay qemu_display_orbital = {
+    .type       = DISPLAY_TYPE_ORBITAL,
+    .early_init = orbital_display_early_init,
+    .init       = orbital_display_init,
+};
+
+static void register_orbital(void)
+{
+    qemu_display_register(&qemu_display_orbital);
+}
+
+type_init(register_orbital);

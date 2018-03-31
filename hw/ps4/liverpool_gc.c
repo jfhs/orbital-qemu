@@ -471,6 +471,10 @@ static const TypeInfo liverpool_gc_info = {
     .parent        = TYPE_PCI_DEVICE,
     .instance_size = sizeof(LiverpoolGCState),
     .class_init    = liverpool_gc_class_init,
+    .interfaces    = (InterfaceInfo[]) {
+        { INTERFACE_PCIE_DEVICE },
+        { }
+    },
 };
 
 static void liverpool_register_types(void)

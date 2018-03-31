@@ -3,6 +3,10 @@
  *
  * Copyright (c) 2017 Alexandro Sanchez Bach
  *
+ * Based on amd_iommu.c
+ * Copyright (C) 2011 Eduard - Gabriel Munteanu
+ * Copyright (C) 2015 David Kiarie, <davidkiarie4@gmail.com>
+ * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
@@ -21,7 +25,10 @@
 #include "qemu/osdep.h"
 #include "qapi/error.h"
 #include "qemu/error-report.h"
+#include "hw/boards.h"
 #include "hw/i386/amd_iommu.h"
+#include "hw/i386/pc.h"
+#include "hw/pci/msi.h"
 
 #define LIVERPOOL_IOMMU(obj) \
     OBJECT_CHECK(LiverpoolIOMMUState, (obj), TYPE_LIVERPOOL_IOMMU)

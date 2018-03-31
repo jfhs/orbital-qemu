@@ -81,6 +81,10 @@ static const TypeInfo aeolia_sdhci_info = {
     .parent        = TYPE_PCI_DEVICE,
     .instance_size = sizeof(AeoliaSDHCIState),
     .class_init    = aeolia_sdhci_class_init,
+    .interfaces    = (InterfaceInfo[]) {
+        { INTERFACE_PCIE_DEVICE },
+        { }
+    },
 };
 
 static void aeolia_register_types(void)

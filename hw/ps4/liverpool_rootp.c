@@ -25,9 +25,8 @@ typedef struct LiverpoolRootPortState {
     PCIDevice parent_obj;
 } LiverpoolRootPortState;
 
-static int liverpool_rootp_init(PCIDevice *dev)
+static void liverpool_rootp_realize(PCIDevice *dev, Error **errp)
 {
-    return 0;
 }
 
 static void liverpool_rootp_class_init(ObjectClass *klass, void *data)
@@ -38,7 +37,7 @@ static void liverpool_rootp_class_init(ObjectClass *klass, void *data)
     pc->device_id = 0x1438;
     pc->revision = 1;
     pc->class_id = PCI_CLASS_BRIDGE_HOST;
-    pc->init = liverpool_rootp_init;
+    pc->realize = liverpool_rootp_realize;
 }
 
 static const TypeInfo liverpool_rootp_info = {

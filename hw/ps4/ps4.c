@@ -194,11 +194,7 @@ static void ps4_cpus_init(PCMachineState *pcms)
     MachineClass *mc = MACHINE_GET_CLASS(pcms);
 
     /* init CPUs */
-    if (machine->cpu_model == NULL) {
-        machine->cpu_model = "jaguar";
-    }
-
-    model_pieces = g_strsplit(machine->cpu_model, ",", 2);
+    model_pieces = g_strsplit(machine->cpu_type, ",", 2);
     if (!model_pieces[0]) {
         error_report("Invalid/empty CPU model name");
         exit(1);
@@ -626,7 +622,7 @@ static void ps4_init(MachineState *machine)
     }
 
     /* init rtc */
-    rtc_state = rtc_init(isa_bus, 2000, NULL);
+    rtc_state = mc146818_rtc_init(isa_bus, 2000, NULL);
 
     /* connect pm stuff to lpc */
     ich9_lpc_pm_init(lpc, pc_machine_is_smm_enabled(pcms));
@@ -647,7 +643,6 @@ static void ps4_init(MachineState *machine)
     ahci_ide_create_devs(ahci, hd);
 
     pc_cmos_init(pcms, idebus[0], idebus[1], rtc_state);
-    pc_pci_device_init(pci_bus);
 }
 
 /* Machine type information */
@@ -660,6 +655,7 @@ static void ps4_class_init(ObjectClass *oc, void *data)
     mc->default_display = "std";
     mc->default_machine_opts = "firmware=bios-256k.bin";
     mc->default_ram_size = 0x200000000UL;
+    mc->default_cpu_type = "jaguar";
     mc->max_cpus = 8;
     mc->is_default = 1;
     mc->init = ps4_init;

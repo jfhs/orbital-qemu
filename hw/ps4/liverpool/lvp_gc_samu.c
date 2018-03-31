@@ -18,6 +18,7 @@
  */
 
 #include "lvp_gc_samu.h"
+#include "qapi/error.h"
 #include "crypto/hash.h"
 #include "crypto/random.h"
 #include "hw/ps4/macros.h"

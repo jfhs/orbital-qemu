@@ -274,8 +274,8 @@ static void generate_hdd_sce_da0x6(BlockBackend* blk, uint64_t size,
 static void generate_hdd_sce_partition_img(BlockBackend* blk, uint64_t size,
     gpt_partition_t* part, const char* data_dir, const char* data_name)
 {
-    const path[256];
-    const buffer[4096];
+    char path[256];
+    char buffer[4096];
     size_t offset;
     size_t count;
     FILE* file;
