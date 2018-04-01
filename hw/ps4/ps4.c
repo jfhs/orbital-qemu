@@ -124,7 +124,6 @@ static void ps4_aeolia_init(PS4MachineState* s)
 static void ps4_liverpool_init(PS4MachineState* s)
 {
     PCIBus *bus;
-    DeviceState *dev;
 
     bus = s->pci_bus;
     /*
@@ -185,29 +184,9 @@ static void ps4_new_cpu(const char *typename, int64_t apic_id, Error **errp)
 static void ps4_cpus_init(PCMachineState *pcms)
 {
     int i;
-    CPUClass *cc;
-    ObjectClass *oc;
-    const char *typename;
-    gchar **model_pieces;
     const CPUArchIdList *possible_cpus;
     MachineState *machine = MACHINE(pcms);
     MachineClass *mc = MACHINE_GET_CLASS(pcms);
-
-    /* init CPUs */
-    model_pieces = g_strsplit(machine->cpu_type, ",", 2);
-    if (!model_pieces[0]) {
-        error_report("Invalid/empty CPU model name");
-        exit(1);
-    }
-    oc = cpu_class_by_name(TYPE_X86_CPU, model_pieces[0]);
-    if (oc == NULL) {
-        error_report("Unable to find CPU definition: %s", model_pieces[0]);
-        exit(1);
-    }
-    typename = object_class_get_name(oc);
-    cc = CPU_CLASS(oc);
-    cc->parse_features(typename, model_pieces[1], &error_fatal);
-    g_strfreev(model_pieces);
 
     /* Calculates the limit to CPU APIC ID values
      *
@@ -219,7 +198,10 @@ static void ps4_cpus_init(PCMachineState *pcms)
     pcms->apic_id_limit = x86_cpu_apic_id_from_index(max_cpus - 1) + 1;
     possible_cpus = mc->possible_cpu_arch_ids(machine);
     for (i = 0; i < smp_cpus; i++) {
-        ps4_new_cpu(typename, possible_cpus->cpus[i].arch_id, &error_fatal);
+        ps4_new_cpu(
+            machine->cpu_type,
+            possible_cpus->cpus[i].arch_id,
+            &error_fatal);
     }
 }
 
@@ -655,7 +637,7 @@ static void ps4_class_init(ObjectClass *oc, void *data)
     mc->default_display = "std";
     mc->default_machine_opts = "firmware=bios-256k.bin";
     mc->default_ram_size = 0x200000000UL;
-    mc->default_cpu_type = "jaguar";
+    mc->default_cpu_type = X86_CPU_TYPE_NAME("jaguar");
     mc->max_cpus = 8;
     mc->is_default = 1;
     mc->init = ps4_init;
