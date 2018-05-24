@@ -175,7 +175,7 @@ supported_hax_target() {
     test "$hax" = "yes" || return 1
     glob "$1" "*-softmmu" || return 1
     case "${1%-softmmu}" in
-        i386|x86_64)
+        i386|x86_64|ps4)
             return 0
         ;;
     esac
@@ -205,7 +205,7 @@ supported_xen_target() {
     glob "$1" "*-softmmu" || return 1
     # Only i386 and x86_64 provide the xenpv machine.
     case "${1%-softmmu}" in
-        i386|x86_64)
+        i386|x86_64|ps4)
             return 0
         ;;
     esac
@@ -216,7 +216,7 @@ supported_hvf_target() {
     test "$hvf" = "yes" || return 1
     glob "$1" "*-softmmu" || return 1
     case "${1%-softmmu}" in
-        x86_64)
+        x86_64|ps4)
             return 0
         ;;
     esac
@@ -227,7 +227,7 @@ supported_whpx_target() {
     test "$whpx" = "yes" || return 1
     glob "$1" "*-softmmu" || return 1
     case "${1%-softmmu}" in
-        i386|x86_64)
+        i386|x86_64|ps4)
             return 0
         ;;
     esac
