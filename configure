@@ -3829,10 +3829,22 @@ if test "$vulkan" != "no" ; then
   vulkan_pkgs="vulkan"
   if $pkg_config $vulkan_pkgs; then
     vulkan_cflags="$($pkg_config --cflags $vulkan_pkgs)"
-    # TODO
-    vulkan_libs="-L/mingw64/bin/ -lvulkan-1"
-    vulkan=yes
-    QEMU_CFLAGS="$QEMU_CFLAGS $vulkan_cflags"
+
+    vulkan=no
+    if test "$mingw32" = "yes" ; then
+        vulkan_libs="-L/mingw64/bin/ -lvulkan-1"
+        vulkan=yes
+    fi
+    if test "$linux" = "yes" ; then
+        vulkan_libs="-lvulkan"
+        vulkan=yes
+    fi
+
+    if test "$vulkan" = "yes" ; then
+        QEMU_CFLAGS="$QEMU_CFLAGS $vulkan_cflags"
+    else
+        feature_not_found "vulkan" "Vulkan does not support your platform."
+    fi
   else
     if test "$vulkan" = "yes" ; then
       feature_not_found "vulkan" "Please install vulkan (mesa) devel pkgs: $vulkan_pkgs"
