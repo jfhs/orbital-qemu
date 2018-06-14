@@ -38,6 +38,7 @@ typedef struct AeoliaGBEState {
 static uint64_t aeolia_gbe_read(
     void *opaque, hwaddr addr, unsigned size)
 {
+    printf("aeolia_gbe_read { addr: %llX, size: %X }\n", addr, size);
     switch (addr) {
     case AGBE_DEVICE_ID:
         assert(size == 1);
@@ -49,7 +50,6 @@ static uint64_t aeolia_gbe_read(
         assert(size == 2);
         return 0x10; // TODO
     }
-    printf("aeolia_gbe_read { addr: %llX, size: %X }\n", addr, size);
     return 0;
 }
 

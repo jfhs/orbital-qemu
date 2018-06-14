@@ -76,6 +76,7 @@ void* orbital_display_main(void* arg)
     vk_init_instance(vks, count+1, extensionNames);
     if (!SDL_Vulkan_CreateSurface(ui.sdl_window, vks->instance, &vks->surface)) {
         printf("SDL_Vulkan_CreateSurface failed: %s\n", SDL_GetError());
+        return NULL;
     }
     vk_init_device(vks);
     

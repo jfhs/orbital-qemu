@@ -125,7 +125,7 @@ void sbl_authmgr_load_self_block(
         input1_straddle_size = page_size - query->data_offset;
         input2_straddle_size = query->data_size - input1_straddle_size;
         memcpy(input, &input_page1[query->data_offset], input1_straddle_size);
-        memcpy(input, &input_page2[0], input2_straddle_size);
+        memcpy(input + input1_straddle_size, &input_page2[0], input2_straddle_size);
         liverpool_gc_samu_fakedecrypt(output, input, query->data_size);
         free(input);
 
