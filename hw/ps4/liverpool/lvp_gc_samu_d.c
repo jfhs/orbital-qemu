@@ -24,7 +24,7 @@
 #include "hw/ps4/macros.h"
 
 /* SAMU debugging */
-#define DEBUG_SAMU 1
+#define DEBUG_SAMU 0
 
 #define DPRINTF(...) \
 do { \

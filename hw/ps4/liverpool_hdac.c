@@ -22,6 +22,17 @@
 #include "hw/pci/pci.h"
 #include "macros.h"
 
+// MMIO
+/* The following three registers are involved in muting audio  */
+#define HDAC_UNK60 0x60  // Command?
+#define HDAC_UNK64 0x64  // Size?
+#define HDAC_UNK68 0x68  // Flags?
+
+// During the muting audio phase, following values are passed to HDAC_UNK60
+// 377703h 377823h 377943h 377A63h
+// 577703h 577823h 577943h 577A63h
+// 777703h 777823h 777943h 777A63h
+
 // Helpers
 #define MMIO_R(...) MMIO_READ(s->mmio, __VA_ARGS__)
 #define MMIO_W(...) MMIO_WRITE(s->mmio, __VA_ARGS__)
@@ -42,6 +53,10 @@ static uint64_t liverpool_hdac_read
 {
     LiverpoolHDACState *s = opaque;
 
+    switch (addr) {
+    case HDAC_UNK68: 
+        return 0;
+    }
     printf("liverpool_hdac_read:  { addr: %lX, size: %X }\n", addr, size);
     return MMIO_R(addr);
 }

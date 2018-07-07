@@ -26,7 +26,7 @@
 #define CHUNK_TABLE_MAX_SIZE 0x4000
 
 /* debugging */
-#define DEBUG_AUTHMGR 1
+#define DEBUG_AUTHMGR 0
 
 #define DPRINTF(...) \
 do { \
