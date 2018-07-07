@@ -493,3 +493,28 @@ int hax_inject_interrupt(CPUArchState *env, int vector)
         return 0;
     }
 }
+
+int hax_set_debug(CPUArchState *env, struct hax_debug_t *debug)
+{
+    int ret;
+    hax_fd fd;
+    HANDLE hDeviceVCPU;
+    DWORD dSize;
+
+    fd = hax_vcpu_get_fd(env);
+    if (hax_invalid_fd(fd)) {
+        return -1;
+    }
+
+    hDeviceVCPU = fd;
+
+    ret = DeviceIoControl(hDeviceVCPU,
+                          HAX_IOCTL_VCPU_DEBUG,
+                          debug, sizeof(struct hax_debug_t), NULL, 0, &dSize,
+                          (LPOVERLAPPED) NULL);
+    if (!ret) {
+        return -EFAULT;
+    } else {
+        return 0;
+    }
+}

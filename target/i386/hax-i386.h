@@ -32,12 +32,15 @@ struct hax_vcpu_state {
     unsigned char *iobuf;
 };
 
+QTAILQ_HEAD(hax_sw_breakpoint_head, hax_sw_breakpoint);
+
 struct hax_state {
     hax_fd fd; /* the global hax device interface */
     uint32_t version;
     struct hax_vm *vm;
     uint64_t mem_quota;
     bool supports_64bit_ramblock;
+    struct hax_sw_breakpoint_head hax_sw_breakpoints;
 };
 
 #define HAX_MAX_VCPU 0x10
@@ -71,6 +74,7 @@ int hax_vm_destroy(struct hax_vm *vm);
 int hax_capability(struct hax_state *hax, struct hax_capabilityinfo *cap);
 int hax_notify_qemu_version(hax_fd vm_fd, struct hax_qemu_version *qversion);
 int hax_set_ram(uint64_t start_pa, uint32_t size, uint64_t host_va, int flags);
+int hax_set_debug(CPUArchState *env, struct hax_debug_t *debug);
 
 /* Common host function */
 int hax_host_create_vm(struct hax_state *hax, int *vm_id);

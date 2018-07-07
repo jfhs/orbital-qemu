@@ -28,6 +28,7 @@
 #include "exec/address-spaces.h"
 #include "exec/exec-all.h"
 #include "exec/ioport.h"
+#include "exec/gdbstub.h"
 
 #include "qemu-common.h"
 #include "hax-i386.h"
@@ -54,8 +55,22 @@ static bool hax_allowed;
 
 struct hax_state hax_global;
 
+static struct {
+    target_ulong addr;
+    int size;
+    int type;
+} hw_breakpoint[4];
+
+static int nb_hw_breakpoint;
+
 static void hax_vcpu_sync_state(CPUArchState *env, int modified);
 static int hax_arch_get_registers(CPUArchState *env);
+
+int hax_sw_breakpoints_active(CPUState *cpu);
+int hax_insert_sw_breakpoint(CPUState *cs, struct hax_sw_breakpoint *bp);
+int hax_remove_sw_breakpoint(CPUState *cs, struct hax_sw_breakpoint *bp);
+struct hax_sw_breakpoint *hax_find_sw_breakpoint(CPUState *cpu, 
+                                                 target_ulong pc);
 
 int hax_enabled(void)
 {
@@ -418,6 +433,36 @@ static int hax_handle_io(CPUArchState *env, uint32_t df, uint16_t port,
     return 0;
 }
 
+static int hax_handle_debug(CPUState *cpu,
+                            struct hax_exit_debug_t *debug)
+{
+    int ret = 0;
+    int i;
+
+    if (debug->dr6) {
+        if (debug->dr6 & (1 << 14) && cpu->singlestep_enabled) {
+            cpu->exception_index = EXCP_DEBUG;
+            ret = 1;
+        } else {
+            for (i = 0; i < 4; i++) {
+                if (debug->dr6 & (1 << i)) {
+                    switch ((debug->dr7 >> (16 + i*4)) & 0x3) {
+                    case 0x0:
+                        cpu->exception_index = EXCP_DEBUG;
+                        ret = 1;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    else if (hax_find_sw_breakpoint(cpu, debug->rip)) {
+        cpu->exception_index = EXCP_DEBUG;
+        ret = 1;
+    }
+    return ret;
+}
+
 static int hax_vcpu_interrupt(CPUArchState *env)
 {
     CPUState *cpu = ENV_GET_CPU(env);
@@ -546,7 +591,7 @@ static int hax_vcpu_hax_exec(CPUArchState *env)
             hax_vcpu_sync_state(env, 0);
             ret = 1;
             break;
-        case HAX_EXIT_UNKNOWN_VMEXIT:
+        case HAX_EXIT_UNKNOWN:
             fprintf(stderr, "Unknown VMX exit %x from guest\n",
                     ht->_exit_reason);
             qemu_system_reset_request(SHUTDOWN_CAUSE_GUEST_RESET);
@@ -573,10 +618,15 @@ static int hax_vcpu_hax_exec(CPUArchState *env)
             fprintf(stderr, "HAX: unsupported MMIO emulation\n");
             ret = -1;
             break;
-        case HAX_EXIT_REAL:
+        case HAX_EXIT_REALMODE:
             /* Should not happen on UG system */
             fprintf(stderr, "HAX: unimplemented real mode emulation\n");
             ret = -1;
+            break;
+        case HAX_EXIT_DEBUG:
+            DPRINTF("hax_exit_debug\n");
+            hax_vcpu_sync_state(env, 0);
+            ret = hax_handle_debug(cpu, &ht->debug);
             break;
         default:
             fprintf(stderr, "Unknown exit %x from HAX\n", ht->_exit_status);
@@ -593,6 +643,265 @@ static int hax_vcpu_hax_exec(CPUArchState *env)
         cpu->exception_index = EXCP_INTERRUPT;
     }
     return ret < 0;
+}
+
+struct hax_debug_data_t {
+    int err;
+    struct hax_debug_t dbg;
+};
+
+static void hax_invoke_set_debug(CPUState *cpu, run_on_cpu_data data)
+{
+    CPUArchState *env = (CPUArchState *)(cpu->env_ptr);
+    struct hax_debug_data_t *arg = (struct hax_debug_data_t *)(data.host_ptr);
+
+    arg->err = hax_set_debug(env, &arg->dbg);
+}
+
+int hax_update_guest_debug(CPUState *cpu)
+{
+    struct hax_debug_data_t data;
+    const uint8_t type_code[] = {
+        [GDB_BREAKPOINT_HW] = 0x0,
+        [GDB_WATCHPOINT_WRITE] = 0x1,
+        [GDB_WATCHPOINT_ACCESS] = 0x3
+    };
+    const uint32_t size_code[] = {
+        [1] = 0x0, [2] = 0x1, [4] = 0x3, [8] = 0x2
+    };
+    int n;
+
+    data.dbg.control = 0;
+    if (cpu->singlestep_enabled) {
+        data.dbg.control |= HAX_DEBUG_ENABLE | HAX_DEBUG_STEP;
+    }
+    if (hax_sw_breakpoints_active(cpu)) {
+        data.dbg.control |= HAX_DEBUG_ENABLE | HAX_DEBUG_USE_SW_BP;
+    }
+    if (nb_hw_breakpoint > 0) {
+        data.dbg.control |= HAX_DEBUG_ENABLE | HAX_DEBUG_USE_HW_BP;
+        data.dbg.dr[7] = 0x0600;
+        for (n = 0; n < nb_hw_breakpoint; n++) {
+            data.dbg.dr[n] = hw_breakpoint[n].addr;
+            data.dbg.dr[7] |= (2 << (n * 2))
+                | (type_code[hw_breakpoint[n].type] << (16 + n*4))
+                | (size_code[hw_breakpoint[n].size] << (18 + n*4));
+        }
+    }
+    run_on_cpu(cpu, hax_invoke_set_debug, RUN_ON_CPU_HOST_PTR(&data));
+    return data.err;
+}
+
+int hax_sw_breakpoints_active(CPUState *cpu)
+{
+    return !QTAILQ_EMPTY(&hax_global.hax_sw_breakpoints);
+}
+
+struct hax_sw_breakpoint *hax_find_sw_breakpoint(CPUState *cpu,
+                                                 target_ulong pc)
+{
+    struct hax_sw_breakpoint *bp;
+
+    QTAILQ_FOREACH(bp, &hax_global.hax_sw_breakpoints, entry) {
+        if (bp->pc == pc) {
+            return bp;
+        }
+    }
+    return NULL;
+}
+
+int hax_insert_sw_breakpoint(CPUState *cs, struct hax_sw_breakpoint *bp)
+{
+    static const uint8_t int3 = 0xcc;
+
+    if (cpu_memory_rw_debug(cs, bp->pc, (uint8_t *)&bp->saved_insn, 1, 0) ||
+        cpu_memory_rw_debug(cs, bp->pc, (uint8_t *)&int3, 1, 1)) {
+        return -EINVAL;
+    }
+    return 0;
+}
+
+int hax_remove_sw_breakpoint(CPUState *cs, struct hax_sw_breakpoint *bp)
+{
+    uint8_t int3;
+
+    if (cpu_memory_rw_debug(cs, bp->pc, &int3, 1, 0) || int3 != 0xcc ||
+        cpu_memory_rw_debug(cs, bp->pc, (uint8_t *)&bp->saved_insn, 1, 1)) {
+        return -EINVAL;
+    }
+    return 0;
+}
+
+static int hax_find_hw_breakpoint(target_ulong addr, int size, int type)
+{
+    int n;
+
+    for (n = 0; n < nb_hw_breakpoint; n++) {
+        if (hw_breakpoint[n].addr == addr && hw_breakpoint[n].type == type &&
+            (hw_breakpoint[n].size == size || size == -1)) {
+            return n;
+        }
+    }
+    return -1;
+}
+
+static int hax_insert_hw_breakpoint(target_ulong addr,
+                                    target_ulong size, int type)
+{
+    switch (type) {
+    case GDB_BREAKPOINT_HW:
+        size = 1;
+        break;
+    case GDB_WATCHPOINT_WRITE:
+    case GDB_WATCHPOINT_ACCESS:
+        switch (size) {
+        case 1:
+            break;
+        case 2:
+        case 4:
+        case 8:
+            if (addr & (size - 1)) {
+                return -EINVAL;
+            }
+            break;
+        default:
+            return -EINVAL;
+        }
+        break;
+    default:
+        return -ENOSYS;
+    }
+
+    if (nb_hw_breakpoint == 4) {
+        return -ENOBUFS;
+    }
+    if (hax_find_hw_breakpoint(addr, size, type) >= 0) {
+        return -EEXIST;
+    }
+    hw_breakpoint[nb_hw_breakpoint].addr = addr;
+    hw_breakpoint[nb_hw_breakpoint].size = size;
+    hw_breakpoint[nb_hw_breakpoint].type = type;
+    nb_hw_breakpoint++;
+
+    return 0;
+}
+
+static int hax_remove_hw_breakpoint(target_ulong addr,
+                                    target_ulong size, int type)
+{
+    int n;
+
+    n = hax_find_hw_breakpoint(addr, (type == GDB_BREAKPOINT_HW) ? 1 : size, type);
+    if (n < 0) {
+        return -ENOENT;
+    }
+    nb_hw_breakpoint--;
+    hw_breakpoint[n] = hw_breakpoint[nb_hw_breakpoint];
+
+    return 0;
+}
+
+int hax_insert_breakpoint(CPUState *cpu, target_ulong addr,
+                          target_ulong len, int type)
+{
+    struct hax_sw_breakpoint *bp;
+    int err;
+
+    if (type == GDB_BREAKPOINT_SW) {
+        bp = hax_find_sw_breakpoint(cpu, addr);
+        if (bp) {
+            bp->use_count++;
+            return 0;
+        }
+
+        bp = g_malloc(sizeof(struct hax_sw_breakpoint));
+        bp->pc = addr;
+        bp->use_count = 1;
+        err = hax_insert_sw_breakpoint(cpu, bp);
+        if (err) {
+            g_free(bp);
+            return err;
+        }
+
+        QTAILQ_INSERT_HEAD(&hax_global.hax_sw_breakpoints, bp, entry);
+    } else {
+        err = hax_insert_hw_breakpoint(addr, len, type);
+        if (err) {
+            return err;
+        }
+    }
+
+    CPU_FOREACH(cpu) {
+        err = hax_update_guest_debug(cpu);
+        if (err) {
+            return err;
+        }
+    }
+    return 0;
+}
+
+int hax_remove_breakpoint(CPUState *cpu, target_ulong addr,
+                          target_ulong len, int type)
+{
+    struct hax_sw_breakpoint *bp;
+    int err;
+
+    if (type == GDB_BREAKPOINT_SW) {
+        bp = hax_find_sw_breakpoint(cpu, addr);
+        if (!bp) {
+            return -ENOENT;
+        }
+
+        if (bp->use_count > 1) {
+            bp->use_count--;
+            return 0;
+        }
+
+        err = hax_remove_sw_breakpoint(cpu, bp);
+        if (err) {
+            return err;
+        }
+
+        QTAILQ_REMOVE(&hax_global.hax_sw_breakpoints, bp, entry);
+        g_free(bp);
+    } else {
+        err = hax_remove_hw_breakpoint(addr, len, type);
+        if (err) {
+            return err;
+        }
+    }
+
+    CPU_FOREACH(cpu) {
+        err = hax_update_guest_debug(cpu);
+        if (err) {
+            return err;
+        }
+    }
+    return 0;
+}
+
+void hax_remove_all_breakpoints(CPUState *cpu)
+{
+    struct hax_sw_breakpoint *bp, *next;
+    struct hax_state *s = &hax_global;
+    CPUState *tmpcpu;
+
+    QTAILQ_FOREACH_SAFE(bp, &s->hax_sw_breakpoints, entry, next) {
+        if (hax_remove_sw_breakpoint(cpu, bp) != 0) {
+            /* Try harder to find a CPU that currently sees the breakpoint. */
+            CPU_FOREACH(tmpcpu) {
+                if (hax_remove_sw_breakpoint(tmpcpu, bp) == 0) {
+                    break;
+                }
+            }
+        }
+        QTAILQ_REMOVE(&s->hax_sw_breakpoints, bp, entry);
+        g_free(bp);
+    }
+
+    CPU_FOREACH(cpu) {
+        hax_update_guest_debug(cpu);
+    }
 }
 
 static void do_hax_cpu_synchronize_state(CPUState *cpu, run_on_cpu_data arg)

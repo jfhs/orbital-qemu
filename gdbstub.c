@@ -36,6 +36,7 @@
 
 #include "qemu/sockets.h"
 #include "sysemu/hw_accel.h"
+#include "sysemu/hax.h"
 #include "sysemu/kvm.h"
 #include "exec/semihost.h"
 #include "exec/exec-all.h"
@@ -784,6 +785,9 @@ static int gdb_breakpoint_insert(target_ulong addr, target_ulong len, int type)
     CPUState *cpu;
     int err = 0;
 
+    if (hax_enabled()) {
+        return hax_insert_breakpoint(gdbserver_state->c_cpu, addr, len, type);
+    }
     if (kvm_enabled()) {
         return kvm_insert_breakpoint(gdbserver_state->c_cpu, addr, len, type);
     }
@@ -821,6 +825,9 @@ static int gdb_breakpoint_remove(target_ulong addr, target_ulong len, int type)
     CPUState *cpu;
     int err = 0;
 
+    if (hax_enabled()) {
+        return hax_remove_breakpoint(gdbserver_state->c_cpu, addr, len, type);
+    }
     if (kvm_enabled()) {
         return kvm_remove_breakpoint(gdbserver_state->c_cpu, addr, len, type);
     }
@@ -856,6 +863,10 @@ static void gdb_breakpoint_remove_all(void)
 {
     CPUState *cpu;
 
+    if (hax_enabled()) {
+        hax_remove_all_breakpoints(gdbserver_state->c_cpu);
+        return;
+    }
     if (kvm_enabled()) {
         kvm_remove_all_breakpoints(gdbserver_state->c_cpu);
         return;
