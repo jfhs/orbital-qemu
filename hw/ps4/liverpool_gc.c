@@ -205,6 +205,7 @@ static uint64_t liverpool_gc_mmio_read(
     uint32_t* mmio = s->mmio;
     uint32_t index = addr >> 2;
     uint32_t index_ix;
+    uint32_t value;
 
     switch (index) {
     case mmVM_INVALIDATE_RESPONSE:
@@ -217,7 +218,24 @@ static uint64_t liverpool_gc_mmio_read(
         return 1;
     case mmACP_UNK512F_:
         return 0xFFFFFFFF;
+    /* oss */
+    case mmIH_STATUS:
+        value = 0;
+        value = REG_SET_FIELD(value, IH_STATUS, IDLE, 1);
+        value = REG_SET_FIELD(value, IH_STATUS, INPUT_IDLE, 1);
+        value = REG_SET_FIELD(value, IH_STATUS, RB_IDLE, 1);
+        return value; // TODO
+    /* dce */
+    case mmCRTC_BLANK_CONTROL:
+        value = 0;
+        value = REG_SET_FIELD(value, CRTC_BLANK_CONTROL, CRTC_CURRENT_BLANK_STATE, 1);
+        return value; // TODO
+    case mmCRTC_STATUS:
+        value = 1;
+        return value; // TODO
     /* gfx */
+    case mmGRBM_STATUS:
+        return 0; // TODO
     case mmCP_RB0_RPTR:
         return s->gfx.cp_rb[0].rptr;
     case mmCP_RB1_RPTR:
@@ -229,15 +247,15 @@ static uint64_t liverpool_gc_mmio_read(
     /* samu */
     case mmSAM_IX_DATA:
         index_ix = s->mmio[mmSAM_IX_INDEX];
-        DPRINTF("mmSAM_IX_DATA_read { index: %X }\n", index_ix);
+        DPRINTF("mmSAM_IX_DATA_read { index: %X }", index_ix);
         return s->samu_ix[index_ix];
     case mmSAM_SAB_IX_DATA:
         index_ix = s->mmio[mmSAM_SAB_IX_INDEX];
-        DPRINTF("mmSAM_SAB_IX_DATA_read { index: %X }\n", index_ix);
+        DPRINTF("mmSAM_SAB_IX_DATA_read { index: %X }", index_ix);
         return s->samu_sab_ix[index_ix];
     }
 
-    DPRINTF("liverpool_gc_mmio_read:  { addr: %llX, size: %X }\n", addr, size);
+    DPRINTF("liverpool_gc_mmio_read:  { addr: %llX, size: %X }", addr, size);
     return s->mmio[index];
 }
 
@@ -313,7 +331,7 @@ static void liverpool_gc_mmio_write(
             break;
         default:
             index_ix = s->mmio[mmSAM_IX_INDEX];
-            DPRINTF("mmSAM_IX_DATA_write { index: %X, value: %llX }\n", index_ix, value);
+            DPRINTF("mmSAM_IX_DATA_write { index: %X, value: %llX }", index_ix, value);
             s->samu_ix[index_ix] = value;
         }
         return;
@@ -322,7 +340,7 @@ static void liverpool_gc_mmio_write(
         switch (s->mmio[mmSAM_SAB_IX_INDEX]) {
         default:
             index_ix = s->mmio[mmSAM_SAB_IX_INDEX];
-            DPRINTF("mmSAM_SAB_IX_DATA_write { index: %X, value: %llX }\n", index_ix, value);
+            DPRINTF("mmSAM_SAB_IX_DATA_write { index: %X, value: %llX }", index_ix, value);
             s->samu_sab_ix[index_ix] = value;
         }
         return;
@@ -392,7 +410,7 @@ static void liverpool_gc_mmio_write(
         uint32_t pipe = REG_GET_FIELD(value, SRBM_GFX_CNTL, PIPEID);
         uint32_t queue = REG_GET_FIELD(value, SRBM_GFX_CNTL, QUEUEID);
         uint32_t vmid = REG_GET_FIELD(value, SRBM_GFX_CNTL, VMID);
-        DPRINTF("liverpool_gc_mmio_write: mmSRBM_GFX_CNTL { me: %d, pipe: %d, queue: %d, vmid: %d }\n", me, pipe, queue, vmid);
+        DPRINTF("liverpool_gc_mmio_write: mmSRBM_GFX_CNTL { me: %d, pipe: %d, queue: %d, vmid: %d }", me, pipe, queue, vmid);
         break;
     }
     case mmSDMA0_UCODE_DATA:
@@ -402,7 +420,7 @@ static void liverpool_gc_mmio_write(
         liverpool_gc_ucode_load(s, mmSDMA1_UCODE_ADDR, value);
         break;
     default:
-        DPRINTF("liverpool_gc_mmio_write: { addr: %llX, size: %X, value: %llX }\n", addr, size, value);
+        DPRINTF("liverpool_gc_mmio_write: { addr: %llX, size: %X, value: %llX }", addr, size, value);
     }
 }
 

@@ -241,8 +241,6 @@ static void trace_pm4_packet3(const uint32_t *packet)
 void trace_pm4_packet(const uint32_t *packet)
 {
     uint32_t type;
-    uint32_t reg, count;
-    uint32_t pred, shtype, op;
 
     if (!DEBUG_CP) {
         return;
