@@ -244,6 +244,8 @@ static uint64_t liverpool_gc_mmio_read(
         return s->gfx.cp_rb[0].wptr;
     case mmCP_RB1_WPTR:
         return s->gfx.cp_rb[1].wptr;
+    case mmVGT_EVENT_INITIATOR:
+        return s->gfx.vgt_event_initiator;
     /* samu */
     case mmSAM_IX_DATA:
         index_ix = s->mmio[mmSAM_IX_INDEX];

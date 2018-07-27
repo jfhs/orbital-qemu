@@ -24,6 +24,8 @@
 #include "qemu/thread.h"
 #include "exec/hwaddr.h"
 
+#include "gca/gfx_7_2_enum.h"
+
 /* forward declarations */
 typedef struct gart_state_t gart_state_t;
 
@@ -45,6 +47,9 @@ typedef struct gfx_state_t {
 
     /* cp */
     gfx_ring_t cp_rb[2];
+
+    /* vgt */
+    VGT_EVENT_TYPE vgt_event_initiator;
 
     /* ucode */
     uint8_t cp_pfp_ucode[0x8000];

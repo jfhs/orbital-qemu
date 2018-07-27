@@ -24,6 +24,9 @@
 
 #include "exec/address-spaces.h"
 
+#define FIELD(from, to, name) \
+    struct { uint32_t:(32-to-1); uint32_t name:(to-from+1); uint32_t:from; }
+
 /* forward declarations */
 static uint32_t cp_handle_pm4(gfx_state_t *s, const uint32_t *rb);
 
@@ -77,6 +80,84 @@ static void cp_handle_pm4_it_indirect_buffer(
         i += cp_handle_pm4(s, &mapped_ib[i]);
     }
     address_space_unmap(gart->as[vmid], mapped_ib, ib_base, mapped_size, true);
+}
+
+static void cp_handle_pm4_it_event_write_eop(
+    gfx_state_t *s, const uint32_t *packet)
+{
+    gart_state_t *gart = s->gart;
+    void *mapped_addr;
+    hwaddr mapped_size;
+    uint64_t addr, data;
+    uint32_t size, vmid;
+    union {
+        uint32_t value;
+        FIELD( 0,  5, event_type);
+        FIELD( 8, 11, event_index);
+        FIELD(20, 20, inv_l2);
+    } event_cntl;
+    union {
+        FIELD( 0, 15, addr_hi);
+        FIELD(24, 25, int_sel);
+        FIELD(29, 31, data_sel);
+        uint32_t value;
+    } data_cntl;
+    uint32_t addr_lo;
+    uint32_t data_lo;
+    uint32_t data_hi;
+
+    event_cntl.value = packet[1];
+    addr_lo = packet[2];
+    data_cntl.value = packet[3];
+    data_lo = packet[4];
+    data_hi = packet[5];
+
+    // Memory write for the end-of-pipe event
+    switch (data_cntl.data_sel) {
+    case 0: // 000
+        size = 0;
+        break;
+    case 1: // 001
+        size = 4;
+        data = data_lo;
+        break;
+    case 2: // 010
+        size = 8;
+        data = ((uint64_t)data_hi << 32) | data_lo;
+        break;
+    case 3: // 011
+        size = 8;
+        data = 0; // TODO: Send 64-bit value of GPU clock counter.
+        break;
+    case 4: // 100
+        size = 8;
+        data = 0; // TODO: Send 64-bit value of CP_PERFCOUNTER_HI/LO.
+        break;
+    default:
+        size = 0;
+    }
+    if (size) {
+        vmid = 0; // TODO: How is VMID selected?
+        addr = ((uint64_t)data_cntl.addr_hi << 32) | addr_lo;
+        mapped_size = size;
+        mapped_addr = address_space_map(gart->as[vmid], addr, &mapped_size, true);
+        memcpy(mapped_addr, &data, size);
+        address_space_unmap(gart->as[vmid], mapped_addr, addr, mapped_size, true);
+    }
+
+    // Interrupt action for the end-of-pipe event
+    switch (data_cntl.int_sel) {
+    case 0: // 00
+        break;
+    case 1: // 01
+        // TODO: Send Interrupt Only
+        break;
+    case 2: // 10
+        // TODO: Send Interrupt when Write Confirm is received from the MC.
+        break;
+    }
+
+    s->vgt_event_initiator = event_cntl.event_type;
 }
 
 static void cp_handle_pm4_it_set_config_reg(
@@ -139,6 +220,9 @@ static uint32_t cp_handle_pm4_type3(gfx_state_t *s, const uint32_t *packet)
     switch (itop) {
     case PM4_IT_INDIRECT_BUFFER:
         cp_handle_pm4_it_indirect_buffer(s, packet);
+        break;
+    case PM4_IT_EVENT_WRITE_EOP:
+        cp_handle_pm4_it_event_write_eop(s, packet);
         break;
     case PM4_IT_SET_CONFIG_REG:
         cp_handle_pm4_it_set_config_reg(s, packet, count);
