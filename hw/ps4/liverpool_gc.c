@@ -52,7 +52,9 @@ do { \
 } while (0)
 
 // Interrupt handlers
-#define GBASE_IH_SBL_DRIVER 0x98
+#define GBASE_IH_DCE1        0x34
+#define GBASE_IH_DCE2        0x35
+#define GBASE_IH_SBL_DRIVER  0x98
 
 #define LIVERPOOL_GC(obj) \
     OBJECT_CHECK(LiverpoolGCState, (obj), TYPE_LIVERPOOL_GC)
@@ -273,13 +275,37 @@ static void liverpool_gc_ih_rb_push(LiverpoolGCState *s, uint32_t value)
     stl_le_phys(s->gart.as[0], wptr_addr, s->mmio[mmIH_RB_WPTR]);
 }
 
+static void liverpool_gc_ih_push_iv(LiverpoolGCState *s,
+    uint8_t id, uint32_t data)
+{
+    uint64_t msi_addr;
+    uint32_t msi_data;
+    uint16_t pasid;
+    uint8_t ringid, vmid;
+    PCIDevice* dev;
+
+    ringid = 0; // TODO
+    pasid = 0; // TODO
+    vmid = 0; // TODO
+    data &= 0xFFFFFFF;
+    liverpool_gc_ih_rb_push(s, id);
+    liverpool_gc_ih_rb_push(s, data);
+    liverpool_gc_ih_rb_push(s, ((pasid << 16) | (vmid << 8) | ringid));
+    liverpool_gc_ih_rb_push(s, 0 /* TODO: timestamp & 0xFFFFFFF */);
+
+    /* Trigger MSI */
+    dev = PCI_DEVICE(s);
+    msi_addr = pci_get_long(&dev->config[dev->msi_cap + PCI_MSI_ADDRESS_HI]);
+    msi_addr = pci_get_long(&dev->config[dev->msi_cap + PCI_MSI_ADDRESS_LO]) | (msi_addr << 32);
+    msi_data = pci_get_long(&dev->config[dev->msi_cap + PCI_MSI_DATA_64]);
+    stl_le_phys(&address_space_memory, msi_addr, msi_data);
+}
+
+
 static void liverpool_gc_samu_doorbell(LiverpoolGCState *s, uint32_t value)
 {
     uint64_t query_addr;
     uint64_t reply_addr;
-    uint64_t msi_addr;
-    uint32_t msi_data;
-    PCIDevice* dev;
 
     assert(value == 1);
     query_addr = s->samu_ix[ixSAM_IH_CPU_AM32_INT_CTX_HIGH];
@@ -302,18 +328,8 @@ static void liverpool_gc_samu_doorbell(LiverpoolGCState *s, uint32_t value)
         return;
     }
 
-    liverpool_gc_ih_rb_push(s, GBASE_IH_SBL_DRIVER);
-    liverpool_gc_ih_rb_push(s, 0 /* TODO */);
-    liverpool_gc_ih_rb_push(s, 0 /* TODO */);
-    liverpool_gc_ih_rb_push(s, 0 /* TODO */);
     s->samu_ix[ixSAM_IH_AM32_CPU_INT_STATUS] |= 1;
-
-    /* Trigger MSI */
-    dev = PCI_DEVICE(s);
-    msi_addr = pci_get_long(&dev->config[dev->msi_cap + PCI_MSI_ADDRESS_HI]);
-    msi_addr = pci_get_long(&dev->config[dev->msi_cap + PCI_MSI_ADDRESS_LO]) | (msi_addr << 32);
-    msi_data = pci_get_long(&dev->config[dev->msi_cap + PCI_MSI_DATA_64]);
-    stl_le_phys(&address_space_memory, msi_addr, msi_data);
+    liverpool_gc_ih_push_iv(s, GBASE_IH_SBL_DRIVER, 0 /* TODO */);
 }
 
 static void liverpool_gc_mmio_write(
