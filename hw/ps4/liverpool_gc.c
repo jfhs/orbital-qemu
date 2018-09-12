@@ -52,9 +52,35 @@ do { \
 } while (0)
 
 // Interrupt handlers
-#define GBASE_IH_DCE1        0x34
-#define GBASE_IH_DCE2        0x35
-#define GBASE_IH_SBL_DRIVER  0x98
+#define GBASE_IH_DCE_EVENT_UPDATE     0x07
+#define GBASE_IH_DCE_EVENT_PFLIP0     0x08
+#define GBASE_IH_DCE_EVENT_PFLIP1     0x0A
+#define GBASE_IH_DCE_EVENT_PFLIP2     0x0C
+#define GBASE_IH_DCE_EVENT_PFLIP3     0x0E
+#define GBASE_IH_DCE_EVENT_PFLIP4     0x10
+#define GBASE_IH_DCE_EVENT_PFLIP5     0x12
+#define GBASE_IH_DCE_EVENT_CRTC_LINE  0x13
+#define GBASE_IH_DCE_SCANIN           0x34
+#define GBASE_IH_DCE_SCANIN_ERROR     0x35
+#define GBASE_IH_SAM                  0x98
+#define GBASE_IH_ACP                  0xA2
+#define GBASE_IH_GFX_EOP              0xB5
+#define GBASE_IH_GFX_PRIV_REG         0xB8
+#define GBASE_IH_GFX_PRIV_INST        0xB9
+
+#define GBASE_IH_UNK0_B4              0xB4
+#define GBASE_IH_UNK0_B7              0xB7
+#define GBASE_IH_UNK0_BC              0xBC
+#define GBASE_IH_UNK0_BD              0xBD
+#define GBASE_IH_UNK0_92              0x92
+#define GBASE_IH_UNK0_93              0x93
+#define GBASE_IH_UNK1_KMD             0x7C
+#define GBASE_IH_UNK2_E0              0xE0
+#define GBASE_IH_UNK2_F0              0xF0
+#define GBASE_IH_UNK2_F3              0xF3
+#define GBASE_IH_UNK2_F5              0xF5
+#define GBASE_IH_UNK3_E9              0xE9
+#define GBASE_IH_UNK4_EF              0xEF
 
 #define LIVERPOOL_GC(obj) \
     OBJECT_CHECK(LiverpoolGCState, (obj), TYPE_LIVERPOOL_GC)
@@ -329,7 +355,7 @@ static void liverpool_gc_samu_doorbell(LiverpoolGCState *s, uint32_t value)
     }
 
     s->samu_ix[ixSAM_IH_AM32_CPU_INT_STATUS] |= 1;
-    liverpool_gc_ih_push_iv(s, GBASE_IH_SBL_DRIVER, 0 /* TODO */);
+    liverpool_gc_ih_push_iv(s, GBASE_IH_SAM, 0 /* TODO */);
 }
 
 static void liverpool_gc_mmio_write(
