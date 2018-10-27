@@ -26,6 +26,7 @@
 #include "hw/hw.h"
 
 #include <zlib.h>
+#include <zip.h>
 
 /* SAMU debugging */
 #define DEBUG_SAMU 1
@@ -58,21 +59,22 @@ do { \
 #define AUTHID_IDATA_MGR  0x3E00000000000006ULL
 #define AUTHID_KEY_MGR    0x3E00000000000007ULL
 
+static zip_t *blobs_zip = NULL;
+
 /* Fake-crypto */
 void liverpool_gc_samu_fakedecrypt(uint8_t *out_buffer,
     const uint8_t *in_buffer, uint64_t in_length)
 {
-    int ret;
     char filename[256];
     char hashstr[33];
     char hashchr;
     uint8_t *hash;
     size_t hashlen = 0;
-    size_t out_length;
-    FILE *file;
+    zip_stat_t stat;
+    zip_file_t *file;
 
     /* compute filename of decrypted blob */
-    ret = qcrypto_hash_bytes(QCRYPTO_HASH_ALG_MD5,
+    qcrypto_hash_bytes(QCRYPTO_HASH_ALG_MD5,
         in_buffer, in_length, &hash, &hashlen, NULL);
     memset(hashstr, 0, sizeof(hashstr));
     for (int i = 0; i < 16; i++) {
@@ -81,19 +83,23 @@ void liverpool_gc_samu_fakedecrypt(uint8_t *out_buffer,
         hashchr = (hash[i] >> 0) & 0xF;
         hashstr[2*i+1] = hashchr >= 0xA ? hashchr + 0x37 : hashchr + 0x30;
     }
-    snprintf(filename, sizeof(filename), "crypto/%s.bin", hashstr);
+    snprintf(filename, sizeof(filename), "%s.bin", hashstr);
 
     /* return decrypted blob contents */
-    file = fopen(filename, "rb");
-    if (!file) {
+    if (zip_stat(blobs_zip, filename, 0, &stat) == -1) {
         printf("qemu: samu-fakedecrypt: Could not find decrypted blob: %s\n", filename);
         qemu_hexdump(in_buffer, stdout, "", in_length > 0x80 ? 0x80 : in_length);
         return;
     }
-    fseek(file, 0, SEEK_END);
-    out_length = ftell(file);
-    fseek(file, 0, SEEK_SET); 
-    fread(out_buffer, 1, out_length, file);
+    if (in_length != stat.size) {
+        printf("qemu: samu-fakedecrypt: decrypted blob size (%lld) is different from input (%lld) for: %s\n", in_length, stat.size, filename);
+    }
+    file = zip_fopen_index(blobs_zip, stat.index, 0);
+    size_t read = zip_fread(file, out_buffer, stat.size);
+    if (read != stat.size) {
+        printf("qemu: samu-fakedecrypt: read %lld bytes instead of %lld for %s\n", read, in_length, filename);
+    }
+    zip_fclose(file);
 }
 
 
@@ -368,7 +374,7 @@ static void samu_packet_mailbox(samu_state_t *s,
             sbl_authmgr_load_self_segment(
                 (authmgr_load_self_segment_t*)&query_mb->data,
                 (authmgr_load_self_segment_t*)&reply_mb->data);
-            break;      
+            break;
         case AUTHMGR_SM_LOAD_SELF_BLOCK:
             sbl_authmgr_load_self_block(
                 (authmgr_load_self_block_t*)&query_mb->data,
@@ -475,4 +481,12 @@ void liverpool_gc_samu_init(samu_state_t *s, uint64_t addr)
     samu_packet_io_write(s, packet, SAMU_CMD_IO_WRITE_FD_STDOUT,
         (char*)secure_kernel_build, strlen(secure_kernel_build));
     address_space_unmap(&address_space_memory, packet, addr, length, true);
+
+    const char* blob_zip_name = "crypto/blobs.zip";
+    int err;
+    blobs_zip = zip_open(blob_zip_name, ZIP_RDONLY, &err);
+    if (!blobs_zip) {
+        DPRINTF("Failed opening %s as zip: errno=%d", blob_zip_name, err);
+        assert(0);
+    }
 }
