@@ -65,6 +65,7 @@ static zip_t *blobs_zip = NULL;
 void liverpool_gc_samu_fakedecrypt(uint8_t *out_buffer,
     const uint8_t *in_buffer, uint64_t in_length)
 {
+    int err;
     char filename[256];
     char hashstr[33];
     char hashchr;
@@ -72,10 +73,15 @@ void liverpool_gc_samu_fakedecrypt(uint8_t *out_buffer,
     size_t hashlen = 0;
     zip_stat_t stat;
     zip_file_t *file;
+    size_t read;
 
     /* compute filename of decrypted blob */
-    qcrypto_hash_bytes(QCRYPTO_HASH_ALG_MD5,
+    err = qcrypto_hash_bytes(QCRYPTO_HASH_ALG_MD5,
         in_buffer, in_length, &hash, &hashlen, NULL);
+    if (err) {
+        printf("qemu: samu-fakedecrypt: Could not hash input data\n");
+        return;
+    }
     memset(hashstr, 0, sizeof(hashstr));
     for (int i = 0; i < 16; i++) {
         hashchr = (hash[i] >> 4) & 0xF;
@@ -92,12 +98,13 @@ void liverpool_gc_samu_fakedecrypt(uint8_t *out_buffer,
         return;
     }
     if (in_length != stat.size) {
-        printf("qemu: samu-fakedecrypt: decrypted blob size (%lld) is different from input (%lld) for: %s\n", in_length, stat.size, filename);
+        printf("qemu: samu-fakedecrypt: Decrypted blob size (%lld) is different from input (%lld) for: %s\n",
+            in_length, stat.size, filename);
     }
     file = zip_fopen_index(blobs_zip, stat.index, 0);
-    size_t read = zip_fread(file, out_buffer, stat.size);
+    read = zip_fread(file, out_buffer, stat.size);
     if (read != stat.size) {
-        printf("qemu: samu-fakedecrypt: read %lld bytes instead of %lld for %s\n", read, in_length, filename);
+        printf("qemu: samu-fakedecrypt: Read %lld bytes instead of %lld for %s\n", read, in_length, filename);
     }
     zip_fclose(file);
 }
@@ -470,8 +477,10 @@ void liverpool_gc_samu_packet(samu_state_t *s,
 
 void liverpool_gc_samu_init(samu_state_t *s, uint64_t addr)
 {
+    int err;
     hwaddr length;
     samu_packet_t *packet;
+    const char *blobs_filename = "crypto/blobs.zip";
     const char *secure_kernel_build =
         "secure kernel build: Sep 26 2017 ??:??:?? (r8963:release_branches/release_05.000)\n";
 
@@ -482,11 +491,9 @@ void liverpool_gc_samu_init(samu_state_t *s, uint64_t addr)
         (char*)secure_kernel_build, strlen(secure_kernel_build));
     address_space_unmap(&address_space_memory, packet, addr, length, true);
 
-    const char* blob_zip_name = "crypto/blobs.zip";
-    int err;
-    blobs_zip = zip_open(blob_zip_name, ZIP_RDONLY, &err);
+    blobs_zip = zip_open(blobs_filename, ZIP_RDONLY, &err);
     if (!blobs_zip) {
-        DPRINTF("Failed opening %s as zip: errno=%d", blob_zip_name, err);
+        printf("Could not open ZIP file %s due to error %d\n", blobs_filename, err);
         assert(0);
     }
 }
