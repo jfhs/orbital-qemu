@@ -22,7 +22,7 @@
 #include "hw/ps4/macros.h"
 
 /* CP debugging */
-#define DEBUG_CP 0
+#define DEBUG_CP 1
 
 #define DEBUG_CP_MAX_DATA 8
 

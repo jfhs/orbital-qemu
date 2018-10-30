@@ -407,6 +407,11 @@ static void liverpool_gc_mmio_write(
          mmVM_CONTEXT15_PAGE_TABLE_BASE_ADDR:
         liverpool_gc_gart_update_pde(s, index, value);
         break;
+    /* dce */
+    case mmCRTC_V_SYNC_A: // TODO
+        liverpool_gc_ih_push_iv(s, GBASE_IH_DCE_EVENT_UPDATE, 0xFF /* TODO */);
+        liverpool_gc_ih_push_iv(s, GBASE_IH_DCE_EVENT_UPDATE, 0xFF /* TODO */);
+        break;
     /* gfx */
     case mmCP_PFP_UCODE_DATA:
         liverpool_gc_ucode_load(s, mmCP_PFP_UCODE_ADDR, value);
