@@ -8,7 +8,7 @@
 // If you are new to dear imgui, read examples/README.txt and read the documentation at the top of imgui.cpp.
 // https://github.com/ocornut/imgui
 
-// The aim of imgui_impl_vulkan.h/.cpp is to be usable in your engine without any modification. 
+// The aim of imgui_impl_vulkan.h/.cpp is to be usable in your engine without any modification.
 // IF YOU FEEL YOU NEED TO MAKE ANY CHANGE TO THIS CODE, please share them and your feedback at https://github.com/ocornut/imgui/
 
 // CHANGELOG
@@ -29,7 +29,7 @@
 #include "imgui.h"
 #include "imgui_impl_vulkan.h"
 #include <stdio.h>
-
+extern "C" {
 // Vulkan data
 static const VkAllocationCallbacks* g_Allocator = NULL;
 static VkPhysicalDevice             g_PhysicalDevice = VK_NULL_HANDLE;
@@ -309,7 +309,7 @@ void ImGui_ImplVulkan_RenderDrawData(ImDrawData* draw_data, VkCommandBuffer comm
                 scissor.extent.width = (uint32_t)(pcmd->ClipRect.z - pcmd->ClipRect.x);
                 scissor.extent.height = (uint32_t)(pcmd->ClipRect.w - pcmd->ClipRect.y + 1); // FIXME: Why +1 here?
                 vkCmdSetScissor(command_buffer, 0, 1, &scissor);
-                
+
                 // Draw
                 vkCmdDrawIndexed(command_buffer, pcmd->ElemCount, 1, idx_offset, vtx_offset, 0);
             }
@@ -731,11 +731,11 @@ void ImGui_ImplVulkan_NewFrame()
 //-------------------------------------------------------------------------
 // Internal / Miscellaneous Vulkan Helpers
 //-------------------------------------------------------------------------
-// You probably do NOT need to use or care about those functions. 
+// You probably do NOT need to use or care about those functions.
 // Those functions only exist because:
 //   1) they facilitate the readability and maintenance of the multiple main.cpp examples files.
 //   2) the upcoming multi-viewport feature will need them internally.
-// Generally we avoid exposing any kind of superfluous high-level helpers in the bindings, 
+// Generally we avoid exposing any kind of superfluous high-level helpers in the bindings,
 // but it is too much code to duplicate everywhere so we exceptionally expose them.
 // Your application/engine will likely already have code to setup all that stuff (swap chain, render pass, frame buffers, etc.).
 // You may read this code to learn about Vulkan, but it is recommended you use you own custom tailored code to do equivalent work.
@@ -743,32 +743,37 @@ void ImGui_ImplVulkan_NewFrame()
 //-------------------------------------------------------------------------
 
 #include <stdlib.h> // malloc
+#include "imgui_impl_vulkan.h"
 
-ImGui_ImplVulkanH_FrameData::ImGui_ImplVulkanH_FrameData()
+ImGui_ImplVulkanH_FrameData ImGui_ImplVulkanH_FrameData_Create()
 {
-    BackbufferIndex = 0;
-    CommandPool = VK_NULL_HANDLE;
-    CommandBuffer = VK_NULL_HANDLE;
-    Fence = VK_NULL_HANDLE;
-    ImageAcquiredSemaphore = VK_NULL_HANDLE;
-    RenderCompleteSemaphore = VK_NULL_HANDLE;
+    ImGui_ImplVulkanH_FrameData result;
+    result.BackbufferIndex = 0;
+    result.CommandPool = VK_NULL_HANDLE;
+    result.CommandBuffer = VK_NULL_HANDLE;
+    result.Fence = VK_NULL_HANDLE;
+    result.ImageAcquiredSemaphore = VK_NULL_HANDLE;
+    result.RenderCompleteSemaphore = VK_NULL_HANDLE;
+    return result;
 }
 
-ImGui_ImplVulkanH_WindowData::ImGui_ImplVulkanH_WindowData()
+ImGui_ImplVulkanH_WindowData ImGui_ImplVulkanH_WindowData_Create()
 {
-    Width = Height = 0;
-    Swapchain = VK_NULL_HANDLE;
-    Surface = VK_NULL_HANDLE;
-    memset(&SurfaceFormat, 0, sizeof(SurfaceFormat));
-    PresentMode = VK_PRESENT_MODE_MAX_ENUM_KHR;
-    RenderPass = VK_NULL_HANDLE;
-    ClearEnable = true;
-    memset(&ClearValue, 0, sizeof(ClearValue));
-    BackBufferCount = 0;
-    memset(&BackBuffer, 0, sizeof(BackBuffer));
-    memset(&BackBufferView, 0, sizeof(BackBufferView));
-    memset(&Framebuffer, 0, sizeof(Framebuffer));
-    FrameIndex = 0;
+    ImGui_ImplVulkanH_WindowData result;
+    result.Width = result.Height = 0;
+    result.Swapchain = VK_NULL_HANDLE;
+    result.Surface = VK_NULL_HANDLE;
+    memset(&result.SurfaceFormat, 0, sizeof(result.SurfaceFormat));
+    result.PresentMode = VK_PRESENT_MODE_MAX_ENUM_KHR;
+    result.RenderPass = VK_NULL_HANDLE;
+    result.ClearEnable = true;
+    memset(&result.ClearValue, 0, sizeof(result.ClearValue));
+    result.BackBufferCount = 0;
+    memset(&result.BackBuffer, 0, sizeof(result.BackBuffer));
+    memset(&result.BackBufferView, 0, sizeof(result.BackBufferView));
+    memset(&result.Framebuffer, 0, sizeof(result.Framebuffer));
+    result.FrameIndex = 0;
+    return result;
 }
 
 VkSurfaceFormatKHR ImGui_ImplVulkanH_SelectSurfaceFormat(VkPhysicalDevice physical_device, VkSurfaceKHR surface, const VkFormat* request_formats, int request_formats_count, VkColorSpaceKHR request_color_space)
@@ -804,7 +809,7 @@ VkSurfaceFormatKHR ImGui_ImplVulkanH_SelectSurfaceFormat(VkPhysicalDevice physic
     }
     else
     {
-        // Request several formats, the first found will be used 
+        // Request several formats, the first found will be used
         for (int request_i = 0; request_i < request_formats_count; request_i++)
             for (uint32_t avail_i = 0; avail_i < avail_count; avail_i++)
                 if (avail_format[avail_i].format == request_formats[request_i] && avail_format[avail_i].colorSpace == request_color_space)
@@ -914,7 +919,7 @@ void ImGui_ImplVulkanH_CreateWindowDataSwapChainAndFramebuffer(VkPhysicalDevice 
     wd->BackBufferCount = 0;
     if (wd->RenderPass)
         vkDestroyRenderPass(device, wd->RenderPass, allocator);
-   
+
     // If min image count was not specified, request different count of images dependent on selected present mode
     if (min_image_count == 0)
         min_image_count = ImGui_ImplVulkanH_GetMinImageCountFromPresentMode(wd->PresentMode);
@@ -1062,5 +1067,7 @@ void ImGui_ImplVulkanH_DestroyWindowData(VkInstance instance, VkDevice device, I
     vkDestroyRenderPass(device, wd->RenderPass, allocator);
     vkDestroySwapchainKHR(device, wd->Swapchain, allocator);
     vkDestroySurfaceKHR(instance, wd->Surface, allocator);
-    *wd = ImGui_ImplVulkanH_WindowData();
+    *wd = ImGui_ImplVulkanH_WindowData_Create();
+}
+
 }

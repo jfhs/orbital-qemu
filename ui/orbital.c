@@ -56,6 +56,123 @@ typedef struct OrbitalUI {
 // Global state
 OrbitalUI ui;
 
+static void check_vk_result(VkResult err)
+{
+    if (err == 0) return;
+    error_report("VkResult %d\n", err);
+    if (err < 0) {
+        // todo: check
+        // abort();
+    }
+}
+
+static void SetupVulkanWindowData(ImGui_ImplVulkanH_WindowData* wd, VulkanState* state, int width, int height)
+{
+    wd->Surface = state->surface;
+
+    // Check for WSI support
+    VkBool32 res;
+    vkGetPhysicalDeviceSurfaceSupportKHR(state->gpu, state->graphics_queue_node_index, wd->Surface, &res);
+    if (res != VK_TRUE)
+    {
+        fprintf(stderr, "Error no WSI support on physical device 0\n");
+        exit(-1);
+    }
+
+    // Select Surface Format
+    const VkFormat requestSurfaceImageFormat[] = { VK_FORMAT_B8G8R8A8_UNORM, VK_FORMAT_R8G8B8A8_UNORM, VK_FORMAT_B8G8R8_UNORM, VK_FORMAT_R8G8B8_UNORM };
+    const VkColorSpaceKHR requestSurfaceColorSpace = VK_COLORSPACE_SRGB_NONLINEAR_KHR;
+    wd->SurfaceFormat = ImGui_ImplVulkanH_SelectSurfaceFormat(state->gpu, wd->Surface, requestSurfaceImageFormat, (size_t)ARRAYSIZE(requestSurfaceImageFormat), requestSurfaceColorSpace);
+
+    // Select Present Mode
+#ifdef IMGUI_UNLIMITED_FRAME_RATE
+    VkPresentModeKHR present_modes[] = { VK_PRESENT_MODE_MAILBOX_KHR, VK_PRESENT_MODE_IMMEDIATE_KHR, VK_PRESENT_MODE_FIFO_KHR };
+#else
+    VkPresentModeKHR present_modes[] = { VK_PRESENT_MODE_FIFO_KHR };
+#endif
+    wd->PresentMode = ImGui_ImplVulkanH_SelectPresentMode(state->gpu, wd->Surface, &present_modes[0], ARRAYSIZE(present_modes));
+    //printf("[vulkan] Selected PresentMode = %d\n", wd->PresentMode);
+
+    // Create SwapChain, RenderPass, Framebuffer, etc.
+    ImGui_ImplVulkanH_CreateWindowDataCommandBuffers(state->gpu, state->device, state->graphics_queue_node_index, wd, NULL);
+    ImGui_ImplVulkanH_CreateWindowDataSwapChainAndFramebuffer(state->gpu, state->device, wd, NULL, width, height);
+}
+
+
+static void FrameRender(ImGui_ImplVulkanH_WindowData* wd, VulkanState* vks)
+{
+	VkResult err;
+
+	VkSemaphore image_acquired_semaphore = wd->Frames[wd->FrameIndex].ImageAcquiredSemaphore;
+	err = vkAcquireNextImageKHR(vks->device, wd->Swapchain, UINT64_MAX, image_acquired_semaphore, VK_NULL_HANDLE, &wd->FrameIndex);
+	check_vk_result(err);
+
+    ImGui_ImplVulkanH_FrameData* fd = &wd->Frames[wd->FrameIndex];
+    {
+		err = vkWaitForFences(vks->device, 1, &fd->Fence, VK_TRUE, UINT64_MAX);	// wait indefinitely instead of periodically checking
+        check_vk_result(err);
+
+		err = vkResetFences(vks->device, 1, &fd->Fence);
+        check_vk_result(err);
+    }
+    {
+        err = vkResetCommandPool(vks->device, fd->CommandPool, 0);
+        check_vk_result(err);
+        VkCommandBufferBeginInfo info = {};
+        info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        info.flags |= VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+        err = vkBeginCommandBuffer(fd->CommandBuffer, &info);
+        check_vk_result(err);
+    }
+    {
+        VkRenderPassBeginInfo info = {};
+        info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+        info.renderPass = wd->RenderPass;
+		info.framebuffer = wd->Framebuffer[wd->FrameIndex];
+        info.renderArea.extent.width = wd->Width;
+        info.renderArea.extent.height = wd->Height;
+        info.clearValueCount = 1;
+        info.pClearValues = &wd->ClearValue;
+        vkCmdBeginRenderPass(fd->CommandBuffer, &info, VK_SUBPASS_CONTENTS_INLINE);
+    }
+
+	// Record Imgui Draw Data and draw funcs into command buffer
+	ImGui_ImplVulkan_RenderDrawData(igGetDrawData(), fd->CommandBuffer);
+
+	// Submit command buffer
+    vkCmdEndRenderPass(fd->CommandBuffer);
+    {
+        VkPipelineStageFlags wait_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        VkSubmitInfo info = {};
+        info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        info.waitSemaphoreCount = 1;
+		info.pWaitSemaphores = &image_acquired_semaphore;
+        info.pWaitDstStageMask = &wait_stage;
+        info.commandBufferCount = 1;
+        info.pCommandBuffers = &fd->CommandBuffer;
+        info.signalSemaphoreCount = 1;
+        info.pSignalSemaphores = &fd->RenderCompleteSemaphore;
+
+        err = vkEndCommandBuffer(fd->CommandBuffer);
+        check_vk_result(err);
+        err = vkQueueSubmit(vks->queue, 1, &info, fd->Fence);
+        check_vk_result(err);
+    }
+}
+
+static void FramePresent(ImGui_ImplVulkanH_WindowData* wd, VulkanState* vks)
+{
+    ImGui_ImplVulkanH_FrameData* fd = &wd->Frames[wd->FrameIndex];
+    VkPresentInfoKHR info = {};
+    info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+    info.waitSemaphoreCount = 1;
+    info.pWaitSemaphores = &fd->RenderCompleteSemaphore;
+    info.swapchainCount = 1;
+    info.pSwapchains = &wd->Swapchain;
+	info.pImageIndices = &wd->FrameIndex;
+	VkResult err = vkQueuePresentKHR(vks->queue, &info);
+    check_vk_result(err);
+}
 
 static
 void* orbital_display_main(void* arg)
@@ -106,31 +223,32 @@ void* orbital_display_main(void* arg)
     int w, h;
     SDL_GetWindowSize(ui.sdl_window, &w, &h);
     ImGui_ImplVulkanH_WindowData* wd = &ui.imgui_WindowData;
-    SetupVulkanWindowData(wd, surface, w, h);
+    *wd = ImGui_ImplVulkanH_WindowData_Create();
+    SetupVulkanWindowData(wd, vks, w, h);
 
     // Setup Dear ImGui binding
-    igCreateContext();
-    ImGuiIO& io = igGetIO(); (void)io;
+    igCreateContext(NULL);
+    ImGuiIO* io = igGetIO(); (void)io;
     //io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;  // Enable Keyboard Controls
 
     // Setup SDL binding
-    ImGui_ImplSDL2_InitForVulkan(window);
+    ImGui_ImplSDL2_InitForVulkan(ui.sdl_window);
 
     // Setup Vulkan binding
     ImGui_ImplVulkan_InitInfo init_info = {};
-    init_info.Instance = g_Instance;
-    init_info.PhysicalDevice = g_PhysicalDevice;
-    init_info.Device = g_Device;
-    init_info.QueueFamily = g_QueueFamily;
-    init_info.Queue = g_Queue;
-    init_info.PipelineCache = g_PipelineCache;
-    init_info.DescriptorPool = g_DescriptorPool;
-    init_info.Allocator = g_Allocator;
+    init_info.Instance = vks->instance;
+    init_info.PhysicalDevice = vks->gpu;
+    init_info.Device = vks->device;
+    init_info.QueueFamily = vks->graphics_queue_node_index;
+    init_info.Queue = vks->queue;
+    init_info.PipelineCache = NULL;
+    init_info.DescriptorPool = vks->descriptor_pool; // todo: check this
+    init_info.Allocator = NULL;
     init_info.CheckVkResultFn = check_vk_result;
     ImGui_ImplVulkan_Init(&init_info, wd->RenderPass);
 
     // Setup style
-    igStyleColorsDark();   
+    igStyleColorsDark(NULL);
 
      // Upload Fonts
     {
@@ -138,7 +256,7 @@ void* orbital_display_main(void* arg)
         VkCommandPool command_pool = wd->Frames[wd->FrameIndex].CommandPool;
         VkCommandBuffer command_buffer = wd->Frames[wd->FrameIndex].CommandBuffer;
 
-        err = vkResetCommandPool(g_Device, command_pool, 0);
+        err = vkResetCommandPool(vks->device, command_pool, 0);
         check_vk_result(err);
         VkCommandBufferBeginInfo begin_info = {};
         begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -154,16 +272,17 @@ void* orbital_display_main(void* arg)
         end_info.pCommandBuffers = &command_buffer;
         err = vkEndCommandBuffer(command_buffer);
         check_vk_result(err);
-        err = vkQueueSubmit(g_Queue, 1, &end_info, VK_NULL_HANDLE);
+        err = vkQueueSubmit(vks->queue, 1, &end_info, VK_NULL_HANDLE);
         check_vk_result(err);
 
-        err = vkDeviceWaitIdle(g_Device);
+        err = vkDeviceWaitIdle(vks->device);
         check_vk_result(err);
         ImGui_ImplVulkan_InvalidateFontUploadObjects();
-    }   
-    
+    }
+
     quit = false;
     while (!quit) {
+        SDL_Event event;
         // Events
         while (SDL_PollEvent(&evt) == 1) {
             ImGui_ImplSDL2_ProcessEvent(&event);
@@ -172,38 +291,43 @@ void* orbital_display_main(void* arg)
             }
             if (event.type == SDL_WINDOWEVENT &&
                 event.window.event == SDL_WINDOWEVENT_RESIZED &&
-                event.window.windowID == SDL_GetWindowID(window)) {
+                event.window.windowID == SDL_GetWindowID(ui.sdl_window)) {
                 ImGui_ImplVulkanH_CreateWindowDataSwapChainAndFramebuffer(
-                    g_PhysicalDevice, g_Device, &g_WindowData, g_Allocator,
+                    vks->gpu, vks->device, wd, NULL,
                     (int)event.window.data1, (int)event.window.data2);
             }
         }
 
         // Frame
         ImGui_ImplVulkan_NewFrame();
-        ImGui_ImplSDL2_NewFrame(window);
+        ImGui_ImplSDL2_NewFrame(ui.sdl_window);
         igNewFrame();
+
+
+        static float clear_color[4] = {0.45f, 0.55f, 0.60f, 1.00f};
 
         // Window
         {
             static float f = 0.0f;
             static int counter = 0;
+            static bool show_demo_window, show_another_window;
+            static ImVec2 button_size = {100.0f, 20.0f};
 
-            igBegin("Hello, world!");                          // Create a window called "Hello, world!" and append into it.
+            igBegin("Hello, world!", false, 0);                          // Create a window called "Hello, world!" and append into it.
 
             igText("This is some useful text.");               // Display some text (you can use a format strings too)
             igCheckbox("Demo Window", &show_demo_window);      // Edit bools storing our window open/close state
             igCheckbox("Another Window", &show_another_window);
 
-            igSliderFloat("float", &f, 0.0f, 1.0f);            // Edit 1 float using a slider from 0.0f to 1.0f    
-            igColorEdit3("clear color", (float*)&clear_color); // Edit 3 floats representing a color
+            igSliderFloat("float", &f, 0.0f, 1.0f, "", 0.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
+            igColorEdit3("clear color", (float*)&clear_color, 0); // Edit 3 floats representing a color
 
-            if (igButton("Button"))                            // Buttons return true when clicked (most widgets return true when edited/activated)
+            if (igButton("Button", button_size))                            // Buttons return true when clicked (most widgets return true when edited/activated)
                 counter++;
-            igSameLine();
+            igSameLine(0.0f, 1.0f);
             igText("counter = %d", counter);
 
-            igText("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / igGetIO().Framerate, igGetIO().Framerate);
+            igText("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / igGetIO()->Framerate, igGetIO()->Framerate);
             igEnd();
         }
 
@@ -211,20 +335,20 @@ void* orbital_display_main(void* arg)
         // Rendering
         igRender();
         memcpy(&wd->ClearValue.color.float32[0], &clear_color, 4 * sizeof(float));
-		FrameRender(wd);
-        FramePresent(wd);
+		FrameRender(wd, vks);
+        FramePresent(wd, vks);
     }
 
-    err = vkDeviceWaitIdle(g_Device);
+    err = vkDeviceWaitIdle(vks->device);
     check_vk_result(err);
     ImGui_ImplVulkan_Shutdown();
     ImGui_ImplSDL2_Shutdown();
-    igDestroyContext();
-    SDL_DestroyWindow(window);
-    CleanupVulkan();
+    igDestroyContext(NULL);
+    SDL_DestroyWindow(ui.sdl_window);
+    // CleanupVulkan(); //todo
     SDL_Quit();
 
-    return NULL;    
+    return NULL;
 }
 
 static void orbital_display_early_init(DisplayOptions *o)

@@ -59,6 +59,13 @@ common-obj-$(CONFIG_OPENGL) += egl-context.o
 common-obj-$(CONFIG_OPENGL_DMABUF) += egl-headless.o
 ifeq ($(CONFIG_VULKAN),y)
 common-obj-y += vk-helpers.o
+common-obj-y += imgui/imgui.o
+common-obj-y += imgui/imgui_draw.o
+common-obj-y += imgui/imgui_demo.o
+common-obj-y += imgui/imgui_widgets.o
+common-obj-y += imgui/imgui_impl_vulkan.o
+common-obj-y += imgui/cimgui_auto.o
+common-obj-y += imgui/imgui_impl_sdl.o
 endif
 
 shader.o-libs += $(OPENGL_LIBS)

@@ -82,7 +82,7 @@ void vk_init_instance(VulkanState* s, uint32_t extCount, const char **extNames)
     const char* instanceLayerNames[] = {
         "VK_LAYER_LUNARG_standard_validation",
     };
-    
+
     applicationInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
     applicationInfo.pNext = NULL;
     applicationInfo.pApplicationName = "QEMU";
@@ -158,5 +158,36 @@ void vk_init_device(VulkanState* s)
     if (vkr != VK_SUCCESS) {
         error_report("vkCreateInstance failed with code %d", vkr);
         return;
+    }
+    vkGetDeviceQueue(s->device, s->graphics_queue_node_index, 0, &s->queue);
+
+
+    // Create Descriptor Pool
+    {
+        VkDescriptorPoolSize pool_sizes[] =
+        {
+            { VK_DESCRIPTOR_TYPE_SAMPLER, 1000 },
+            { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000 },
+            { VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1000 },
+            { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1000 },
+            { VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 1000 },
+            { VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 1000 },
+            { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000 },
+            { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1000 },
+            { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1000 },
+            { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1000 },
+            { VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1000 }
+        };
+        VkDescriptorPoolCreateInfo pool_info = {};
+        pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+        pool_info.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+        pool_info.maxSets = 1000 * ARRAYSIZE(pool_sizes);
+        pool_info.poolSizeCount = (uint32_t)ARRAYSIZE(pool_sizes);
+        pool_info.pPoolSizes = pool_sizes;
+        vkr = vkCreateDescriptorPool(s->device, &pool_info, NULL, &s->descriptor_pool);
+        if (vkr != VK_SUCCESS) {
+            error_report("vkCreateDescriptorPool failed with code %d", vkr);
+            return;
+        }
     }
 }

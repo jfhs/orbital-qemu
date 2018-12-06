@@ -16,8 +16,16 @@
 struct SDL_Window;
 typedef union SDL_Event SDL_Event;
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 IMGUI_IMPL_API bool     ImGui_ImplSDL2_InitForOpenGL(SDL_Window* window, void* sdl_gl_context);
 IMGUI_IMPL_API bool     ImGui_ImplSDL2_InitForVulkan(SDL_Window* window);
 IMGUI_IMPL_API void     ImGui_ImplSDL2_Shutdown(void);
 IMGUI_IMPL_API void     ImGui_ImplSDL2_NewFrame(SDL_Window* window);
 IMGUI_IMPL_API bool     ImGui_ImplSDL2_ProcessEvent(SDL_Event* event);
+
+#ifdef __cplusplus
+}
+#endif

@@ -43,6 +43,8 @@ typedef struct VulkanState {
     VkQueueFamilyProperties *queue_props;
     uint32_t queue_count;
     uint32_t graphics_queue_node_index;
+    VkQueue queue;
+    VkDescriptorPool descriptor_pool;
 
     uint32_t enabled_extension_count;
     uint32_t enabled_layer_count;
