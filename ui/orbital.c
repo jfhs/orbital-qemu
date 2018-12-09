@@ -80,16 +80,26 @@ static void SetupVulkanWindowData(ImGui_ImplVulkanH_WindowData* wd, VulkanState*
     }
 
     // Select Surface Format
-    const VkFormat requestSurfaceImageFormat[] = { VK_FORMAT_B8G8R8A8_UNORM, VK_FORMAT_R8G8B8A8_UNORM, VK_FORMAT_B8G8R8_UNORM, VK_FORMAT_R8G8B8_UNORM };
+    const VkFormat requestSurfaceImageFormat[] = {
+        VK_FORMAT_B8G8R8A8_UNORM,
+        VK_FORMAT_R8G8B8A8_UNORM,
+        VK_FORMAT_B8G8R8_UNORM,
+        VK_FORMAT_R8G8B8_UNORM
+    };
     const VkColorSpaceKHR requestSurfaceColorSpace = VK_COLORSPACE_SRGB_NONLINEAR_KHR;
-    wd->SurfaceFormat = ImGui_ImplVulkanH_SelectSurfaceFormat(state->gpu, wd->Surface, requestSurfaceImageFormat, (size_t)ARRAYSIZE(requestSurfaceImageFormat), requestSurfaceColorSpace);
+    wd->SurfaceFormat = ImGui_ImplVulkanH_SelectSurfaceFormat(
+        state->gpu, wd->Surface, requestSurfaceImageFormat, (size_t)ARRAYSIZE(requestSurfaceImageFormat), requestSurfaceColorSpace);
 
     // Select Present Mode
+    VkPresentModeKHR present_modes[] = {
 #ifdef IMGUI_UNLIMITED_FRAME_RATE
-    VkPresentModeKHR present_modes[] = { VK_PRESENT_MODE_MAILBOX_KHR, VK_PRESENT_MODE_IMMEDIATE_KHR, VK_PRESENT_MODE_FIFO_KHR };
+        VK_PRESENT_MODE_MAILBOX_KHR,
+        VK_PRESENT_MODE_IMMEDIATE_KHR,
+        VK_PRESENT_MODE_FIFO_KHR
 #else
-    VkPresentModeKHR present_modes[] = { VK_PRESENT_MODE_FIFO_KHR };
+        VK_PRESENT_MODE_FIFO_KHR
 #endif
+    };
     wd->PresentMode = ImGui_ImplVulkanH_SelectPresentMode(state->gpu, wd->Surface, &present_modes[0], ARRAYSIZE(present_modes));
     //printf("[vulkan] Selected PresentMode = %d\n", wd->PresentMode);
 
@@ -172,6 +182,15 @@ static void FramePresent(ImGui_ImplVulkanH_WindowData* wd, VulkanState* vks)
 	info.pImageIndices = &wd->FrameIndex;
 	VkResult err = vkQueuePresentKHR(vks->queue, &info);
     check_vk_result(err);
+}
+
+static void CleanupVulkan(ImGui_ImplVulkanH_WindowData* wd, VulkanState* vks)
+{
+    ImGui_ImplVulkanH_DestroyWindowData(vks->instance, vks->device, wd, NULL);
+    vkDestroyDescriptorPool(vks->device, vks->descriptor_pool, NULL);
+
+    vkDestroyDevice(vks->device, NULL);
+    vkDestroyInstance(vks->instance, NULL);
 }
 
 static
@@ -303,7 +322,6 @@ void* orbital_display_main(void* arg)
         ImGui_ImplSDL2_NewFrame(ui.sdl_window);
         igNewFrame();
 
-
         static float clear_color[4] = {0.45f, 0.55f, 0.60f, 1.00f};
 
         // Window
@@ -331,7 +349,6 @@ void* orbital_display_main(void* arg)
             igEnd();
         }
 
-
         // Rendering
         igRender();
         memcpy(&wd->ClearValue.color.float32[0], &clear_color, 4 * sizeof(float));
@@ -345,7 +362,7 @@ void* orbital_display_main(void* arg)
     ImGui_ImplSDL2_Shutdown();
     igDestroyContext(NULL);
     SDL_DestroyWindow(ui.sdl_window);
-    // CleanupVulkan(); //todo
+    CleanupVulkan(wd, vks);
     SDL_Quit();
 
     return NULL;
