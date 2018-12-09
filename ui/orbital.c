@@ -111,18 +111,18 @@ static void SetupVulkanWindowData(ImGui_ImplVulkanH_WindowData* wd, VulkanState*
 
 static void FrameRender(ImGui_ImplVulkanH_WindowData* wd, VulkanState* vks)
 {
-	VkResult err;
+    VkResult err;
 
-	VkSemaphore image_acquired_semaphore = wd->Frames[wd->FrameIndex].ImageAcquiredSemaphore;
-	err = vkAcquireNextImageKHR(vks->device, wd->Swapchain, UINT64_MAX, image_acquired_semaphore, VK_NULL_HANDLE, &wd->FrameIndex);
-	check_vk_result(err);
+    VkSemaphore image_acquired_semaphore = wd->Frames[wd->FrameIndex].ImageAcquiredSemaphore;
+    err = vkAcquireNextImageKHR(vks->device, wd->Swapchain, UINT64_MAX, image_acquired_semaphore, VK_NULL_HANDLE, &wd->FrameIndex);
+    check_vk_result(err);
 
     ImGui_ImplVulkanH_FrameData* fd = &wd->Frames[wd->FrameIndex];
     {
-		err = vkWaitForFences(vks->device, 1, &fd->Fence, VK_TRUE, UINT64_MAX);	// wait indefinitely instead of periodically checking
+        err = vkWaitForFences(vks->device, 1, &fd->Fence, VK_TRUE, UINT64_MAX);    // wait indefinitely instead of periodically checking
         check_vk_result(err);
 
-		err = vkResetFences(vks->device, 1, &fd->Fence);
+        err = vkResetFences(vks->device, 1, &fd->Fence);
         check_vk_result(err);
     }
     {
@@ -138,7 +138,7 @@ static void FrameRender(ImGui_ImplVulkanH_WindowData* wd, VulkanState* vks)
         VkRenderPassBeginInfo info = {};
         info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
         info.renderPass = wd->RenderPass;
-		info.framebuffer = wd->Framebuffer[wd->FrameIndex];
+        info.framebuffer = wd->Framebuffer[wd->FrameIndex];
         info.renderArea.extent.width = wd->Width;
         info.renderArea.extent.height = wd->Height;
         info.clearValueCount = 1;
@@ -146,17 +146,17 @@ static void FrameRender(ImGui_ImplVulkanH_WindowData* wd, VulkanState* vks)
         vkCmdBeginRenderPass(fd->CommandBuffer, &info, VK_SUBPASS_CONTENTS_INLINE);
     }
 
-	// Record Imgui Draw Data and draw funcs into command buffer
-	ImGui_ImplVulkan_RenderDrawData(igGetDrawData(), fd->CommandBuffer);
+    // Record Imgui Draw Data and draw funcs into command buffer
+    ImGui_ImplVulkan_RenderDrawData(igGetDrawData(), fd->CommandBuffer);
 
-	// Submit command buffer
+    // Submit command buffer
     vkCmdEndRenderPass(fd->CommandBuffer);
     {
         VkPipelineStageFlags wait_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
         VkSubmitInfo info = {};
         info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
         info.waitSemaphoreCount = 1;
-		info.pWaitSemaphores = &image_acquired_semaphore;
+        info.pWaitSemaphores = &image_acquired_semaphore;
         info.pWaitDstStageMask = &wait_stage;
         info.commandBufferCount = 1;
         info.pCommandBuffers = &fd->CommandBuffer;
@@ -179,8 +179,8 @@ static void FramePresent(ImGui_ImplVulkanH_WindowData* wd, VulkanState* vks)
     info.pWaitSemaphores = &fd->RenderCompleteSemaphore;
     info.swapchainCount = 1;
     info.pSwapchains = &wd->Swapchain;
-	info.pImageIndices = &wd->FrameIndex;
-	VkResult err = vkQueuePresentKHR(vks->queue, &info);
+    info.pImageIndices = &wd->FrameIndex;
+    VkResult err = vkQueuePresentKHR(vks->queue, &info);
     check_vk_result(err);
 }
 
@@ -193,8 +193,45 @@ static void CleanupVulkan(ImGui_ImplVulkanH_WindowData* wd, VulkanState* vks)
     vkDestroyInstance(vks->instance, NULL);
 }
 
-static
-void* orbital_display_main(void* arg)
+static void orbital_display_draw(void)
+{
+    static bool show_stats = false;
+    static bool show_uart = false;
+
+    igBeginMainMenuBar();
+    if (igBeginMenu("File", true)) {
+        if (igMenuItemBool("Exit", "", false, false)) {
+            /* TODO */
+        }
+        igEndMenu();
+    }
+    if (igBeginMenu("View", true)) {
+        if (igMenuItemBool("Statistics", "Alt+1", false, true))
+            show_stats ^= true;
+        if (igMenuItemBool("UART Output", "Alt+2", false, true))
+            show_uart ^= true;
+        igEndMenu();
+    }
+    if (igBeginMenu("Tools", false)) {
+        /* TODO */
+    }
+    if (igBeginMenu("Help", true)) {
+        if (igMenuItemBool("About...", "", false, false)) {
+            /* TODO */
+        }
+        igEndMenu();
+    }
+    igEndMainMenuBar();
+
+    igBegin("Statistics", &show_stats, 0);
+    igText("Average %.3f ms/frame (%.1f FPS)", 1000.0f / igGetIO()->Framerate, igGetIO()->Framerate);
+    igEnd();
+
+    igBegin("UART Output", &show_uart, ImGuiWindowFlags_AlwaysVerticalScrollbar);
+    igEnd();
+}
+
+static void* orbital_display_main(void* arg)
 {
     VulkanState* vks = &ui.vk_state;
     SDL_Event evt;
@@ -299,6 +336,9 @@ void* orbital_display_main(void* arg)
         ImGui_ImplVulkan_InvalidateFontUploadObjects();
     }
 
+    static float clear_color[4] = {0.45f, 0.55f, 0.60f, 1.00f};
+    memcpy(&wd->ClearValue.color.float32[0], &clear_color, 4 * sizeof(float));
+
     quit = false;
     while (!quit) {
         SDL_Event event;
@@ -316,43 +356,17 @@ void* orbital_display_main(void* arg)
                     (int)event.window.data1, (int)event.window.data2);
             }
         }
-
         // Frame
         ImGui_ImplVulkan_NewFrame();
         ImGui_ImplSDL2_NewFrame(ui.sdl_window);
         igNewFrame();
 
-        static float clear_color[4] = {0.45f, 0.55f, 0.60f, 1.00f};
-
         // Window
-        {
-            static float f = 0.0f;
-            static int counter = 0;
-            static bool show_demo_window, show_another_window;
-            static ImVec2 button_size = {100.0f, 20.0f};
-
-            igBegin("Hello, world!", false, 0);                          // Create a window called "Hello, world!" and append into it.
-
-            igText("This is some useful text.");               // Display some text (you can use a format strings too)
-            igCheckbox("Demo Window", &show_demo_window);      // Edit bools storing our window open/close state
-            igCheckbox("Another Window", &show_another_window);
-
-            igSliderFloat("float", &f, 0.0f, 1.0f, "", 0.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
-            igColorEdit3("clear color", (float*)&clear_color, 0); // Edit 3 floats representing a color
-
-            if (igButton("Button", button_size))                            // Buttons return true when clicked (most widgets return true when edited/activated)
-                counter++;
-            igSameLine(0.0f, 1.0f);
-            igText("counter = %d", counter);
-
-            igText("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / igGetIO()->Framerate, igGetIO()->Framerate);
-            igEnd();
-        }
+        orbital_display_draw();
 
         // Rendering
         igRender();
-        memcpy(&wd->ClearValue.color.float32[0], &clear_color, 4 * sizeof(float));
-		FrameRender(wd, vks);
+        FrameRender(wd, vks);
         FramePresent(wd, vks);
     }
 
