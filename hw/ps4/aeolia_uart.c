@@ -27,6 +27,8 @@
 #include "chardev/char-fe.h"
 #include "qemu/error-report.h"
 
+#include "ui/orbital.h"
+
 /* registers */
 #define REG_RXTX  0
 #define REG_IER   1
@@ -158,6 +160,8 @@ static void uart_write(void *opaque, hwaddr addr,
     switch (addr) {
     case REG_RXTX:
         putc(ch, stdout);
+        if (orbital_display_active())
+            orbital_log_uart(0, ch);
         break;
     case REG_IER:
     case REG_LCR:

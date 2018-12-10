@@ -39,11 +39,14 @@
 #include "imgui/imgui_impl_sdl.h"
 #include "imgui/imgui_impl_vulkan.h"
 
+#include "orbital-logs.h"
+
 // Configuration
 #define ORBITAL_WIDTH 1280
 #define ORBITAL_HEIGHT 720
 
 typedef struct OrbitalUI {
+    bool active;
     /* vulkan */
     VulkanState vk_state;
     /* sdl */
@@ -51,19 +54,30 @@ typedef struct OrbitalUI {
     SDL_Window* sdl_window;
     /* imgui */
     ImGui_ImplVulkanH_WindowData imgui_WindowData;
+    struct orbital_logs_t *logs_uart;
+    bool show_stats;
+    bool show_uart;
 } OrbitalUI;
 
 // Global state
 OrbitalUI ui;
 
+bool orbital_display_active(void)
+{
+    return ui.active;
+}
+
+void orbital_log_uart(int index, char ch)
+{
+    (void)index; // Unused
+    orbital_logs_logchr(ui.logs_uart, ch);
+}
+
 static void check_vk_result(VkResult err)
 {
     if (err == 0) return;
     error_report("VkResult %d\n", err);
-    if (err < 0) {
-        // todo: check
-        // abort();
-    }
+    assert(0);
 }
 
 static void SetupVulkanWindowData(ImGui_ImplVulkanH_WindowData* wd, VulkanState* state, int width, int height)
@@ -193,11 +207,8 @@ static void CleanupVulkan(ImGui_ImplVulkanH_WindowData* wd, VulkanState* vks)
     vkDestroyInstance(vks->instance, NULL);
 }
 
-static void orbital_display_draw(void)
+static void orbital_display_draw(OrbitalUI *ui)
 {
-    static bool show_stats = false;
-    static bool show_uart = false;
-
     igBeginMainMenuBar();
     if (igBeginMenu("File", true)) {
         if (igMenuItemBool("Exit", "", false, false)) {
@@ -207,9 +218,9 @@ static void orbital_display_draw(void)
     }
     if (igBeginMenu("View", true)) {
         if (igMenuItemBool("Statistics", "Alt+1", false, true))
-            show_stats ^= true;
+            ui->show_stats ^= true;
         if (igMenuItemBool("UART Output", "Alt+2", false, true))
-            show_uart ^= true;
+            ui->show_uart ^= true;
         igEndMenu();
     }
     if (igBeginMenu("Tools", false)) {
@@ -223,12 +234,11 @@ static void orbital_display_draw(void)
     }
     igEndMainMenuBar();
 
-    igBegin("Statistics", &show_stats, 0);
+    igBegin("Statistics", &ui->show_stats, 0);
     igText("Average %.3f ms/frame (%.1f FPS)", 1000.0f / igGetIO()->Framerate, igGetIO()->Framerate);
     igEnd();
 
-    igBegin("UART Output", &show_uart, ImGuiWindowFlags_AlwaysVerticalScrollbar);
-    igEnd();
+    orbital_logs_draw(ui->logs_uart, "UART Output", &ui->show_uart);
 }
 
 static void* orbital_display_main(void* arg)
@@ -336,8 +346,14 @@ static void* orbital_display_main(void* arg)
         ImGui_ImplVulkan_InvalidateFontUploadObjects();
     }
 
-    static float clear_color[4] = {0.45f, 0.55f, 0.60f, 1.00f};
+    // Initialization
+    float clear_color[4] = {0.45f, 0.55f, 0.60f, 1.00f};
     memcpy(&wd->ClearValue.color.float32[0], &clear_color, 4 * sizeof(float));
+    ui.logs_uart = orbital_logs_create();
+    ui.show_stats = false;
+    ui.show_uart = false;
+    assert(ui.logs_uart);
+    ui.active = true;
 
     quit = false;
     while (!quit) {
@@ -362,7 +378,7 @@ static void* orbital_display_main(void* arg)
         igNewFrame();
 
         // Window
-        orbital_display_draw();
+        orbital_display_draw(&ui);
 
         // Rendering
         igRender();
