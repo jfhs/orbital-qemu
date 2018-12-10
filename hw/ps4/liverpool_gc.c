@@ -24,6 +24,7 @@
 #include "hw/pci/pci.h"
 
 #include "liverpool_gc_mmio.h"
+#include "liverpool/lvp_gc_dce.h"
 #include "liverpool/lvp_gc_gart.h"
 #include "liverpool/lvp_gc_gfx.h"
 #include "liverpool/lvp_gc_samu.h"
