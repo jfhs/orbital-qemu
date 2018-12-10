@@ -227,6 +227,7 @@ struct vcpu_state_t {
 
 struct hax_debug_t {
     uint32_t control;
+    uint32_t reserved;
     uint64_t dr[8];
 } __attribute__ ((__packed__));
 
