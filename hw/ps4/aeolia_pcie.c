@@ -41,8 +41,9 @@
 
 #define WDT_TIMER0                  0x81028
 #define WDT_TIMER1                  0x8102C
-#define WDT_UNK81000                0x81000 // R/W
-#define WDT_UNK81084                0x81084 // R/W
+#define WDT_CCR                     0x81000 // R/W
+#define WDT_PLCR                    0x81058
+#define WDT_CER                     0x81084 // R/W
 
 #define APCIE_ICC_BASE                                    0x184000
 
@@ -456,8 +457,9 @@ static uint64_t aeolia_pcie_peripherals_read(
     // Timer/WDT
     case WDT_TIMER0:
     case WDT_TIMER1:
-        value = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL); // TODO
-        value /= 100LL; // TODO: What's the appropiate factor
+        // EMC timer ticking at 32.768kHz
+        value = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
+        value /= 30518LL; // 10^9 Hz / 32768 Hz
         break;
     // SFlash
     case SFLASH_VENDOR:

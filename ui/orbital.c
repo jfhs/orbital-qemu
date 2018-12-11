@@ -39,6 +39,7 @@
 #include "imgui/imgui_impl_sdl.h"
 #include "imgui/imgui_impl_vulkan.h"
 
+#include "orbital.h"
 #include "orbital-logs.h"
 
 // Configuration
@@ -57,6 +58,13 @@ typedef struct OrbitalUI {
     struct orbital_logs_t *logs_uart;
     bool show_stats;
     bool show_uart;
+    bool show_trace_cp;
+    bool show_trace_icc;
+    bool show_trace_samu;
+    bool show_mem_gpa;
+    bool show_mem_gva;
+    bool show_mem_gart;
+    bool show_mem_iommu;
 } OrbitalUI;
 
 // Global state
@@ -211,34 +219,53 @@ static void orbital_display_draw(OrbitalUI *ui)
 {
     igBeginMainMenuBar();
     if (igBeginMenu("File", true)) {
-        if (igMenuItemBool("Exit", "", false, false)) {
-            /* TODO */
-        }
+        if (igMenuItemBool("Open kernel...", NULL, false, false))   { /* TODO */ }
+        igSeparator();
+        if (igMenuItemBool("Exit", NULL, false, true)) { /* TODO */ }
         igEndMenu();
     }
-    if (igBeginMenu("View", true)) {
-        if (igMenuItemBool("Statistics", "Alt+1", false, true))
-            ui->show_stats ^= true;
-        if (igMenuItemBool("UART Output", "Alt+2", false, true))
-            ui->show_uart ^= true;
+    if (igBeginMenu("Machine", true)) {
+        if (igMenuItemBool("Run", NULL, false, false))   { /* TODO */ }
+        if (igMenuItemBool("Pause", NULL, false, false)) { /* TODO */ }
+        if (igMenuItemBool("Stop", NULL, false, false))  { /* TODO */ }
+        igSeparator();
+        if (igMenuItemBool("Load state", NULL, false, false)) { /* TODO */ }
+        if (igMenuItemBool("Save state", NULL, false, false)) { /* TODO */ }
+        igSeparator();
+        if (igMenuItemBool("Configuration...", NULL, false, false)) { /* TODO */ }
         igEndMenu();
     }
-    if (igBeginMenu("Tools", false)) {
-        /* TODO */
+    if (igBeginMenu("Tools", true)) {
+        igMenuItemBoolPtr("Statistics", "Alt+1", &ui->show_stats, true);
+        igMenuItemBoolPtr("UART Output", "Alt+2", &ui->show_uart, true);
+        igSeparator();
+        igMenuItemBoolPtr("CP Commands", "Alt+3", &ui->show_trace_cp, false);
+        igMenuItemBoolPtr("ICC Commands", "Alt+4", &ui->show_trace_icc, false);
+        igMenuItemBoolPtr("SAMU Commands", "Alt+5", &ui->show_trace_samu, false);
+        igSeparator();
+        igMenuItemBoolPtr("Memory Editor (GPA)", "Ctrl+1", &ui->show_mem_gpa, false);
+        igMenuItemBoolPtr("Memory Editor (GVA)", "Ctrl+2", &ui->show_mem_gva, false);
+        igMenuItemBoolPtr("Memory Editor (GART)", "Ctrl+3", &ui->show_mem_gart, false);
+        igMenuItemBoolPtr("Memory Editor (IOMMU)", "Ctrl+4", &ui->show_mem_iommu, false);
+        igEndMenu();
     }
     if (igBeginMenu("Help", true)) {
-        if (igMenuItemBool("About...", "", false, false)) {
+        if (igMenuItemBool("About...", NULL, false, false)) {
             /* TODO */
         }
         igEndMenu();
     }
     igEndMainMenuBar();
 
-    igBegin("Statistics", &ui->show_stats, 0);
-    igText("Average %.3f ms/frame (%.1f FPS)", 1000.0f / igGetIO()->Framerate, igGetIO()->Framerate);
-    igEnd();
+    if (ui->show_stats) {
+        igBegin("Statistics", &ui->show_stats, 0);
+        igText("Average %.3f ms/frame (%.1f FPS)", 1000.0f / igGetIO()->Framerate, igGetIO()->Framerate);
+        igEnd();
+    }
 
-    orbital_logs_draw(ui->logs_uart, "UART Output", &ui->show_uart);
+    if (ui->show_uart) {
+        orbital_logs_draw(ui->logs_uart, "UART Output", &ui->show_uart);
+    }
 }
 
 static void* orbital_display_main(void* arg)
@@ -352,6 +379,13 @@ static void* orbital_display_main(void* arg)
     ui.logs_uart = orbital_logs_create();
     ui.show_stats = false;
     ui.show_uart = false;
+    ui.show_trace_cp = false;
+    ui.show_trace_icc = false;
+    ui.show_trace_samu = false;
+    ui.show_mem_gpa = false;
+    ui.show_mem_gva = false;
+    ui.show_mem_gart = false;
+    ui.show_mem_iommu = false;
     assert(ui.logs_uart);
     ui.active = true;
 
