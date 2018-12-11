@@ -41,8 +41,9 @@
 
 #define WDT_TIMER0                  0x81028
 #define WDT_TIMER1                  0x8102C
-#define WDT_UNK81000                0x81000 // R/W
-#define WDT_UNK81084                0x81084 // R/W
+#define WDT_CCR                     0x81000 // R/W
+#define WDT_PLCR                    0x81058
+#define WDT_CER                     0x81084 // R/W
 
 #define APCIE_ICC_BASE                                    0x184000
 
