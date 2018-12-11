@@ -456,8 +456,9 @@ static uint64_t aeolia_pcie_peripherals_read(
     // Timer/WDT
     case WDT_TIMER0:
     case WDT_TIMER1:
-        value = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL); // TODO
-        value /= 100LL; // TODO: What's the appropiate factor
+        // EMC timer ticking at 32.768kHz
+        value = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
+        value /= 30518LL; // 10^9 Hz / 32768 Hz
         break;
     // SFlash
     case SFLASH_VENDOR:
