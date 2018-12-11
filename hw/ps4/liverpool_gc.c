@@ -133,7 +133,7 @@ static void liverpool_gc_ucode_load(
     LiverpoolGCState *s, uint32_t mm_index, uint32_t mm_value)
 {
     uint32_t offset = s->mmio[mm_index];
-    uint8_t *data;    
+    uint8_t *data;
     size_t size;
 
     switch (mm_index) {
@@ -227,6 +227,8 @@ static void liverpool_gc_cp_update_ring(
     }
 }
 
+static uint64_t CRTC_BLANK_CONTROL_value = 0;
+
 static uint64_t liverpool_gc_mmio_read(
     void *opaque, hwaddr addr, unsigned size)
 {
@@ -256,9 +258,7 @@ static uint64_t liverpool_gc_mmio_read(
         return value; // TODO
     /* dce */
     case mmCRTC_BLANK_CONTROL:
-        value = 0;
-        value = REG_SET_FIELD(value, CRTC_BLANK_CONTROL, CRTC_CURRENT_BLANK_STATE, 1);
-        return value; // TODO
+        return CRTC_BLANK_CONTROL_value; // TODO
     case mmCRTC_STATUS:
         value = 1;
         return value; // TODO
@@ -413,6 +413,14 @@ static void liverpool_gc_mmio_write(
         liverpool_gc_ih_push_iv(s, GBASE_IH_DCE_EVENT_UPDATE, 0xFF /* TODO */);
         liverpool_gc_ih_push_iv(s, GBASE_IH_DCE_EVENT_UPDATE, 0xFF /* TODO */);
         break;
+    case mmCRTC_BLANK_CONTROL: {
+        //TODO: this is just to get past some avcontrol init sequence, need to understand what exactly this is signalling
+        // Orbital expects this bit to be flipped (rather quickly) after it sets it to some value
+        uint64_t new_blank_state = REG_GET_FIELD(value, CRTC_BLANK_CONTROL, CRTC_CURRENT_BLANK_STATE);
+        uint64_t curvalue = CRTC_BLANK_CONTROL_value;
+        CRTC_BLANK_CONTROL_value = REG_SET_FIELD(curvalue, CRTC_BLANK_CONTROL, CRTC_CURRENT_BLANK_STATE, new_blank_state == 0 ? 1 : 0);
+        break;
+    }
     /* gfx */
     case mmCP_PFP_UCODE_DATA:
         liverpool_gc_ucode_load(s, mmCP_PFP_UCODE_ADDR, value);
