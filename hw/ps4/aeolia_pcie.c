@@ -27,6 +27,7 @@
 #include "hw/pci/pci.h"
 #include "hw/sysbus.h"
 #include "hw/i386/pc.h"
+#include "ui/orbital.h"
 
 #include "aeolia/aeolia_hpet.h"
 #include "aeolia/aeolia_sflash.h"
@@ -39,6 +40,7 @@
 #define APCIE_CHIP_ID1               0x1108
 #define APCIE_CHIP_REV               0x110C
 
+/* EMC timer */
 #define WDT_TIMER0                  0x81028
 #define WDT_TIMER1                  0x8102C
 #define WDT_CCR                     0x81000 // R/W
@@ -166,6 +168,9 @@ void aeolia_pcie_set_icc_data(PCIDevice* dev, char* icc_data)
 static uint64_t aeolia_pcie_0_read(
     void *opaque, hwaddr addr, unsigned size)
 {
+    if (orbital_display_active())
+        orbital_log_event(UI_DEVICE_AEOLIA_PCIE, UI_DEVICE_BAR0, UI_DEVICE_READ);
+
     printf("aeolia_pcie_0_read:  { addr: %llX, size: %X }\n", addr, size);
     return 0;
 }
@@ -173,6 +178,9 @@ static uint64_t aeolia_pcie_0_read(
 static void aeolia_pcie_0_write(
     void *opaque, hwaddr addr, uint64_t value, unsigned size)
 {
+    if (orbital_display_active())
+        orbital_log_event(UI_DEVICE_AEOLIA_PCIE, UI_DEVICE_BAR0, UI_DEVICE_WRITE);
+
     printf("aeolia_pcie_0_write: { addr: %llX, size: %X, value: %llX }\n", addr, size, value);
 }
 
@@ -186,6 +194,9 @@ static const MemoryRegionOps aeolia_pcie_0_ops = {
 static uint64_t aeolia_pcie_1_read
     (void *opaque, hwaddr addr, unsigned size)
 {
+    if (orbital_display_active())
+        orbital_log_event(UI_DEVICE_AEOLIA_PCIE, UI_DEVICE_BAR2, UI_DEVICE_READ);
+
     switch (addr) {
     case APCIE_RTC_STATUS:
         return APCIE_RTC_STATUS__BATTERY_OK |
@@ -206,6 +217,9 @@ static uint64_t aeolia_pcie_1_read
 static void aeolia_pcie_1_write
     (void *opaque, hwaddr addr, uint64_t value, unsigned size)
 {
+    if (orbital_display_active())
+        orbital_log_event(UI_DEVICE_AEOLIA_PCIE, UI_DEVICE_BAR2, UI_DEVICE_WRITE);
+
     printf("aeolia_pcie_1_write: { addr: %llX, size: %X, value: %llX }\n", addr, size, value);
 }
 
@@ -447,6 +461,9 @@ static uint64_t aeolia_pcie_peripherals_read(
     uint64_t value = 0;
     uint64_t offset;
 
+    if (orbital_display_active())
+        orbital_log_event(UI_DEVICE_AEOLIA_PCIE, UI_DEVICE_BAR4, UI_DEVICE_READ);
+
     switch (addr) {
     // HPET
     case RANGE(HPET):
@@ -492,6 +509,9 @@ static void aeolia_pcie_peripherals_write(
     if (addr < AEOLIA_HPET_BASE || addr >= AEOLIA_HPET_BASE + AEOLIA_HPET_SIZE) {
         DPRINTF("{ addr: %llX, size: %X, value: %llX }\n", addr, size, value);
     }
+
+    if (orbital_display_active())
+        orbital_log_event(UI_DEVICE_AEOLIA_PCIE, UI_DEVICE_BAR4, UI_DEVICE_WRITE);
 
     switch (addr) {
     // HPET

@@ -21,6 +21,7 @@
 #include "qemu/osdep.h"
 #include "hw/pci/pci.h"
 #include "hw/pci/msi.h"
+#include "ui/orbital.h"
 
 // Helpers
 #define AEOLIA_XHCI(obj) \
@@ -33,22 +34,78 @@ typedef struct AeoliaXHCIState {
     MemoryRegion iomem[3];
 } AeoliaXHCIState;
 
-static uint64_t aeolia_xhci_read
+static uint64_t aeolia_xhci_bar0_read
     (void *opaque, hwaddr addr, unsigned size)
 {
-    printf("aeolia_xhci_read:  { addr: %lX, size: %X }\n", addr, size);
+    if (orbital_display_active())
+        orbital_log_event(UI_DEVICE_AEOLIA_XHCI, UI_DEVICE_BAR0, UI_DEVICE_READ);
+
+    printf("aeolia_xhci_bar0_read:  { addr: %lX, size: %X }\n", addr, size);
     return 0;
 }
 
-static void aeolia_xhci_write
+static void aeolia_xhci_bar0_write
     (void *opaque, hwaddr addr, uint64_t value, unsigned size)
 {
-    printf("aeolia_xhci_write: { addr: %lX, size: %X, value: %lX }\n", addr, size, value);
+    if (orbital_display_active())
+        orbital_log_event(UI_DEVICE_AEOLIA_XHCI, UI_DEVICE_BAR0, UI_DEVICE_WRITE);
+
+    printf("aeolia_xhci_bar0_write: { addr: %lX, size: %X, value: %lX }\n", addr, size, value);
 }
 
-static const MemoryRegionOps aeolia_xhci_ops = {
-    .read = aeolia_xhci_read,
-    .write = aeolia_xhci_write,
+static uint64_t aeolia_xhci_bar2_read
+    (void *opaque, hwaddr addr, unsigned size)
+{
+    if (orbital_display_active())
+        orbital_log_event(UI_DEVICE_AEOLIA_XHCI, UI_DEVICE_BAR2, UI_DEVICE_READ);
+
+    printf("aeolia_xhci_bar2_read:  { addr: %lX, size: %X }\n", addr, size);
+    return 0;
+}
+
+static void aeolia_xhci_bar2_write
+    (void *opaque, hwaddr addr, uint64_t value, unsigned size)
+{
+    if (orbital_display_active())
+        orbital_log_event(UI_DEVICE_AEOLIA_XHCI, UI_DEVICE_BAR2, UI_DEVICE_WRITE);
+
+    printf("aeolia_xhci_bar2_write: { addr: %lX, size: %X, value: %lX }\n", addr, size, value);
+}
+
+static uint64_t aeolia_xhci_bar4_read
+    (void *opaque, hwaddr addr, unsigned size)
+{
+    if (orbital_display_active())
+        orbital_log_event(UI_DEVICE_AEOLIA_XHCI, UI_DEVICE_BAR4, UI_DEVICE_READ);
+
+    printf("aeolia_xhci_bar4_read:  { addr: %lX, size: %X }\n", addr, size);
+    return 0;
+}
+
+static void aeolia_xhci_bar4_write
+    (void *opaque, hwaddr addr, uint64_t value, unsigned size)
+{
+    if (orbital_display_active())
+        orbital_log_event(UI_DEVICE_AEOLIA_XHCI, UI_DEVICE_BAR4, UI_DEVICE_WRITE);
+
+    printf("aeolia_xhci_bar4_write: { addr: %lX, size: %X, value: %lX }\n", addr, size, value);
+}
+
+static const MemoryRegionOps aeolia_xhci_bar0_ops = {
+    .read = aeolia_xhci_bar0_read,
+    .write = aeolia_xhci_bar0_write,
+    .endianness = DEVICE_LITTLE_ENDIAN,
+};
+
+static const MemoryRegionOps aeolia_xhci_bar2_ops = {
+    .read = aeolia_xhci_bar2_read,
+    .write = aeolia_xhci_bar2_write,
+    .endianness = DEVICE_LITTLE_ENDIAN,
+};
+
+static const MemoryRegionOps aeolia_xhci_bar4_ops = {
+    .read = aeolia_xhci_bar4_read,
+    .write = aeolia_xhci_bar4_write,
     .endianness = DEVICE_LITTLE_ENDIAN,
 };
 
@@ -63,11 +120,11 @@ static void aeolia_xhci_realize(PCIDevice *dev, Error **errp)
     pci_add_capability(dev, PCI_CAP_ID_MSI, 0, PCI_CAP_SIZEOF, errp);
 
     memory_region_init_io(&s->iomem[0], OBJECT(dev),
-        &aeolia_xhci_ops, s, "aeolia-xhci-0", 0x200000);
+        &aeolia_xhci_bar0_ops, s, "aeolia-xhci-0", 0x200000);
     memory_region_init_io(&s->iomem[1], OBJECT(dev),
-        &aeolia_xhci_ops, s, "aeolia-xhci-1", 0x200000);
+        &aeolia_xhci_bar2_ops, s, "aeolia-xhci-1", 0x200000);
     memory_region_init_io(&s->iomem[2], OBJECT(dev),
-        &aeolia_xhci_ops, s, "aeolia-xhci-2", 0x200000);
+        &aeolia_xhci_bar4_ops, s, "aeolia-xhci-2", 0x200000);
 
     pci_register_bar(dev, 0, PCI_BASE_ADDRESS_SPACE_MEMORY, &s->iomem[0]);
     pci_register_bar(dev, 2, PCI_BASE_ADDRESS_SPACE_MEMORY, &s->iomem[1]);

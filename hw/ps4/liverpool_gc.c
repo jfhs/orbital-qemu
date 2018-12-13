@@ -22,6 +22,7 @@
 #include "qemu/osdep.h"
 #include "hw/pci/msi.h"
 #include "hw/pci/pci.h"
+#include "ui/orbital.h"
 
 #include "liverpool_gc_mmio.h"
 #include "liverpool/lvp_gc_dce.h"
@@ -109,22 +110,53 @@ typedef struct LiverpoolGCState {
 } LiverpoolGCState;
 
 /* Liverpool GC ??? */
-static uint64_t liverpool_gc_read(void *opaque, hwaddr addr,
-                              unsigned size)
+static uint64_t liverpool_gc_bar0_read(void *opaque, hwaddr addr,
+                                       unsigned size)
 {
-    printf("liverpool_gc_read:  { addr: %llX, size: %X }\n", addr, size);
+    if (orbital_display_active())
+        orbital_log_event(UI_DEVICE_LIVERPOOL_GC, UI_DEVICE_BAR0, UI_DEVICE_READ);
+
+    printf("liverpool_gc_bar0_read:  { addr: %llX, size: %X }\n", addr, size);
     return 0;
 }
 
-static void liverpool_gc_write(void *opaque, hwaddr addr,
-                           uint64_t value, unsigned size)
+static void liverpool_gc_bar0_write(void *opaque, hwaddr addr,
+                                    uint64_t value, unsigned size)
 {
-    printf("liverpool_gc_write: { addr: %llX, size: %X, value: %llX }\n", addr, size, value);
+    if (orbital_display_active())
+        orbital_log_event(UI_DEVICE_LIVERPOOL_GC, UI_DEVICE_BAR0, UI_DEVICE_WRITE);
+
+    printf("liverpool_gc_bar0_write: { addr: %llX, size: %X, value: %llX }\n", addr, size, value);
 }
 
-static const MemoryRegionOps liverpool_gc_ops = {
-    .read = liverpool_gc_read,
-    .write = liverpool_gc_write,
+static const MemoryRegionOps liverpool_gc_bar0_ops = {
+    .read = liverpool_gc_bar0_read,
+    .write = liverpool_gc_bar0_write,
+    .endianness = DEVICE_LITTLE_ENDIAN,
+};
+
+static uint64_t liverpool_gc_bar2_read(void *opaque, hwaddr addr,
+                                       unsigned size)
+{
+    if (orbital_display_active())
+        orbital_log_event(UI_DEVICE_LIVERPOOL_GC, UI_DEVICE_BAR2, UI_DEVICE_READ);
+
+    printf("liverpool_gc_bar2_read:  { addr: %llX, size: %X }\n", addr, size);
+    return 0;
+}
+
+static void liverpool_gc_bar2_write(void *opaque, hwaddr addr,
+                                    uint64_t value, unsigned size)
+{
+    if (orbital_display_active())
+        orbital_log_event(UI_DEVICE_LIVERPOOL_GC, UI_DEVICE_BAR2, UI_DEVICE_WRITE);
+
+    printf("liverpool_gc_bar2_write: { addr: %llX, size: %X, value: %llX }\n", addr, size, value);
+}
+
+static const MemoryRegionOps liverpool_gc_bar2_ops = {
+    .read = liverpool_gc_bar2_read,
+    .write = liverpool_gc_bar2_write,
     .endianness = DEVICE_LITTLE_ENDIAN,
 };
 
@@ -235,6 +267,9 @@ static uint64_t liverpool_gc_mmio_read(
     uint32_t index = addr >> 2;
     uint32_t index_ix;
     uint32_t value;
+
+    if (orbital_display_active())
+        orbital_log_event(UI_DEVICE_LIVERPOOL_GC, UI_DEVICE_BAR5, UI_DEVICE_READ);
 
     switch (index) {
     case mmVM_INVALIDATE_RESPONSE:
@@ -367,6 +402,9 @@ static void liverpool_gc_mmio_write(
     uint32_t index = addr >> 2;
     uint32_t index_ix;
 
+    if (orbital_display_active())
+        orbital_log_event(UI_DEVICE_LIVERPOOL_GC, UI_DEVICE_BAR5, UI_DEVICE_WRITE);
+
     // Indirect registers
     switch (index) {
     case mmSAM_IX_DATA:
@@ -496,9 +534,9 @@ static void liverpool_gc_realize(PCIDevice *dev, Error **errp)
 
     // Memory
     memory_region_init_io(&s->iomem[0], OBJECT(dev),
-        &liverpool_gc_ops, s, "liverpool-gc-0", 0x4000000);
+        &liverpool_gc_bar0_ops, s, "liverpool-gc-0", 0x4000000);
     memory_region_init_io(&s->iomem[1], OBJECT(dev),
-        &liverpool_gc_ops, s, "liverpool-gc-1", 0x800000);
+        &liverpool_gc_bar2_ops, s, "liverpool-gc-1", 0x800000);
     memory_region_init_io(&s->iomem[2], OBJECT(dev),
         &liverpool_gc_mmio_ops, s, "liverpool-gc-mmio", 0x40000);
 

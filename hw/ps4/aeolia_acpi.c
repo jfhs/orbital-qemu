@@ -24,6 +24,7 @@
 #include "qemu/osdep.h"
 #include "hw/pci/pci.h"
 #include "hw/pci/msi.h"
+#include "ui/orbital.h"
 
 #define AEOLIA_ACPI(obj) OBJECT_CHECK(AeoliaACPIState, (obj), TYPE_AEOLIA_ACPI)
 
@@ -34,20 +35,47 @@ typedef struct AeoliaACPIState {
     MemoryRegion iomem[2];
 } AeoliaACPIState;
 
-static uint64_t aeolia_acpi_read(
+static uint64_t aeolia_acpi_mem_read(
     void *opaque, hwaddr addr, unsigned size)
 {
+    if (orbital_display_active())
+        orbital_log_event(UI_DEVICE_AEOLIA_ACPI, UI_DEVICE_BAR0, UI_DEVICE_READ);
+
     return 0;
 }
 
-static void aeolia_acpi_write(
+static void aeolia_acpi_mem_write(
     void *opaque, hwaddr addr, uint64_t value, unsigned size)
 {
+    if (orbital_display_active())
+        orbital_log_event(UI_DEVICE_AEOLIA_ACPI, UI_DEVICE_BAR0, UI_DEVICE_WRITE);
 }
 
-static const MemoryRegionOps aeolia_acpi_ops = {
-    .read = aeolia_acpi_read,
-    .write = aeolia_acpi_write,
+static const MemoryRegionOps aeolia_acpi_mem_ops = {
+    .read = aeolia_acpi_mem_read,
+    .write = aeolia_acpi_mem_write,
+    .endianness = DEVICE_LITTLE_ENDIAN,
+};
+
+static uint64_t aeolia_acpi_io_read(
+    void *opaque, hwaddr addr, unsigned size)
+{
+    if (orbital_display_active())
+        orbital_log_event(UI_DEVICE_AEOLIA_ACPI, UI_DEVICE_BAR2, UI_DEVICE_READ);
+
+    return 0;
+}
+
+static void aeolia_acpi_io_write(
+    void *opaque, hwaddr addr, uint64_t value, unsigned size)
+{
+    if (orbital_display_active())
+        orbital_log_event(UI_DEVICE_AEOLIA_ACPI, UI_DEVICE_BAR2, UI_DEVICE_WRITE);
+}
+
+static const MemoryRegionOps aeolia_acpi_io_ops = {
+    .read = aeolia_acpi_io_read,
+    .write = aeolia_acpi_io_write,
     .endianness = DEVICE_LITTLE_ENDIAN,
 };
 
@@ -64,9 +92,9 @@ static void aeolia_acpi_realize(PCIDevice *dev, Error **errp)
 
     // Memory
     memory_region_init_io(&s->iomem[0], OBJECT(dev),
-        &aeolia_acpi_ops, s, "aeolia-acpi-mem", 0x2000000);
+        &aeolia_acpi_mem_ops, s, "aeolia-acpi-mem", 0x2000000);
     memory_region_init_io(&s->iomem[1], OBJECT(dev),
-        &aeolia_acpi_ops, s, "aeolia-acpi-io", 0x100);
+        &aeolia_acpi_io_ops, s, "aeolia-acpi-io", 0x100);
 
     pci_register_bar(dev, 0, PCI_BASE_ADDRESS_SPACE_MEMORY, &s->iomem[0]);
     pci_register_bar(dev, 2, PCI_BASE_ADDRESS_SPACE_IO, &s->iomem[1]);

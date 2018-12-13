@@ -21,6 +21,7 @@
 #include "qemu/osdep.h"
 #include "hw/pci/pci.h"
 #include "hw/pci/msi.h"
+#include "ui/orbital.h"
 
 #define AEOLIA_GBE(obj) OBJECT_CHECK(AeoliaGBEState, (obj), TYPE_AEOLIA_GBE)
 
@@ -38,6 +39,9 @@ typedef struct AeoliaGBEState {
 static uint64_t aeolia_gbe_read(
     void *opaque, hwaddr addr, unsigned size)
 {
+    if (orbital_display_active())
+        orbital_log_event(UI_DEVICE_AEOLIA_GBE, UI_DEVICE_BAR0, UI_DEVICE_READ);
+
     printf("aeolia_gbe_read { addr: %llX, size: %X }\n", addr, size);
     switch (addr) {
     case AGBE_DEVICE_ID:
@@ -56,6 +60,9 @@ static uint64_t aeolia_gbe_read(
 static void aeolia_gbe_write(
     void *opaque, hwaddr addr, uint64_t value, unsigned size)
 {
+    if (orbital_display_active())
+        orbital_log_event(UI_DEVICE_AEOLIA_GBE, UI_DEVICE_BAR0, UI_DEVICE_WRITE);
+
     printf("aeolia_gbe_write { addr: %llX, size: %X, value: %llX }\n", addr, size, value);
 }
 

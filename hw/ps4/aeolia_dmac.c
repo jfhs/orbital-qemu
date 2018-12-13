@@ -21,6 +21,7 @@
 #include "qemu/osdep.h"
 #include "hw/pci/pci.h"
 #include "hw/pci/msi.h"
+#include "ui/orbital.h"
 
 #define AEOLIA_DMAC(obj) OBJECT_CHECK(AeoliaDMACState, (obj), TYPE_AEOLIA_DMAC)
 
@@ -31,20 +32,47 @@ typedef struct AeoliaDMACState {
     MemoryRegion iomem[2];
 } AeoliaDMACState;
 
-static uint64_t aeolia_dmac_read(
+static uint64_t aeolia_dmac_bar0_read(
     void *opaque, hwaddr addr, unsigned size)
 {
+    if (orbital_display_active())
+        orbital_log_event(UI_DEVICE_AEOLIA_DMAC, UI_DEVICE_BAR0, UI_DEVICE_READ);
+
     return 0;
 }
 
-static void aeolia_dmac_write(
+static void aeolia_dmac_bar0_write(
     void *opaque, hwaddr addr, uint64_t value, unsigned size)
 {
+    if (orbital_display_active())
+        orbital_log_event(UI_DEVICE_AEOLIA_DMAC, UI_DEVICE_BAR0, UI_DEVICE_WRITE);
 }
 
-static const MemoryRegionOps aeolia_dmac_ops = {
-    .read = aeolia_dmac_read,
-    .write = aeolia_dmac_write,
+static const MemoryRegionOps aeolia_dmac_bar0_ops = {
+    .read = aeolia_dmac_bar0_read,
+    .write = aeolia_dmac_bar0_write,
+    .endianness = DEVICE_LITTLE_ENDIAN,
+};
+
+static uint64_t aeolia_dmac_bar2_read(
+    void *opaque, hwaddr addr, unsigned size)
+{
+    if (orbital_display_active())
+        orbital_log_event(UI_DEVICE_AEOLIA_DMAC, UI_DEVICE_BAR2, UI_DEVICE_READ);
+
+    return 0;
+}
+
+static void aeolia_dmac_bar2_write(
+    void *opaque, hwaddr addr, uint64_t value, unsigned size)
+{
+    if (orbital_display_active())
+        orbital_log_event(UI_DEVICE_AEOLIA_DMAC, UI_DEVICE_BAR2, UI_DEVICE_WRITE);
+}
+
+static const MemoryRegionOps aeolia_dmac_bar2_ops = {
+    .read = aeolia_dmac_bar2_read,
+    .write = aeolia_dmac_bar2_write,
     .endianness = DEVICE_LITTLE_ENDIAN,
 };
 
@@ -61,9 +89,9 @@ static void aeolia_dmac_realize(PCIDevice *dev, Error **errp)
 
     // Memory
     memory_region_init_io(&s->iomem[0], OBJECT(dev),
-        &aeolia_dmac_ops, s, "aeolia-dmac-0", 0x1000);
+        &aeolia_dmac_bar0_ops, s, "aeolia-dmac-0", 0x1000);
     memory_region_init_io(&s->iomem[1], OBJECT(dev),
-        &aeolia_dmac_ops, s, "aeolia-dmac-1", 0x1000);
+        &aeolia_dmac_bar2_ops, s, "aeolia-dmac-1", 0x1000);
 
     pci_register_bar(dev, 0, PCI_BASE_ADDRESS_SPACE_MEMORY, &s->iomem[0]);
     pci_register_bar(dev, 2, PCI_BASE_ADDRESS_SPACE_MEMORY, &s->iomem[1]);
