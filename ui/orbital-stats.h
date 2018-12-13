@@ -22,47 +22,28 @@
  * THE SOFTWARE.
  */
 
-#ifndef UI_ORBITAL_H_
-#define UI_ORBITAL_H_
+#ifndef UI_ORBITAL_STATS_H_
+#define UI_ORBITAL_STATS_H_
 
 #include "qemu/osdep.h"
 #include "qemu-common.h"
 
-enum ui_device_t {
-    UI_DEVICE_UNKNOWN = 0,
-    // Aeolia
-    UI_DEVICE_AEOLIA_ACPI,
-    UI_DEVICE_AEOLIA_GBE,
-    UI_DEVICE_AEOLIA_AHCI,
-    UI_DEVICE_AEOLIA_SDHCI,
-    UI_DEVICE_AEOLIA_PCIE,
-    UI_DEVICE_AEOLIA_DMAC,
-    UI_DEVICE_AEOLIA_DDR3,
-    UI_DEVICE_AEOLIA_XHCI,
-    // Liverpool
-    UI_DEVICE_LIVERPOOL_GC,
-    UI_DEVICE_LIVERPOOL_HDAC,
-};
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-enum {
-    UI_DEVICE_BAR0,
-    UI_DEVICE_BAR1,
-    UI_DEVICE_BAR2,
-    UI_DEVICE_BAR3,
-    UI_DEVICE_BAR4,
-    UI_DEVICE_BAR5,
-    UI_DEVICE_MSI,
-};
+struct orbital_stats_t;
 
-enum {
-    UI_DEVICE_READ,
-    UI_DEVICE_WRITE,
-};
+struct orbital_stats_t* orbital_stats_create(void);
 
-bool orbital_display_active(void);
+void orbital_stats_destroy(struct orbital_stats_t *stats);
 
-void orbital_log_uart(int index, char ch);
+void orbital_stats_draw(struct orbital_stats_t *stats, const char *title, bool* p_open);
 
-void orbital_log_event(int device, int component, int event);
+void orbital_stats_log(struct orbital_stats_t *stats, int device, int component, int event);
 
-#endif // UI_ORBITAL_H_
+#ifdef __cplusplus
+} // extern "C"
+#endif
+
+#endif // UI_ORBITAL_STATS_H_

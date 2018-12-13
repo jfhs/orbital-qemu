@@ -41,6 +41,7 @@
 
 #include "orbital.h"
 #include "orbital-logs.h"
+#include "orbital-stats.h"
 
 // Configuration
 #define ORBITAL_WIDTH 1280
@@ -55,6 +56,7 @@ typedef struct OrbitalUI {
     SDL_Window* sdl_window;
     /* imgui */
     ImGui_ImplVulkanH_WindowData imgui_WindowData;
+    struct orbital_stats_t *stats;
     struct orbital_logs_t *logs_uart;
     bool show_stats;
     bool show_uart;
@@ -79,6 +81,11 @@ void orbital_log_uart(int index, char ch)
 {
     (void)index; // Unused
     orbital_logs_logchr(ui.logs_uart, ch);
+}
+
+void orbital_log_event(int device, int component, int event)
+{
+    orbital_stats_log(ui.stats, device, component, event);
 }
 
 static void check_vk_result(VkResult err)
@@ -258,9 +265,7 @@ static void orbital_display_draw(OrbitalUI *ui)
     igEndMainMenuBar();
 
     if (ui->show_stats) {
-        igBegin("Statistics", &ui->show_stats, 0);
-        igText("Average %.3f ms/frame (%.1f FPS)", 1000.0f / igGetIO()->Framerate, igGetIO()->Framerate);
-        igEnd();
+        orbital_stats_draw(ui->stats, "Statistics", &ui->show_stats);
     }
 
     if (ui->show_uart) {
@@ -377,7 +382,8 @@ static void* orbital_display_main(void* arg)
     float clear_color[4] = {0.45f, 0.55f, 0.60f, 1.00f};
     memcpy(&wd->ClearValue.color.float32[0], &clear_color, 4 * sizeof(float));
     ui.logs_uart = orbital_logs_create();
-    ui.show_stats = false;
+    ui.stats = orbital_stats_create();
+    ui.show_stats = true;
     ui.show_uart = false;
     ui.show_trace_cp = false;
     ui.show_trace_icc = false;
@@ -387,6 +393,7 @@ static void* orbital_display_main(void* arg)
     ui.show_mem_gart = false;
     ui.show_mem_iommu = false;
     assert(ui.logs_uart);
+    assert(ui.stats);
     ui.active = true;
 
     quit = false;
