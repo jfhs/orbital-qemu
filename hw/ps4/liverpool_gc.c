@@ -91,10 +91,16 @@ typedef struct LiverpoolGCState {
     /*< private >*/
     PCIDevice parent_obj;
     /*< public >*/
-    MemoryRegion iomem[3];
+    MemoryRegion io;
+    MemoryRegion iomem[4];
     VGACommonState vga;
     uint32_t mmio[0x10000];
     gart_state_t gart;
+
+    /*** PIO ***/
+    uint32_t pio_reg_addr;
+
+    /*** MMIO ***/
 
     /* gfx */
     gfx_state_t gfx;
@@ -157,6 +163,48 @@ static void liverpool_gc_bar2_write(void *opaque, hwaddr addr,
 static const MemoryRegionOps liverpool_gc_bar2_ops = {
     .read = liverpool_gc_bar2_read,
     .write = liverpool_gc_bar2_write,
+    .endianness = DEVICE_LITTLE_ENDIAN,
+};
+
+static uint64_t liverpool_gc_io_read(void *opaque, hwaddr addr,
+                                     unsigned size)
+{
+    LiverpoolGCState *s = opaque;
+    PCIDevice *dev = &s->parent_obj;
+    uint64_t value;
+
+    if (orbital_display_active())
+        orbital_log_event(UI_DEVICE_LIVERPOOL_GC, UI_DEVICE_BAR4, UI_DEVICE_READ);
+
+    addr += 0x3B0;
+    switch (addr) {
+    case 0x3C3:
+        value = pci_get_byte(dev->config + PCI_BASE_ADDRESS_4 + 1);
+        break;
+    default:
+        value = 0;
+        printf("liverpool_gc_io_read:  { addr: %llX, size: %X }\n", addr, size);
+    }
+    return value;
+}
+
+static void liverpool_gc_io_write(void *opaque, hwaddr addr,
+                                  uint64_t value, unsigned size)
+{
+    if (orbital_display_active())
+        orbital_log_event(UI_DEVICE_LIVERPOOL_GC, UI_DEVICE_BAR4, UI_DEVICE_WRITE);
+
+    addr += 0x3B0;
+    switch (addr) {
+    default:
+        printf("liverpool_gc_io_write: { addr: %llX, size: %X, value: %llX }\n", addr, size, value);
+        break;
+    }
+}
+
+static const MemoryRegionOps liverpool_gc_io_ops = {
+    .read = liverpool_gc_io_read,
+    .write = liverpool_gc_io_write,
     .endianness = DEVICE_LITTLE_ENDIAN,
 };
 
@@ -310,6 +358,15 @@ static uint64_t liverpool_gc_mmio_read(
         return s->gfx.cp_rb[1].wptr;
     case mmVGT_EVENT_INITIATOR:
         return s->gfx.vgt_event_initiator;
+    case mmRLC_GPM_STAT:
+        return 2; // TODO
+    case mmRLC_GPU_CLOCK_32_RES_SEL:
+        return 0; // TODO
+    case mmRLC_GPU_CLOCK_32:
+        value = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
+        value /= 1LL; // TODO
+        value &= ~0x80000000;
+        return value;
     /* samu */
     case mmSAM_IX_DATA:
         index_ix = s->mmio[mmSAM_IX_INDEX];
@@ -522,6 +579,67 @@ static const MemoryRegionOps liverpool_gc_mmio_ops = {
     },
 };
 
+static uint64_t liverpool_gc_pio_read(void *opaque, hwaddr addr,
+                                       unsigned size)
+{
+    LiverpoolGCState *s = opaque;
+    uint64_t value;
+
+    if (orbital_display_active())
+        orbital_log_event(UI_DEVICE_LIVERPOOL_GC, UI_DEVICE_BAR4, UI_DEVICE_READ);
+
+    switch (addr) {
+    case 0x0:
+        value = s->pio_reg_addr;
+        break;
+    case 0x4:
+        // QEMU claims [1] this writes to BAR2 @ 0x4000 + s->pio_reg_addr.
+        // However, by inspecting VBIOS code that relies in this mechanism,
+        // it seems the writes occur at BAR5 @ 0x0 + s->pio_reg_addr instead.
+        // It could be that both ranges are the same.
+        // - [1] See `vfio_probe_ati_bar4_quirk`.
+        value = liverpool_gc_mmio_read(opaque, s->pio_reg_addr, size);
+        break;
+    default:
+        value = 0;
+        break;
+    }
+    //printf("liverpool_gc_pio_read:  { addr: %llX, size: %X }\n", addr, size);
+    return value;
+}
+
+static void liverpool_gc_pio_write(void *opaque, hwaddr addr,
+                                    uint64_t value, unsigned size)
+{
+    LiverpoolGCState *s = opaque;
+
+    if (orbital_display_active())
+        orbital_log_event(UI_DEVICE_LIVERPOOL_GC, UI_DEVICE_BAR4, UI_DEVICE_WRITE);
+
+    switch (addr) {
+    case 0x0:
+        s->pio_reg_addr = value;
+        break;
+    case 0x4:
+        // QEMU claims [1] this writes to BAR2 @ 0x4000 + s->pio_reg_addr.
+        // However, by inspecting VBIOS code that relies in this mechanism,
+        // it seems the writes occur at BAR5 @ 0x0 + s->pio_reg_addr instead.
+        // It could be that both ranges are the same.
+        // - [1] See `vfio_probe_ati_bar4_quirk`.
+        liverpool_gc_mmio_write(opaque, s->pio_reg_addr, value, size);
+        break;
+    default:
+        break;
+    }
+    //printf("liverpool_gc_pio_write: { addr: %llX, size: %X, value: %llX }\n", addr, size, value);
+}
+
+static const MemoryRegionOps liverpool_gc_pio_ops = {
+    .read = liverpool_gc_pio_read,
+    .write = liverpool_gc_pio_write,
+    .endianness = DEVICE_LITTLE_ENDIAN,
+};
+
 /* Device functions */
 static void liverpool_gc_realize(PCIDevice *dev, Error **errp)
 {
@@ -532,17 +650,26 @@ static void liverpool_gc_realize(PCIDevice *dev, Error **errp)
     dev->config[PCI_INTERRUPT_PIN] = 0x01;
     msi_init(dev, 0, 1, true, false, errp);
 
+    // IO
+    memory_region_init_io(&s->io, OBJECT(dev),
+        &liverpool_gc_io_ops, s, "liverpool-gc-io", 0x20);
+    memory_region_set_flush_coalesced(&s->io);
+    memory_region_add_subregion(pci_address_space_io(dev), 0x3b0, &s->io);
+
     // Memory
     memory_region_init_io(&s->iomem[0], OBJECT(dev),
         &liverpool_gc_bar0_ops, s, "liverpool-gc-0", 0x4000000);
     memory_region_init_io(&s->iomem[1], OBJECT(dev),
         &liverpool_gc_bar2_ops, s, "liverpool-gc-1", 0x800000);
     memory_region_init_io(&s->iomem[2], OBJECT(dev),
+        &liverpool_gc_pio_ops, s, "liverpool-gc-pio", 0x100);
+    memory_region_init_io(&s->iomem[3], OBJECT(dev),
         &liverpool_gc_mmio_ops, s, "liverpool-gc-mmio", 0x40000);
 
     pci_register_bar(dev, 0, PCI_BASE_ADDRESS_SPACE_MEMORY, &s->iomem[0]);
     pci_register_bar(dev, 2, PCI_BASE_ADDRESS_SPACE_MEMORY, &s->iomem[1]);
-    pci_register_bar(dev, 5, PCI_BASE_ADDRESS_SPACE_MEMORY, &s->iomem[2]);
+    pci_register_bar(dev, 4, PCI_BASE_ADDRESS_SPACE_IO, &s->iomem[2]);
+    pci_register_bar(dev, 5, PCI_BASE_ADDRESS_SPACE_MEMORY, &s->iomem[3]);
 
     // GART
     s->gfx.gart = &s->gart;
@@ -566,7 +693,7 @@ static void liverpool_gc_class_init(ObjectClass *klass, void *data)
     pc->revision = 0;
     pc->subsystem_vendor_id = LIVERPOOL_GC_VENDOR_ID;
     pc->subsystem_id = LIVERPOOL_GC_DEVICE_ID;
-    pc->romfile = "vgabios-cirrus.bin";
+    pc->romfile = "vbios_600b.bin"; // "vgabios-cirrus.bin"; //"vbios_600b.bin";
     pc->class_id = PCI_CLASS_DISPLAY_VGA;
     pc->realize = liverpool_gc_realize;
     pc->exit = liverpool_gc_exit;
