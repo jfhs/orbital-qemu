@@ -52,6 +52,7 @@ typedef struct orbital_stats_device_info_t {
 } orbital_stats_device_t;
 
 typedef struct orbital_stats_device_usage_t {
+    orbital_stats_usage_t pci;
     orbital_stats_usage_t bar[6];
     orbital_stats_usage_t msi;
 } orbital_stats_device_usage_t;
@@ -75,6 +76,21 @@ struct orbital_stats_t
 {
     std::unordered_map<int, orbital_stats_device_usage_t> dev_usages;
 
+    static void DrawUsageBox(const orbital_stats_usage_t& usage)
+    {
+        float hue = 0.6f;
+        float sv = !usage.used ? 0.2 : 0.4 +
+            0.5 * std::max(0.0, 1.0 - (ImGui::GetTime() - usage.last));
+        ImGui::PushStyleColor(ImGuiCol_Button,
+            (ImVec4)ImColor::HSV(hue, sv / 2.0, sv));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+            (ImVec4)ImColor::HSV(hue, sv / 2.0, sv));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive,
+            (ImVec4)ImColor::HSV(hue, sv / 2.0, sv));
+        ImGui::Button("RW");
+        ImGui::PopStyleColor(3);
+    }
+
     void Draw(const char* title, bool* p_open = NULL)
     {
         ImGui::SetNextWindowSize(ImVec2(500,400), ImGuiCond_FirstUseEver);
@@ -90,8 +106,8 @@ struct orbital_stats_t
             ImGui::Text("ID");   ImGui::NextColumn();
             ImGui::PopItemWidth();
             ImGui::Text("Name"); ImGui::NextColumn();
-            ImGui::Text("BAR");  ImGui::NextColumn();
-            ImGui::Text("MSI");  ImGui::NextColumn();
+            ImGui::Text("PCI");  ImGui::NextColumn();
+            ImGui::Text("BARs");  ImGui::NextColumn();
             ImGui::Separator();
             for (int i = 0; i < IM_ARRAYSIZE(devices); i++) {
                 ImGui::PushItemWidth(200);
@@ -100,23 +116,13 @@ struct orbital_stats_t
                 ImGui::PopItemWidth();
                 ImGui::Text("%s", devices[i].name);
                 ImGui::NextColumn();
-                for (int j = 0; j < 6; j++) {
-                    orbital_stats_device_usage_t& dev_usage = dev_usages[devices[i].id];
-                    if (j > 0) ImGui::SameLine();
-                    float hue = 0.6f;
-                    float sv = !dev_usage.bar[j].used ? 0.2 : 0.4 +
-                        0.5 * std::max(0.0, 1.0 - (ImGui::GetTime() - dev_usage.bar[j].last));
-                    ImGui::PushStyleColor(ImGuiCol_Button,
-                        (ImVec4)ImColor::HSV(hue, sv / 2.0, sv));
-                    ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
-                        (ImVec4)ImColor::HSV(hue, sv / 2.0, sv));
-                    ImGui::PushStyleColor(ImGuiCol_ButtonActive,
-                        (ImVec4)ImColor::HSV(hue, sv / 2.0, sv));
-                    ImGui::Button("RW");
-                    ImGui::PopStyleColor(3);
-                }
+                DrawUsageBox(dev_usages[devices[i].id].pci);
                 ImGui::NextColumn();
-                ImGui::Text("R/W");
+                for (int j = 0; j < 6; j++) {
+                    if (j > 0)
+                        ImGui::SameLine();
+                    DrawUsageBox(dev_usages[devices[i].id].bar[j]);
+                }
                 ImGui::NextColumn();
             }
             ImGui::Columns(1);

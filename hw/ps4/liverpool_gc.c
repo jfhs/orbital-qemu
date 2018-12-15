@@ -693,7 +693,7 @@ static void liverpool_gc_class_init(ObjectClass *klass, void *data)
     pc->revision = 0;
     pc->subsystem_vendor_id = LIVERPOOL_GC_VENDOR_ID;
     pc->subsystem_id = LIVERPOOL_GC_DEVICE_ID;
-    pc->romfile = "vbios_600b.bin"; // "vgabios-cirrus.bin"; //"vbios_600b.bin";
+    pc->romfile = "vbios.bin";
     pc->class_id = PCI_CLASS_DISPLAY_VGA;
     pc->realize = liverpool_gc_realize;
     pc->exit = liverpool_gc_exit;
