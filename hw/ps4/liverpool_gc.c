@@ -345,6 +345,19 @@ static uint64_t liverpool_gc_mmio_read(
     case mmCRTC_STATUS:
         value = 1;
         return value; // TODO
+    case mmDENTIST_DISPCLK_CNTL:
+        value = 0;
+        value = REG_SET_FIELD(value, DENTIST_DISPCLK_CNTL, DENTIST_DISPCLK_CHG_DONE, 1);
+        value = REG_SET_FIELD(value, DENTIST_DISPCLK_CNTL, DENTIST_DPREFCLK_CHG_DONE, 1);
+        return value;
+    case mmDCCG_PLL0_PLL_CNTL:
+    case mmDCCG_PLL1_PLL_CNTL:
+    case mmDCCG_PLL2_PLL_CNTL:
+    case mmDCCG_PLL3_PLL_CNTL:
+        value = 0;
+        value = REG_SET_FIELD(value, PLL_CNTL, PLL_CALIB_DONE, 1);
+        value = REG_SET_FIELD(value, PLL_CNTL, PLL_LOCKED, 1);
+        return value;
     /* gfx */
     case mmGRBM_STATUS:
         return 0; // TODO
