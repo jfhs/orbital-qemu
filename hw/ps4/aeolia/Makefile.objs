@@ -1,1 +1,2 @@
 obj-y += aeolia_hpet.o
+obj-y += aeolia_msi.o
