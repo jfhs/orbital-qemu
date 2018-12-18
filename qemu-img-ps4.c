@@ -267,8 +267,14 @@ static void generate_hdd_gpt(BlockBackend* blk, uint64_t size,
 static void generate_hdd_sce_da0x6(BlockBackend* blk, uint64_t size,
     gpt_partition_t* part)
 {
-    const char magic[] = "SONY COMPUTER ENTERTAINMENT INC.";
-    blk_pwrite(blk, lba_offset(part->first_lba), magic, strlen(magic), 0);
+    /* NOTE:
+     * In kernel 5.00 (and possibly any other kernel), there's no need to
+     * provide a valid magic/header for the da0x6 partition, if the magic
+     * check fails, the kernel will rewrite everything for us. 
+     * Consequently, we have disabled this function. */
+
+    //const char magic[] = "SONY COMPUTER ENTERTAINMENT INC.";
+    //blk_pwrite(blk, lba_offset(part->first_lba), magic, strlen(magic), 0);
 }
 
 static void generate_hdd_sce_partition_img(BlockBackend* blk, uint64_t size,
