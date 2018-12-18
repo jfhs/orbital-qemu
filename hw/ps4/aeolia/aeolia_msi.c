@@ -120,6 +120,21 @@
 void apcie_msi_trigger(apcie_msi_controller_t *s, uint32_t func, uint32_t sub)
 {
     uint32_t data;
+    bool enabled;
+
+    if (sub > 30) {
+        fprintf(stderr, "%s: Subfunction #%u out of range!",
+            __FUNCTION__, sub);
+        assert(0);
+        return;
+    }
+    enabled = s->func_mask[func] & (1 << sub);
+    if (!enabled) {
+        fprintf(stderr, "%s: Cannot send MSI to disabled device %u:%u!",
+            __FUNCTION__, func, sub);
+        assert(0);
+        return;
+    }
 
     data = s->func_data[func];
     switch (func) {
