@@ -25,7 +25,7 @@
 #include "exec/address-spaces.h"
 
 #define FIELD(from, to, name) \
-    struct { uint32_t:(32-to-1); uint32_t name:(to-from+1); uint32_t:from; }
+    struct { uint32_t:from; uint32_t name:(to-from+1); uint32_t:(32-to-1); }
 
 /* forward declarations */
 static uint32_t cp_handle_pm4(gfx_state_t *s, const uint32_t *rb);
@@ -97,10 +97,10 @@ static void cp_handle_pm4_it_event_write_eop(
         FIELD(20, 20, inv_l2);
     } event_cntl;
     union {
+        uint32_t value;
         FIELD( 0, 15, addr_hi);
         FIELD(24, 25, int_sel);
         FIELD(29, 31, data_sel);
-        uint32_t value;
     } data_cntl;
     uint32_t addr_lo;
     uint32_t data_lo;
