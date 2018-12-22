@@ -35,7 +35,9 @@
 #include "imgui/imgui_impl_sdl.h"
 #include "imgui/imgui_impl_vulkan.h"
 
+#include <array>
 #include <algorithm>
+#include <cstring>
 #include <unordered_map>
 
 typedef struct orbital_stats_usage_t {
@@ -57,7 +59,7 @@ typedef struct orbital_stats_device_usage_t {
     orbital_stats_usage_t msi;
 } orbital_stats_device_usage_t;
 
-static const orbital_stats_device_info_t devices[] = {
+static const std::array<orbital_stats_device_info_t, 10> devices = {{
     // Aeolia
     { UI_DEVICE_AEOLIA_ACPI,    "104D:908F", "Aeolia ACPI" },
     { UI_DEVICE_AEOLIA_GBE,     "104D:909E", "Aeolia GBE" },
@@ -70,10 +72,54 @@ static const orbital_stats_device_info_t devices[] = {
     // Liverpool
     { UI_DEVICE_LIVERPOOL_GC,   "1002:9920", "Liverpool GC" },
     { UI_DEVICE_LIVERPOOL_HDAC, "1002:9921", "Liverpool HDAC" },
-};
+}};
 
 struct orbital_stats_t
 {
+    static const auto PCI_USAGES = 1;
+    static const auto BAR_USAGES = 6;
+
+    struct column_widths_t {
+        float id;
+        float name;
+        float pci;
+        float bars;
+        float total;
+
+        bool dirty = true;
+
+        void Calculate() {
+            if (!dirty)
+                return;
+
+            std::string max_name_column;
+            uint32_t max_name_column_width = 0;
+            for (auto dev : devices) {
+                const auto cur_name_column_width = strlen(dev.name);
+                if (max_name_column_width < cur_name_column_width) {
+                    max_name_column_width = cur_name_column_width;
+                    max_name_column = dev.name;
+                }
+            }
+
+            auto ig_style = ImGui::GetStyle();
+
+            const auto frame_padding_x = ig_style.FramePadding.x;
+            const auto item_spacing_x = ig_style.ItemSpacing.x;
+
+            id = frame_padding_x * 2 + item_spacing_x + ImGui::CalcTextSize("0000:0000").x;
+            name = frame_padding_x * 2 + item_spacing_x + ImGui::CalcTextSize(max_name_column.c_str()).x;
+
+            const float usagebox = ImGui::CalcTextSize("RW").x + frame_padding_x * 2;
+
+            pci = frame_padding_x * 2 + usagebox * PCI_USAGES + PCI_USAGES * item_spacing_x;
+            bars = frame_padding_x * 2 + usagebox * BAR_USAGES + BAR_USAGES * item_spacing_x;
+
+            total = id + name + pci + bars;
+
+            dirty = false;
+        }
+    } column_widths;
     std::unordered_map<int, orbital_stats_device_usage_t> dev_usages;
 
     static void DrawUsageBox(const orbital_stats_usage_t& usage)
@@ -93,35 +139,37 @@ struct orbital_stats_t
 
     void Draw(const char* title, bool* p_open = NULL)
     {
-        ImGui::SetNextWindowSize(ImVec2(500,400), ImGuiCond_FirstUseEver);
-        if (!ImGui::Begin(title, p_open)) {
+        column_widths.Calculate();
+
+        ImGui::SetNextWindowSize(ImVec2(column_widths.total, 0));
+        if (!ImGui::Begin(title, p_open, ImGuiWindowFlags_AlwaysAutoResize)) {
             ImGui::End();
             return;
         }
         ImGui::Text("Average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
         if (ImGui::CollapsingHeader("Hardware")) {
             ImGui::Columns(4, "mycolumns");
+            ImGui::SetColumnWidth(0, column_widths.id);
+            ImGui::SetColumnWidth(1, column_widths.name);
+            ImGui::SetColumnWidth(2, column_widths.pci);
+            ImGui::SetColumnWidth(3, column_widths.bars);
             ImGui::Separator();
-            ImGui::PushItemWidth(200);
             ImGui::Text("ID");   ImGui::NextColumn();
-            ImGui::PopItemWidth();
             ImGui::Text("Name"); ImGui::NextColumn();
             ImGui::Text("PCI");  ImGui::NextColumn();
             ImGui::Text("BARs");  ImGui::NextColumn();
             ImGui::Separator();
-            for (int i = 0; i < IM_ARRAYSIZE(devices); i++) {
-                ImGui::PushItemWidth(200);
-                ImGui::Text("%s", devices[i].devid);
+            for (const auto dev : devices) {
+                ImGui::Text("%s", dev.devid);
                 ImGui::NextColumn();
-                ImGui::PopItemWidth();
-                ImGui::Text("%s", devices[i].name);
+                ImGui::Text("%s", dev.name);
                 ImGui::NextColumn();
-                DrawUsageBox(dev_usages[devices[i].id].pci);
+                DrawUsageBox(dev_usages[dev.id].pci);
                 ImGui::NextColumn();
-                for (int j = 0; j < 6; j++) {
+                for (int j = 0; j < BAR_USAGES; j++) {
                     if (j > 0)
                         ImGui::SameLine();
-                    DrawUsageBox(dev_usages[devices[i].id].bar[j]);
+                    DrawUsageBox(dev_usages[dev.id].bar[j]);
                 }
                 ImGui::NextColumn();
             }
@@ -166,7 +214,7 @@ extern "C" {
 struct orbital_stats_t* orbital_stats_create(void)
 {
     struct orbital_stats_t *stats;
-    
+
     stats = new orbital_stats_t();
     return stats;
 }
