@@ -58,4 +58,6 @@ static inline void hax_close_fd(hax_fd fd)
 #define HAX_VCPU_SET_REGS       _IOWR(0, 0xc7, struct vcpu_state_t)
 #define HAX_VCPU_GET_REGS       _IOWR(0, 0xc8, struct vcpu_state_t)
 
+#define HAX_VCPU_IOCTL_DEBUG _IOW(0, 0xc9, struct hax_debug_t)
+
 #endif /* TARGET_I386_HAX_DARWIN_H */

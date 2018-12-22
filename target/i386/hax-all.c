@@ -561,6 +561,12 @@ static int hax_vcpu_hax_exec(CPUArchState *env)
 
         qemu_mutex_unlock_iothread();
         cpu_exec_start(cpu);
+
+        if (cpu->vcpu_dirty) {
+            hax_vcpu_sync_state(env, 1);
+            cpu->vcpu_dirty = false;
+        }
+
         hax_ret = hax_vcpu_run(vcpu);
         cpu_exec_end(cpu);
         qemu_mutex_lock_iothread();
@@ -1126,6 +1132,13 @@ static int hax_sync_vcpu_register(CPUArchState *env, int set)
 #endif
     hax_getput_reg(&regs._rflags, &env->eflags, set);
     hax_getput_reg(&regs._rip, &env->eip, set);
+
+    hax_getput_reg(&regs._dr0, &env->dr[0], set);
+    hax_getput_reg(&regs._dr1, &env->dr[1], set);
+    hax_getput_reg(&regs._dr2, &env->dr[2], set);
+    hax_getput_reg(&regs._dr3, &env->dr[3], set);
+    hax_getput_reg(&regs._dr6, &env->dr[6], set);
+    hax_getput_reg(&regs._dr7, &env->dr[7], set);
 
     if (set) {
         regs._cr0 = env->cr[0];

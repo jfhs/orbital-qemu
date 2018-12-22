@@ -366,6 +366,7 @@ struct hax_set_ram_info {
 #define HAX_CAP_MEMQUOTA           0x2
 #define HAX_CAP_UG                 0x4
 #define HAX_CAP_64BIT_RAMBLOCK     0x8
+#define HAX_CAP_DEBUG              (1 << 7)
 
 struct hax_capabilityinfo {
     /* bit 0: 1 - working

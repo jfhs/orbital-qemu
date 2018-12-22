@@ -325,3 +325,14 @@ int hax_inject_interrupt(CPUArchState *env, int vector)
     ret = ioctl(fd, HAX_VCPU_IOCTL_INTERRUPT, &vector);
     return ret;
 }
+
+int hax_set_debug(CPUArchState *env, struct hax_debug_t *debug)
+{
+    int fd;
+
+    fd = hax_vcpu_get_fd(env);
+    if (fd <= 0) {
+        return -1;
+    }
+    return ioctl(fd, HAX_VCPU_IOCTL_DEBUG, debug);
+}
