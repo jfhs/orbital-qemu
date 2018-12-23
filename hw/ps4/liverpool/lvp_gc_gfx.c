@@ -28,7 +28,7 @@
     struct { uint32_t:from; uint32_t name:(to-from+1); uint32_t:(32-to-1); }
 
 /* forward declarations */
-static uint32_t cp_handle_pm4(gfx_state_t *s, const uint32_t *rb);
+static uint32_t cp_handle_pm4(gfx_state_t *s, uint32_t vmid, const uint32_t *rb);
 
 void liverpool_gc_gfx_cp_set_ring_location(gfx_state_t *s,
     int index, uint64_t base, uint64_t size)
@@ -57,11 +57,11 @@ void liverpool_gc_gfx_cp_set_ring_location(gfx_state_t *s,
 
 /* cp packet operations */
 static void cp_handle_pm4_it_indirect_buffer(
-    gfx_state_t *s, const uint32_t *packet)
+    gfx_state_t *s, uint32_t vmid, const uint32_t *packet)
 {
     gart_state_t *gart = s->gart;
     uint64_t ib_base, ib_base_lo, ib_base_hi;
-    uint32_t ib_size, vmid, i; 
+    uint32_t ib_size, ib_vmid, i; 
     uint32_t *mapped_ib;
     hwaddr mapped_size;
 
@@ -69,27 +69,27 @@ static void cp_handle_pm4_it_indirect_buffer(
     ib_base_hi = packet[2];
     ib_base = ib_base_lo | (ib_base_hi << 32);
     ib_size = packet[3] & 0xFFFFF;
-    vmid = (packet[3] >> 24) & 0xF;
+    ib_vmid = (packet[3] >> 24) & 0xF;
 
     i = 0;
     mapped_size = ib_size;
-    mapped_ib = address_space_map(gart->as[vmid], ib_base, &mapped_size, true);
+    mapped_ib = address_space_map(gart->as[ib_vmid], ib_base, &mapped_size, true);
     assert(mapped_ib);
     assert(mapped_size >= ib_size);
     while (i < ib_size) {
-        i += cp_handle_pm4(s, &mapped_ib[i]);
+        i += cp_handle_pm4(s, ib_vmid, &mapped_ib[i]);
     }
-    address_space_unmap(gart->as[vmid], mapped_ib, ib_base, mapped_size, true);
+    address_space_unmap(gart->as[ib_vmid], mapped_ib, ib_base, mapped_size, true);
 }
 
 static void cp_handle_pm4_it_event_write_eop(
-    gfx_state_t *s, const uint32_t *packet)
+    gfx_state_t *s, uint32_t vmid, const uint32_t *packet)
 {
     gart_state_t *gart = s->gart;
     void *mapped_addr;
     hwaddr mapped_size;
     uint64_t addr, data;
-    uint32_t size, vmid;
+    uint32_t size;
     union {
         uint32_t value;
         FIELD( 0,  5, event_type);
@@ -137,7 +137,6 @@ static void cp_handle_pm4_it_event_write_eop(
         size = 0;
     }
     if (size) {
-        vmid = 0; // TODO: How is VMID selected?
         addr = ((uint64_t)data_cntl.addr_hi << 32) | addr_lo;
         mapped_size = size;
         mapped_addr = address_space_map(gart->as[vmid], addr, &mapped_size, true);
@@ -161,7 +160,7 @@ static void cp_handle_pm4_it_event_write_eop(
 }
 
 static void cp_handle_pm4_it_set_config_reg(
-    gfx_state_t *s, const uint32_t *packet, uint32_t count)
+    gfx_state_t *s, uint32_t vmid, const uint32_t *packet, uint32_t count)
 {
     uint32_t i;
     uint32_t reg_offset, reg_count; 
@@ -175,7 +174,7 @@ static void cp_handle_pm4_it_set_config_reg(
 }
 
 static void cp_handle_pm4_it_set_context_reg(
-    gfx_state_t *s, const uint32_t *packet, uint32_t count)
+    gfx_state_t *s, uint32_t vmid, const uint32_t *packet, uint32_t count)
 {
     uint32_t i;
     uint32_t reg_offset, reg_count; 
@@ -189,7 +188,8 @@ static void cp_handle_pm4_it_set_context_reg(
 }
 
 /* cp packet types */
-static uint32_t cp_handle_pm4_type0(gfx_state_t *s, const uint32_t *packet)
+static uint32_t cp_handle_pm4_type0(
+    gfx_state_t *s, uint32_t vmid, const uint32_t *packet)
 {
     uint32_t reg, count;
     reg   = EXTRACT(packet[0], PM4_TYPE0_HEADER_REG);
@@ -197,19 +197,22 @@ static uint32_t cp_handle_pm4_type0(gfx_state_t *s, const uint32_t *packet)
     return count + 1;
 }
 
-static uint32_t cp_handle_pm4_type1(gfx_state_t *s, const uint32_t *packet)
+static uint32_t cp_handle_pm4_type1(
+    gfx_state_t *s, uint32_t vmid, const uint32_t *packet)
 {
     // Unexpected packet type
     assert(0);
     return 1;
 }
 
-static uint32_t cp_handle_pm4_type2(gfx_state_t *s, const uint32_t *packet)
+static uint32_t cp_handle_pm4_type2(
+    gfx_state_t *s, uint32_t vmid, const uint32_t *packet)
 {
     return 1;
 }
 
-static uint32_t cp_handle_pm4_type3(gfx_state_t *s, const uint32_t *packet)
+static uint32_t cp_handle_pm4_type3(
+    gfx_state_t *s, uint32_t vmid, const uint32_t *packet)
 {
     uint32_t pred, shtype, itop, count;
     pred   = EXTRACT(packet[0], PM4_TYPE3_HEADER_PRED);
@@ -219,22 +222,23 @@ static uint32_t cp_handle_pm4_type3(gfx_state_t *s, const uint32_t *packet)
 
     switch (itop) {
     case PM4_IT_INDIRECT_BUFFER:
-        cp_handle_pm4_it_indirect_buffer(s, packet);
+        cp_handle_pm4_it_indirect_buffer(s, vmid, packet);
         break;
     case PM4_IT_EVENT_WRITE_EOP:
-        cp_handle_pm4_it_event_write_eop(s, packet);
+        cp_handle_pm4_it_event_write_eop(s, vmid, packet);
         break;
     case PM4_IT_SET_CONFIG_REG:
-        cp_handle_pm4_it_set_config_reg(s, packet, count);
+        cp_handle_pm4_it_set_config_reg(s, vmid, packet, count);
         break;
     case PM4_IT_SET_CONTEXT_REG:
-        cp_handle_pm4_it_set_context_reg(s, packet, count);
+        cp_handle_pm4_it_set_context_reg(s, vmid, packet, count);
         break;
     }
     return count + 1;
 }
 
-static uint32_t cp_handle_pm4(gfx_state_t *s, const uint32_t *packet)
+static uint32_t cp_handle_pm4(
+    gfx_state_t *s, uint32_t vmid, const uint32_t *packet)
 {
     uint32_t type;
 
@@ -242,25 +246,26 @@ static uint32_t cp_handle_pm4(gfx_state_t *s, const uint32_t *packet)
     type = EXTRACT(packet[0], PM4_PACKET_TYPE);
     switch (type) {
     case PM4_PACKET_TYPE0:
-        return cp_handle_pm4_type0(s, packet);
+        return cp_handle_pm4_type0(s, vmid, packet);
     case PM4_PACKET_TYPE1:
-        return cp_handle_pm4_type1(s, packet);
+        return cp_handle_pm4_type1(s, vmid, packet);
     case PM4_PACKET_TYPE2:
-        return cp_handle_pm4_type2(s, packet);
+        return cp_handle_pm4_type2(s, vmid, packet);
     case PM4_PACKET_TYPE3:
-        return cp_handle_pm4_type3(s, packet);
+        return cp_handle_pm4_type3(s, vmid, packet);
     }
     return 1;
 }
 
 static uint32_t cp_handle_ringbuffer(gfx_state_t *s, gfx_ring_t *rb)
 {
-    uint32_t index;
+    uint32_t index, vmid;
     uint32_t *packet;
 
     index = rb->rptr;
+    vmid = s->cp_rb_vmid;
     packet = &rb->mapped_base[index];
-    return cp_handle_pm4(s, packet);
+    return cp_handle_pm4(s, vmid, packet);
 }
 
 void *liverpool_gc_gfx_cp_thread(void *arg)

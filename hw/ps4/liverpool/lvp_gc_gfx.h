@@ -47,6 +47,7 @@ typedef struct gfx_state_t {
 
     /* cp */
     gfx_ring_t cp_rb[2];
+    uint32_t cp_rb_vmid;
 
     /* vgt */
     VGT_EVENT_TYPE vgt_event_initiator;

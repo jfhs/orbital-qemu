@@ -369,6 +369,8 @@ static uint64_t liverpool_gc_mmio_read(
         return s->gfx.cp_rb[0].wptr;
     case mmCP_RB1_WPTR:
         return s->gfx.cp_rb[1].wptr;
+    case mmCP_RB_VMID:
+        return s->gfx.cp_rb_vmid;
     case mmVGT_EVENT_INITIATOR:
         return s->gfx.vgt_event_initiator;
     case mmRLC_GPM_STAT:
@@ -389,9 +391,10 @@ static uint64_t liverpool_gc_mmio_read(
         index_ix = s->mmio[mmSAM_SAB_IX_INDEX];
         DPRINTF("mmSAM_SAB_IX_DATA_read { index: %X }", index_ix);
         return s->samu_sab_ix[index_ix];
+    default:
+        DPRINTF("liverpool_gc_mmio_read:  { index: 0x%X, size: 0x%X }",
+            index, size);
     }
-
-    DPRINTF("liverpool_gc_mmio_read:  { addr: %llX, size: %X }", addr, size);
     return s->mmio[index];
 }
 
@@ -433,7 +436,6 @@ static void liverpool_gc_ih_push_iv(LiverpoolGCState *s,
     stl_le_phys(&address_space_memory, msi_addr, msi_data);
 }
 
-
 static void liverpool_gc_samu_doorbell(LiverpoolGCState *s, uint32_t value)
 {
     uint64_t query_addr;
@@ -446,7 +448,7 @@ static void liverpool_gc_samu_doorbell(LiverpoolGCState *s, uint32_t value)
     reply_addr = s->samu_ix[ixSAM_IH_AM32_CPU_INT_CTX_HIGH];
     reply_addr = s->samu_ix[ixSAM_IH_AM32_CPU_INT_CTX_LOW] | (reply_addr << 32);
     reply_addr &= 0xFFFFFFFFFFFFULL;
-    printf("liverpool_gc_samu_doorbell: { flags: %llX, query: %llX, reply: %llX }\n",
+    DPRINTF("liverpool_gc_samu_doorbell: { flags: %llX, query: %llX, reply: %llX }\n",
         query_addr >> 48, query_addr, reply_addr);
 
     uint32_t command = ldl_le_phys(&address_space_memory, query_addr);
@@ -562,6 +564,9 @@ static void liverpool_gc_mmio_write(
     case mmCP_RB1_WPTR:
         s->gfx.cp_rb[1].wptr = value;
         break;
+    case mmCP_RB_VMID:
+        s->gfx.cp_rb_vmid = value;
+        break;
     /* oss */
     case mmSRBM_GFX_CNTL: {
         uint32_t me = REG_GET_FIELD(value, SRBM_GFX_CNTL, MEID);
@@ -578,7 +583,8 @@ static void liverpool_gc_mmio_write(
         liverpool_gc_ucode_load(s, mmSDMA1_UCODE_ADDR, value);
         break;
     default:
-        DPRINTF("liverpool_gc_mmio_write: { addr: %llX, size: %X, value: %llX }", addr, size, value);
+        DPRINTF("liverpool_gc_mmio_write: { index: 0x%X, size: 0x%X, value: 0x%llX }",
+            index, size, value);
     }
 }
 
