@@ -57,6 +57,63 @@ void liverpool_gc_gfx_cp_set_ring_location(gfx_state_t *s,
 }
 
 /* draw operations */
+static void gfx_draw_update_shader(
+    gfx_state_t *s, uint32_t vmid, gfx_shader_t *shader, int type)
+{
+    gart_state_t *gart = s->gart;
+    uint64_t pgm_addr, pgm_size;
+    uint32_t pgm_offs;
+    uint8_t *pgm_data;
+    hwaddr mapped_size;
+
+    switch (type) {
+    case GFX_SHADER_PS:
+        pgm_addr = s->mmio[mmSPI_SHADER_PGM_HI_PS];
+        pgm_addr = s->mmio[mmSPI_SHADER_PGM_LO_PS] | (pgm_addr << 32);
+        break;
+    case GFX_SHADER_VS:
+        pgm_addr = s->mmio[mmSPI_SHADER_PGM_HI_VS];
+        pgm_addr = s->mmio[mmSPI_SHADER_PGM_LO_VS] | (pgm_addr << 32);
+        break;
+    case GFX_SHADER_GS:
+        pgm_addr = s->mmio[mmSPI_SHADER_PGM_HI_GS];
+        pgm_addr = s->mmio[mmSPI_SHADER_PGM_LO_GS] | (pgm_addr << 32);
+        break;
+    case GFX_SHADER_ES:
+        pgm_addr = s->mmio[mmSPI_SHADER_PGM_HI_ES];
+        pgm_addr = s->mmio[mmSPI_SHADER_PGM_LO_ES] | (pgm_addr << 32);
+        break;
+    case GFX_SHADER_HS:
+        pgm_addr = s->mmio[mmSPI_SHADER_PGM_HI_HS];
+        pgm_addr = s->mmio[mmSPI_SHADER_PGM_LO_HS] | (pgm_addr << 32);
+        break;
+    case GFX_SHADER_LS:
+        pgm_addr = s->mmio[mmSPI_SHADER_PGM_HI_LS];
+        pgm_addr = s->mmio[mmSPI_SHADER_PGM_LO_LS] | (pgm_addr << 32);
+        break;
+    }
+    pgm_addr <<= 8;
+
+    // Map shader bytecode into host userspace
+    pgm_offs = pgm_addr & 0xFFF;
+    pgm_addr = pgm_addr & ~0xFFF;
+    pgm_size = 0x2000; // TODO
+    mapped_size = pgm_size;
+    pgm_data = address_space_map(gart->as[vmid], pgm_addr, &mapped_size, false);
+    gfx_shader_translate(shader, &pgm_data[pgm_offs], type);
+    address_space_unmap(gart->as[vmid], pgm_data, pgm_addr, mapped_size, false);
+}
+
+static void gfx_draw_common(
+    gfx_state_t *s, uint32_t vmid)
+{
+    gfx_shader_t *shader_vs = &s->vmid[vmid].shader_vs;
+    gfx_shader_t *shader_ps = &s->vmid[vmid].shader_ps;
+
+    gfx_draw_update_shader(s, vmid, shader_vs, GFX_SHADER_VS);
+    gfx_draw_update_shader(s, vmid, shader_ps, GFX_SHADER_PS);
+}
+
 static void gfx_draw_index_auto(
     gfx_state_t *s, uint32_t vmid)
 {
@@ -65,6 +122,7 @@ static void gfx_draw_index_auto(
 
     num_indices = s->mmio[mmVGT_NUM_INDICES];
     num_instances = s->mmio[mmVGT_NUM_INSTANCES];
+    gfx_draw_common(s, vmid);
 }
 
 /* cp packet operations */
@@ -78,6 +136,7 @@ static void cp_handle_pm4_it_draw_index_auto(
     draw_initiator = packet[2];
     s->mmio[mmVGT_NUM_INDICES] = index_count;
     s->mmio[mmVGT_DRAW_INITIATOR] = draw_initiator;
+    gfx_draw_index_auto(s, vmid);
 }
 
 static void cp_handle_pm4_it_event_write_eop(

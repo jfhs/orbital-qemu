@@ -24,6 +24,7 @@
 #include "qemu/thread.h"
 #include "exec/hwaddr.h"
 
+#include "lvp_gc_gfx_shader.h"
 #include "gca/gfx_7_2_enum.h"
 
 /* forward declarations */
@@ -39,10 +40,16 @@ typedef struct gfx_ring_t {
     hwaddr mapped_size;
 } gfx_ring_t;
 
+typedef struct vmid_state_t {
+    gfx_shader_t shader_vs;
+    gfx_shader_t shader_ps;
+} vmid_state_t;
+
 /* GFX State */
 typedef struct gfx_state_t {
     QemuThread cp_thread;
     gart_state_t *gart;
+    vmid_state_t vmid[16];
     uint32_t *mmio;
 
     /* cp */
