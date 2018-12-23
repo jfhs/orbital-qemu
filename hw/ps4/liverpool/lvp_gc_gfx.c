@@ -82,6 +82,32 @@ static void cp_handle_pm4_it_indirect_buffer(
     address_space_unmap(gart->as[ib_vmid], mapped_ib, ib_base, mapped_size, true);
 }
 
+static void cp_handle_pm4_it_indirect_buffer_const(
+    gfx_state_t *s, uint32_t vmid, const uint32_t *packet)
+{
+    gart_state_t *gart = s->gart;
+    uint64_t ib_base, ib_base_lo, ib_base_hi;
+    uint32_t ib_size, ib_vmid, i; 
+    uint32_t *mapped_ib;
+    hwaddr mapped_size;
+
+    ib_base_lo = packet[1];
+    ib_base_hi = packet[2];
+    ib_base = ib_base_lo | (ib_base_hi << 32);
+    ib_size = packet[3] & 0xFFFFF;
+    ib_vmid = (packet[3] >> 24) & 0xF;
+
+    i = 0;
+    mapped_size = ib_size;
+    mapped_ib = address_space_map(gart->as[ib_vmid], ib_base, &mapped_size, true);
+    assert(mapped_ib);
+    assert(mapped_size >= ib_size);
+    while (i < ib_size) {
+        i += cp_handle_pm4(s, ib_vmid, &mapped_ib[i]);
+    }
+    address_space_unmap(gart->as[ib_vmid], mapped_ib, ib_base, mapped_size, true);
+}
+
 static void cp_handle_pm4_it_event_write_eop(
     gfx_state_t *s, uint32_t vmid, const uint32_t *packet)
 {
@@ -223,6 +249,9 @@ static uint32_t cp_handle_pm4_type3(
     switch (itop) {
     case PM4_IT_INDIRECT_BUFFER:
         cp_handle_pm4_it_indirect_buffer(s, vmid, packet);
+        break;
+    case PM4_IT_INDIRECT_BUFFER_CONST:
+        cp_handle_pm4_it_indirect_buffer_const(s, vmid, packet);
         break;
     case PM4_IT_EVENT_WRITE_EOP:
         cp_handle_pm4_it_event_write_eop(s, vmid, packet);
