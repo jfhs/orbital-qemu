@@ -276,7 +276,6 @@ static void orbital_display_draw(OrbitalUI *ui)
 static void* orbital_display_main(void* arg)
 {
     VulkanState* vks = &ui.vk_state;
-    SDL_Event evt;
     int err, flags;
     bool quit;
     uint32_t count;
@@ -400,17 +399,22 @@ static void* orbital_display_main(void* arg)
     while (!quit) {
         SDL_Event event;
         // Events
-        while (SDL_PollEvent(&evt) == 1) {
+        while (SDL_PollEvent(&event)) {
             ImGui_ImplSDL2_ProcessEvent(&event);
-            if (evt.type == SDL_QUIT) {
+            if (event.type == SDL_QUIT) {
                 quit = true;
             }
-            if (event.type == SDL_WINDOWEVENT &&
-                event.window.event == SDL_WINDOWEVENT_RESIZED &&
+            if (event.type == SDL_WINDOWEVENT ||
                 event.window.windowID == SDL_GetWindowID(ui.sdl_window)) {
-                ImGui_ImplVulkanH_CreateWindowDataSwapChainAndFramebuffer(
-                    vks->gpu, vks->device, wd, NULL,
-                    (int)event.window.data1, (int)event.window.data2);
+                switch (event.window.event) {
+                case SDL_WINDOWEVENT_RESIZED:
+                case SDL_WINDOWEVENT_MINIMIZED:
+                case SDL_WINDOWEVENT_EXPOSED:
+                    ImGui_ImplVulkanH_CreateWindowDataSwapChainAndFramebuffer(
+                        vks->gpu, vks->device, wd, NULL,
+                        (int)event.window.data1, (int)event.window.data2);
+                    break;
+                }
             }
         }
         // Frame
