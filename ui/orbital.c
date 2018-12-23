@@ -44,6 +44,7 @@
 #include "orbital-logs.h"
 #include "orbital-stats.h"
 #include "orbital-debug-gpu.h"
+#include "orbital-procs.h"
 
 // Configuration
 #define ORBITAL_WIDTH 1280
@@ -61,9 +62,11 @@ typedef struct OrbitalUI {
     struct orbital_stats_t *stats;
     struct orbital_logs_t *logs_uart;
     struct orbital_debug_gpu_t *gpu_debugger;
+    struct orbital_procs_t *procs;
     bool show_stats;
     bool show_uart;
     bool show_gpu_debugger;
+    bool show_executing_processes;
     bool show_trace_cp;
     bool show_trace_icc;
     bool show_trace_samu;
@@ -95,6 +98,24 @@ void orbital_log_event(int device, int component, int event)
 void orbital_debug_gpu_mmio(uint32_t *mmio)
 {
     orbital_debug_gpu_set_mmio(ui.gpu_debugger, mmio);
+}
+
+void orbital_update_cpu_procs(int cpuid, uint64_t gs, uint64_t thread_ptr, uint64_t proc_ptr, uint64_t pid, const char* name)
+{
+    // TODO: this is some bad code, too much copying
+    orbital_procs_cpu_data data;
+    data.gs = gs;
+    data.thread_pointer = thread_ptr;
+    data.proc_pointer = proc_ptr;
+    data.pid = pid;
+    if (name) {
+        size_t l = strlen(name);
+        memcpy(data.proc_name, name, l);
+        data.proc_name[l] = 0;
+    } else {
+        data.proc_name[0] = 0;
+    }
+    orbital_procs_update(ui.procs, cpuid, data);
 }
 
 static void check_vk_result(VkResult err)
@@ -260,11 +281,12 @@ static void orbital_display_draw(OrbitalUI *ui)
     if (igBeginMenu("Tools", true)) {
         igMenuItemBoolPtr("Statistics", "Alt+1", &ui->show_stats, true);
         igMenuItemBoolPtr("UART Output", "Alt+2", &ui->show_uart, true);
-        igMenuItemBoolPtr("GPU Debugger", "Alt+2", &ui->show_gpu_debugger, true);
+        igMenuItemBoolPtr("GPU Debugger", "Alt+3", &ui->show_gpu_debugger, true);
+        igMenuItemBoolPtr("Executing Processes", "Alt+4", &ui->show_executing_processes, true);
         igSeparator();
-        igMenuItemBoolPtr("CP Commands", "Alt+3", &ui->show_trace_cp, false);
-        igMenuItemBoolPtr("ICC Commands", "Alt+4", &ui->show_trace_icc, false);
-        igMenuItemBoolPtr("SAMU Commands", "Alt+5", &ui->show_trace_samu, false);
+        igMenuItemBoolPtr("CP Commands", "Alt+5", &ui->show_trace_cp, false);
+        igMenuItemBoolPtr("ICC Commands", "Alt+6", &ui->show_trace_icc, false);
+        igMenuItemBoolPtr("SAMU Commands", "Alt+7", &ui->show_trace_samu, false);
         igSeparator();
         igMenuItemBoolPtr("Memory Editor (GPA)", "Ctrl+1", &ui->show_mem_gpa, false);
         igMenuItemBoolPtr("Memory Editor (GVA)", "Ctrl+2", &ui->show_mem_gva, false);
@@ -288,6 +310,9 @@ static void orbital_display_draw(OrbitalUI *ui)
     }
     if (ui->show_gpu_debugger) {
         orbital_debug_gpu_draw(ui->gpu_debugger, "GPU Debugger", &ui->show_gpu_debugger);
+    }
+    if (ui->show_executing_processes) {
+        orbital_procs_draw(ui->procs, "Executing Processes", &ui->show_executing_processes);
     }
 }
 
@@ -402,9 +427,11 @@ static void* orbital_display_main(void* arg)
     ui.gpu_debugger = orbital_debug_gpu_create();
     ui.logs_uart = orbital_logs_create();
     ui.stats = orbital_stats_create();
+    ui.procs = orbital_procs_create();
     ui.show_stats = true;
     ui.show_uart = true;
     ui.show_gpu_debugger = true;
+    ui.show_executing_processes = true;
     ui.show_trace_cp = false;
     ui.show_trace_icc = false;
     ui.show_trace_samu = false;
@@ -415,6 +442,7 @@ static void* orbital_display_main(void* arg)
     assert(ui.gpu_debugger);
     assert(ui.logs_uart);
     assert(ui.stats);
+    assert(ui.procs);
     ui.active = true;
 
     quit = false;

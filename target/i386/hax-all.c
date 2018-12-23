@@ -37,7 +37,10 @@
 #include "qemu/main-loop.h"
 #include "hw/boards.h"
 
+#include "ui/orbital.h"
+
 #define DEBUG_HAX 0
+#define DEBUG_CPU_UI 0
 
 #define DPRINTF(fmt, ...) \
     do { \
@@ -69,7 +72,7 @@ static int hax_arch_get_registers(CPUArchState *env);
 int hax_sw_breakpoints_active(CPUState *cpu);
 int hax_insert_sw_breakpoint(CPUState *cs, struct hax_sw_breakpoint *bp);
 int hax_remove_sw_breakpoint(CPUState *cs, struct hax_sw_breakpoint *bp);
-struct hax_sw_breakpoint *hax_find_sw_breakpoint(CPUState *cpu, 
+struct hax_sw_breakpoint *hax_find_sw_breakpoint(CPUState *cpu,
                                                  target_ulong pc);
 
 int hax_enabled(void)
@@ -506,6 +509,57 @@ void hax_raise_event(CPUState *cpu)
     vcpu->tunnel->user_event_pending = 1;
 }
 
+static inline int target_memory_rw_debug(CPUState *cpu, target_ulong addr,
+                                         uint8_t *buf, int len, bool is_write)
+{
+    CPUClass *cc = CPU_GET_CLASS(cpu);
+
+    if (cc->memory_rw_debug) {
+        return cc->memory_rw_debug(cpu, addr, buf, len, is_write);
+    }
+    return cpu_memory_rw_debug(cpu, addr, buf, len, is_write);
+}
+
+static void hax_update_orbital_cpu_procs(CPUArchState *env, CPUState *cpu) {
+    struct hax_msr_data md;
+    struct vmx_msr *msrs = md.entries;
+    int ret, n;
+    const uint64_t PROC_NAME_LEN = 20;
+
+    n = 0;
+    msrs[n++].entry = MSR_GSBASE;
+    md.nr_msr = n;
+    ret = hax_sync_msr(env, &md, 0);
+
+    if (ret < 0) {
+        fprintf(stderr, "err syncing msrs for vcpu %x\n", cpu->cpu_index);
+        return;
+    }
+
+    uint64_t gs = msrs[0].value;
+    uint64_t thread_ptr = 0;
+    uint64_t proc_ptr = 0;
+    uint32_t pid = 0;
+    char namebuf[21];
+    memset(namebuf, 0, 21);
+    char* name = NULL;
+    if (gs) {
+        target_memory_rw_debug(cpu, gs, (uint8_t*)&thread_ptr, 8, false);
+        target_memory_rw_debug(cpu, thread_ptr+8, (uint8_t*)&proc_ptr, 8, false);
+        if (proc_ptr) {
+            // TODO: can we use some header for this?
+            const uint64_t PID_OFFSET = 0xB0;
+            const uint64_t PROC_NAME_OFFSET = 0x44C;
+            target_memory_rw_debug(cpu, proc_ptr + PID_OFFSET, (uint8_t*)&pid, 4, false);
+            target_memory_rw_debug(cpu, proc_ptr + PROC_NAME_OFFSET, (uint8_t*)namebuf, PROC_NAME_LEN, false);
+            name = namebuf;
+        }
+    }
+
+    if (orbital_display_active()) {
+        orbital_update_cpu_procs(cpu->cpu_index, gs, thread_ptr, proc_ptr, pid, name);
+    }
+
 /*
  * Ask hax kernel module to run the CPU for us till:
  * 1. Guest crash or shutdown
@@ -570,6 +624,10 @@ static int hax_vcpu_hax_exec(CPUArchState *env)
         hax_ret = hax_vcpu_run(vcpu);
         cpu_exec_end(cpu);
         qemu_mutex_lock_iothread();
+
+        if (DEBUG_CPU_UI) {
+            hax_update_orbital_cpu_procs(env, cpu);
+        }
 
         /* Simply continue the vcpu_run if system call interrupted */
         if (hax_ret == -EINTR || hax_ret == -EAGAIN) {
