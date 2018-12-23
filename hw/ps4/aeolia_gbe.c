@@ -25,6 +25,18 @@
 
 #define AEOLIA_GBE(obj) OBJECT_CHECK(AeoliaGBEState, (obj), TYPE_AEOLIA_GBE)
 
+#define DEBUG_GBE 0
+
+#define DPRINTF(...) \
+do { \
+    if (DEBUG_GBE) { \
+        fprintf(stderr, "aeolia-gbe (%s:%d): ", __FUNCTION__, __LINE__); \
+        fprintf(stderr, __VA_ARGS__); \
+        fprintf(stderr, "\n"); \
+    } \
+} while (0)
+
+
 #define AGBE_DEVICE_ID   0x11B
 #define AGBE_DEVICE_REV  0x11A
 #define AGBE_UNK2880     0x2880
@@ -42,7 +54,7 @@ static uint64_t aeolia_gbe_read(
     if (orbital_display_active())
         orbital_log_event(UI_DEVICE_AEOLIA_GBE, UI_DEVICE_BAR0, UI_DEVICE_READ);
 
-    printf("aeolia_gbe_read { addr: %llX, size: %X }\n", addr, size);
+    DPRINTF("aeolia_gbe_read { addr: %llX, size: %X }\n", addr, size);
     switch (addr) {
     case AGBE_DEVICE_ID:
         assert(size == 1);
@@ -63,7 +75,7 @@ static void aeolia_gbe_write(
     if (orbital_display_active())
         orbital_log_event(UI_DEVICE_AEOLIA_GBE, UI_DEVICE_BAR0, UI_DEVICE_WRITE);
 
-    printf("aeolia_gbe_write { addr: %llX, size: %X, value: %llX }\n", addr, size, value);
+    DPRINTF("aeolia_gbe_write { addr: %llX, size: %X, value: %llX }\n", addr, size, value);
 }
 
 static const MemoryRegionOps aeolia_gbe_ops = {

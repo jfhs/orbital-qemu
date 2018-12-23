@@ -21,6 +21,7 @@
 #include "lvp_gc_gart.h"
 #include "hw/ps4/liverpool/pm4.h"
 #include "hw/ps4/macros.h"
+#include "gca/gfx_7_2_d.h"
 
 #include "exec/address-spaces.h"
 
@@ -55,7 +56,30 @@ void liverpool_gc_gfx_cp_set_ring_location(gfx_state_t *s,
     assert(s->cp_rb[index].mapped_size >= size);
 }
 
+/* draw operations */
+static void gfx_draw_index_auto(
+    gfx_state_t *s, uint32_t vmid)
+{
+    uint32_t num_indices;
+    uint32_t num_instances;
+
+    num_indices = s->mmio[mmVGT_NUM_INDICES];
+    num_instances = s->mmio[mmVGT_NUM_INSTANCES];
+}
+
 /* cp packet operations */
+static void cp_handle_pm4_it_draw_index_auto(
+    gfx_state_t *s, uint32_t vmid, const uint32_t *packet)
+{
+    uint32_t index_count;
+    uint32_t draw_initiator;
+
+    index_count = packet[1];
+    draw_initiator = packet[2];
+    s->mmio[mmVGT_NUM_INDICES] = index_count;
+    s->mmio[mmVGT_DRAW_INITIATOR] = draw_initiator;
+}
+
 static void cp_handle_pm4_it_event_write_eop(
     gfx_state_t *s, uint32_t vmid, const uint32_t *packet)
 {
@@ -185,6 +209,20 @@ static void cp_handle_pm4_it_indirect_buffer_const(
     address_space_unmap(gart->as[ib_vmid], mapped_ib, ib_base, mapped_size, true);
 }
 
+
+static void cp_handle_pm4_it_num_instances(
+    gfx_state_t *s, uint32_t vmid, const uint32_t *packet)
+{
+    uint32_t num_instances;
+
+    num_instances = packet[1];
+    if (num_instances == 0)
+        num_instances = 1;
+
+    // TODO: This register is not shadowed. Remove?
+    s->mmio[mmVGT_NUM_INSTANCES] = num_instances;
+}
+
 static void cp_handle_pm4_it_set_config_reg(
     gfx_state_t *s, uint32_t vmid, const uint32_t *packet, uint32_t count)
 {
@@ -193,7 +231,7 @@ static void cp_handle_pm4_it_set_config_reg(
 
     reg_offset = packet[1] & 0xFFFF;
     reg_count = count - 1;
-    assert(reg_offset + reg_count <= 0x1000);
+    assert(reg_offset + reg_count <= 0xC00);
     for (i = 0; i < reg_count; i++) {
         s->mmio[0x2000 + reg_offset] = packet[2 + i];
     }
@@ -221,9 +259,23 @@ static void cp_handle_pm4_it_set_sh_reg(
 
     reg_offset = packet[1] & 0xFFFF;
     reg_count = count - 1;
-    assert(reg_offset + reg_count <= 0x15B);
+    assert(reg_offset + reg_count <= 0x400);
     for (i = 0; i < reg_count; i++) {
         s->mmio[0x2C00 + reg_offset] = packet[2 + i];
+    }
+}
+
+static void cp_handle_pm4_it_set_uconfig_reg(
+    gfx_state_t *s, uint32_t vmid, const uint32_t *packet, uint32_t count)
+{
+    uint32_t i;
+    uint32_t reg_offset, reg_count; 
+
+    reg_offset = packet[1] & 0xFFFF;
+    reg_count = count - 1;
+    assert(reg_offset + reg_count <= 0x2000);
+    for (i = 0; i < reg_count; i++) {
+        s->mmio[0xC000 + reg_offset] = packet[2 + i];
     }
 }
 
@@ -261,6 +313,9 @@ static uint32_t cp_handle_pm4_type3(
     count  = EXTRACT(packet[0], PM4_TYPE3_HEADER_COUNT) + 1;
 
     switch (itop) {
+    case PM4_IT_DRAW_INDEX_AUTO:
+        cp_handle_pm4_it_draw_index_auto(s, vmid, packet);
+        break;
     case PM4_IT_EVENT_WRITE_EOP:
         cp_handle_pm4_it_event_write_eop(s, vmid, packet);
         break;
@@ -270,6 +325,9 @@ static uint32_t cp_handle_pm4_type3(
     case PM4_IT_INDIRECT_BUFFER_CONST:
         cp_handle_pm4_it_indirect_buffer_const(s, vmid, packet);
         break;
+    case PM4_IT_NUM_INSTANCES:
+        cp_handle_pm4_it_num_instances(s, vmid, packet);
+        break;
     case PM4_IT_SET_CONFIG_REG:
         cp_handle_pm4_it_set_config_reg(s, vmid, packet, count);
         break;
@@ -278,6 +336,9 @@ static uint32_t cp_handle_pm4_type3(
         break;
     case PM4_IT_SET_SH_REG:
         cp_handle_pm4_it_set_sh_reg(s, vmid, packet, count);
+        break;
+    case PM4_IT_SET_UCONFIG_REG:
+        cp_handle_pm4_it_set_uconfig_reg(s, vmid, packet, count);
         break;
     }
     return count + 1;
