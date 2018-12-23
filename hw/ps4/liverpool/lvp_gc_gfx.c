@@ -209,7 +209,6 @@ static void cp_handle_pm4_it_indirect_buffer_const(
     address_space_unmap(gart->as[ib_vmid], mapped_ib, ib_base, mapped_size, true);
 }
 
-
 static void cp_handle_pm4_it_num_instances(
     gfx_state_t *s, uint32_t vmid, const uint32_t *packet)
 {
@@ -233,7 +232,7 @@ static void cp_handle_pm4_it_set_config_reg(
     reg_count = count - 1;
     assert(reg_offset + reg_count <= 0xC00);
     for (i = 0; i < reg_count; i++) {
-        s->mmio[0x2000 + reg_offset] = packet[2 + i];
+        s->mmio[0x2000 + reg_offset + i] = packet[2 + i];
     }
 }
 
@@ -247,7 +246,7 @@ static void cp_handle_pm4_it_set_context_reg(
     reg_count = count - 1;
     assert(reg_offset + reg_count <= 0x400);
     for (i = 0; i < reg_count; i++) {
-        s->mmio[0xA000 + reg_offset] = packet[2 + i];
+        s->mmio[0xA000 + reg_offset + i] = packet[2 + i];
     }
 }
 
@@ -261,7 +260,7 @@ static void cp_handle_pm4_it_set_sh_reg(
     reg_count = count - 1;
     assert(reg_offset + reg_count <= 0x400);
     for (i = 0; i < reg_count; i++) {
-        s->mmio[0x2C00 + reg_offset] = packet[2 + i];
+        s->mmio[0x2C00 + reg_offset + i] = packet[2 + i];
     }
 }
 
@@ -275,7 +274,7 @@ static void cp_handle_pm4_it_set_uconfig_reg(
     reg_count = count - 1;
     assert(reg_offset + reg_count <= 0x2000);
     for (i = 0; i < reg_count; i++) {
-        s->mmio[0xC000 + reg_offset] = packet[2 + i];
+        s->mmio[0xC000 + reg_offset + i] = packet[2 + i];
     }
 }
 

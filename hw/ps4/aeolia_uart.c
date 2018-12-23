@@ -159,7 +159,7 @@ static void uart_write(void *opaque, hwaddr addr,
     addr >>= 2;
     switch (addr) {
     case REG_RXTX:
-        putc(ch, stdout);
+        //putc(ch, stdout);
         if (orbital_display_active())
             orbital_log_uart(0, ch);
         break;

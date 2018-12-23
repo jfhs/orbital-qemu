@@ -36,7 +36,6 @@ do { \
     } \
 } while (0)
 
-
 #define AGBE_DEVICE_ID   0x11B
 #define AGBE_DEVICE_REV  0x11A
 #define AGBE_UNK2880     0x2880
