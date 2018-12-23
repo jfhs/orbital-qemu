@@ -258,7 +258,7 @@ static uint32_t cp_handle_ringbuffer(gfx_state_t *s, gfx_ring_t *rb)
     uint32_t index;
     uint32_t *packet;
 
-    index = rb->rptr >> 2;
+    index = rb->rptr;
     packet = &rb->mapped_base[index];
     return cp_handle_pm4(s, packet);
 }
