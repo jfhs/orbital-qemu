@@ -42,6 +42,7 @@
 #include "orbital.h"
 #include "orbital-logs.h"
 #include "orbital-stats.h"
+#include "orbital-procs.h"
 
 // Configuration
 #define ORBITAL_WIDTH 1280
@@ -58,6 +59,7 @@ typedef struct OrbitalUI {
     ImGui_ImplVulkanH_WindowData imgui_WindowData;
     struct orbital_stats_t *stats;
     struct orbital_logs_t *logs_uart;
+    struct orbital_procs_t *procs;
     bool show_stats;
     bool show_uart;
     bool show_trace_cp;
@@ -86,6 +88,24 @@ void orbital_log_uart(int index, char ch)
 void orbital_log_event(int device, int component, int event)
 {
     orbital_stats_log(ui.stats, device, component, event);
+}
+
+void orbital_update_cpu_procs(int cpuid, uint64_t gs, uint64_t thread_ptr, uint64_t proc_ptr, uint64_t pid, const char* name)
+{
+    // TODO: this is some bad code, too much copying
+    orbital_procs_cpu_data data;
+    data.gs = gs;
+    data.thread_pointer = thread_ptr;
+    data.proc_pointer = proc_ptr;
+    data.pid = pid;
+    if (name) {
+        size_t l = strlen(name);
+        memcpy(data.proc_name, name, l);
+        data.proc_name[l] = 0;
+    } else {
+        data.proc_name[0] = 0;
+    }
+    orbital_procs_update(ui.procs, cpuid, data);
 }
 
 static void check_vk_result(VkResult err)
@@ -271,6 +291,7 @@ static void orbital_display_draw(OrbitalUI *ui)
     if (ui->show_uart) {
         orbital_logs_draw(ui->logs_uart, "UART Output", &ui->show_uart);
     }
+    orbital_procs_draw(ui->procs, "Processes", true);
 }
 
 static void* orbital_display_main(void* arg)
@@ -383,6 +404,7 @@ static void* orbital_display_main(void* arg)
     memcpy(&wd->ClearValue.color.float32[0], &clear_color, 4 * sizeof(float));
     ui.logs_uart = orbital_logs_create();
     ui.stats = orbital_stats_create();
+    ui.procs = orbital_procs_create();
     ui.show_stats = true;
     ui.show_uart = false;
     ui.show_trace_cp = false;
@@ -394,6 +416,7 @@ static void* orbital_display_main(void* arg)
     ui.show_mem_iommu = false;
     assert(ui.logs_uart);
     assert(ui.stats);
+    assert(ui.procs);
     ui.active = true;
 
     quit = false;
