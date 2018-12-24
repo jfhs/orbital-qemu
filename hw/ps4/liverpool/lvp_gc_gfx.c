@@ -19,6 +19,7 @@
 
 #include "lvp_gc_gfx.h"
 #include "lvp_gc_gart.h"
+#include "lvp_gc_ih.h"
 #include "hw/ps4/liverpool/pm4.h"
 #include "hw/ps4/macros.h"
 #include "gca/gfx_7_2_d.h"

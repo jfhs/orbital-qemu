@@ -28,6 +28,7 @@
 #include "liverpool/lvp_gc_dce.h"
 #include "liverpool/lvp_gc_gart.h"
 #include "liverpool/lvp_gc_gfx.h"
+#include "liverpool/lvp_gc_ih.h"
 #include "liverpool/lvp_gc_samu.h"
 
 #include "ui/console.h"
@@ -53,37 +54,6 @@ do { \
     } \
 } while (0)
 
-// Interrupt handlers
-#define GBASE_IH_DCE_EVENT_UPDATE     0x07
-#define GBASE_IH_DCE_EVENT_PFLIP0     0x08
-#define GBASE_IH_DCE_EVENT_PFLIP1     0x0A
-#define GBASE_IH_DCE_EVENT_PFLIP2     0x0C
-#define GBASE_IH_DCE_EVENT_PFLIP3     0x0E
-#define GBASE_IH_DCE_EVENT_PFLIP4     0x10
-#define GBASE_IH_DCE_EVENT_PFLIP5     0x12
-#define GBASE_IH_DCE_EVENT_CRTC_LINE  0x13
-#define GBASE_IH_DCE_SCANIN           0x34
-#define GBASE_IH_DCE_SCANIN_ERROR     0x35
-#define GBASE_IH_SAM                  0x98
-#define GBASE_IH_ACP                  0xA2
-#define GBASE_IH_GFX_EOP              0xB5
-#define GBASE_IH_GFX_PRIV_REG         0xB8
-#define GBASE_IH_GFX_PRIV_INST        0xB9
-
-#define GBASE_IH_UNK0_B4              0xB4
-#define GBASE_IH_UNK0_B7              0xB7
-#define GBASE_IH_UNK0_BC              0xBC
-#define GBASE_IH_UNK0_BD              0xBD
-#define GBASE_IH_UNK0_92              0x92
-#define GBASE_IH_UNK0_93              0x93
-#define GBASE_IH_UNK1_KMD             0x7C
-#define GBASE_IH_UNK2_E0              0xE0
-#define GBASE_IH_UNK2_F0              0xF0
-#define GBASE_IH_UNK2_F3              0xF3
-#define GBASE_IH_UNK2_F5              0xF5
-#define GBASE_IH_UNK3_E9              0xE9
-#define GBASE_IH_UNK4_EF              0xEF
-
 #define LIVERPOOL_GC(obj) \
     OBJECT_CHECK(LiverpoolGCState, (obj), TYPE_LIVERPOOL_GC)
 
@@ -108,6 +78,7 @@ typedef struct LiverpoolGCState {
     /* oss */
     uint8_t sdma0_ucode[0x8000];
     uint8_t sdma1_ucode[0x8000];
+    ih_state_t ih;
 
     /* samu */
     uint32_t samu_ix[0x80];
@@ -331,12 +302,20 @@ static uint64_t liverpool_gc_mmio_read(
     case mmACP_UNK512F_:
         return 0xFFFFFFFF;
     /* oss */
+    case mmIH_RB_BASE:
+        return s->ih.rb_base;
+        break;
+    case mmIH_RB_WPTR:
+        return s->ih.rb_wptr;
+        break;
+    case mmIH_RB_WPTR_ADDR_LO:
+        return s->ih.rb_wptr_addr_lo;
+        break;
+    case mmIH_RB_WPTR_ADDR_HI:
+        return s->ih.rb_wptr_addr_hi;
+        break;
     case mmIH_STATUS:
-        value = 0;
-        value = REG_SET_FIELD(value, IH_STATUS, IDLE, 1);
-        value = REG_SET_FIELD(value, IH_STATUS, INPUT_IDLE, 1);
-        value = REG_SET_FIELD(value, IH_STATUS, RB_IDLE, 1);
-        return value; // TODO
+        return s->ih.status;
     /* dce */
     case mmCRTC_BLANK_CONTROL:
         value = 0;
@@ -398,44 +377,6 @@ static uint64_t liverpool_gc_mmio_read(
     return s->mmio[index];
 }
 
-static void liverpool_gc_ih_rb_push(LiverpoolGCState *s, uint32_t value)
-{
-    // Push value
-    uint64_t addr = ((uint64_t)s->mmio[mmIH_RB_BASE] << 8) + s->mmio[mmIH_RB_WPTR];
-    stl_le_phys(s->gart.as[0], addr, value);
-    s->mmio[mmIH_RB_WPTR] += 4;
-    s->mmio[mmIH_RB_WPTR] &= 0x1FFFF; // IH_RB is 0x20000 bytes in size
-    // Update WPTR
-    uint64_t wptr_addr = ((uint64_t)s->mmio[mmIH_RB_WPTR_ADDR_HI] << 32) + s->mmio[mmIH_RB_WPTR_ADDR_LO];
-    stl_le_phys(s->gart.as[0], wptr_addr, s->mmio[mmIH_RB_WPTR]);
-}
-
-static void liverpool_gc_ih_push_iv(LiverpoolGCState *s,
-    uint8_t id, uint32_t data)
-{
-    uint64_t msi_addr;
-    uint32_t msi_data;
-    uint16_t pasid;
-    uint8_t ringid, vmid;
-    PCIDevice* dev;
-
-    ringid = 0; // TODO
-    pasid = 0; // TODO
-    vmid = 0; // TODO
-    data &= 0xFFFFFFF;
-    liverpool_gc_ih_rb_push(s, id);
-    liverpool_gc_ih_rb_push(s, data);
-    liverpool_gc_ih_rb_push(s, ((pasid << 16) | (vmid << 8) | ringid));
-    liverpool_gc_ih_rb_push(s, 0 /* TODO: timestamp & 0xFFFFFFF */);
-
-    /* Trigger MSI */
-    dev = PCI_DEVICE(s);
-    msi_addr = pci_get_long(&dev->config[dev->msi_cap + PCI_MSI_ADDRESS_HI]);
-    msi_addr = pci_get_long(&dev->config[dev->msi_cap + PCI_MSI_ADDRESS_LO]) | (msi_addr << 32);
-    msi_data = pci_get_long(&dev->config[dev->msi_cap + PCI_MSI_DATA_64]);
-    stl_le_phys(&address_space_memory, msi_addr, msi_data);
-}
-
 static void liverpool_gc_samu_doorbell(LiverpoolGCState *s, uint32_t value)
 {
     uint64_t query_addr;
@@ -463,7 +404,7 @@ static void liverpool_gc_samu_doorbell(LiverpoolGCState *s, uint32_t value)
     }
 
     s->samu_ix[ixSAM_IH_AM32_CPU_INT_STATUS] |= 1;
-    liverpool_gc_ih_push_iv(s, GBASE_IH_SAM, 0 /* TODO */);
+    liverpool_gc_ih_push_iv(&s->ih, 0, GBASE_IH_SAM, 0 /* TODO */);
 }
 
 static void liverpool_gc_mmio_write(
@@ -520,8 +461,8 @@ static void liverpool_gc_mmio_write(
         break;
     /* dce */
     case mmCRTC_V_SYNC_A: // TODO
-        liverpool_gc_ih_push_iv(s, GBASE_IH_DCE_EVENT_UPDATE, 0xFF /* TODO */);
-        liverpool_gc_ih_push_iv(s, GBASE_IH_DCE_EVENT_UPDATE, 0xFF /* TODO */);
+        liverpool_gc_ih_push_iv(&s->ih, 0, GBASE_IH_DCE_EVENT_UPDATE, 0xFF /* TODO */);
+        liverpool_gc_ih_push_iv(&s->ih, 0, GBASE_IH_DCE_EVENT_UPDATE, 0xFF /* TODO */);
         break;
     /* gfx */
     case mmCP_PFP_UCODE_DATA:
@@ -568,6 +509,18 @@ static void liverpool_gc_mmio_write(
         s->gfx.cp_rb_vmid = value;
         break;
     /* oss */
+    case mmIH_RB_BASE:
+        s->ih.rb_base = value;
+        break;
+    case mmIH_RB_WPTR:
+        s->ih.rb_wptr = value;
+        break;
+    case mmIH_RB_WPTR_ADDR_LO:
+        s->ih.rb_wptr_addr_lo = value;
+        break;
+    case mmIH_RB_WPTR_ADDR_HI:
+        s->ih.rb_wptr_addr_hi = value;
+        break;
     case mmSRBM_GFX_CNTL: {
         uint32_t me = REG_GET_FIELD(value, SRBM_GFX_CNTL, MEID);
         uint32_t pipe = REG_GET_FIELD(value, SRBM_GFX_CNTL, PIPEID);
@@ -690,7 +643,9 @@ static void liverpool_gc_realize(PCIDevice *dev, Error **errp)
     pci_register_bar(dev, 4, PCI_BASE_ADDRESS_SPACE_IO, &s->iomem[2]);
     pci_register_bar(dev, 5, PCI_BASE_ADDRESS_SPACE_MEMORY, &s->iomem[3]);
 
-    // GART
+    // Engines
+    liverpool_gc_ih_init(&s->ih, &s->gart, dev);
+    s->gfx.ih = &s->ih;
     s->gfx.gart = &s->gart;
     s->gfx.mmio = &s->mmio[0];
 
