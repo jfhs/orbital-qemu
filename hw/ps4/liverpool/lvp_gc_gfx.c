@@ -337,6 +337,87 @@ static void cp_handle_pm4_it_set_uconfig_reg(
     }
 }
 
+static void cp_handle_pm4_it_wait_reg_mem(
+    gfx_state_t *s, uint32_t vmid, const uint32_t *packet)
+{
+    gart_state_t *gart = s->gart;
+    uint32_t value;
+    bool finished;
+    uint64_t poll_addr;
+    uint64_t poll_addr_lo;
+    uint64_t poll_addr_hi;
+    uint32_t poll_interval, reference, mask;
+    union {
+        uint32_t value;
+        FIELD(0, 2, function);
+        FIELD(4, 4, mem_space);
+        FIELD(8, 8, engine);
+    } info;
+    
+    info.value = packet[1];
+    poll_addr_lo = packet[2];
+    poll_addr_hi = packet[3];
+    reference = packet[4];
+    mask = packet[5];
+    poll_interval = packet[6] & 0xFFFF;
+    poll_addr = poll_addr_lo | (poll_addr_hi << 32);
+
+    if (info.engine == 1 /*PFP*/ &&
+        info.mem_space == 0 /*Register*/) {
+        fprintf(stderr, "%s: Invalid access!\n", __FUNCTION__);
+        return;
+    }
+    if (info.engine == 1 /*PFP*/ &&
+        info.function != 3 /*EQ*/ &&
+        info.function != 6 /*GT*/) {
+        fprintf(stderr, "%s: Invalid function!\n", __FUNCTION__);
+        return;
+    }
+
+    finished = false;
+    while (true) {
+        switch (info.mem_space) {
+        case 0: // Register
+            value = s->mmio[poll_addr];
+            break;
+        case 1: // Memory
+            value = ldq_le_phys(gart->as[vmid], poll_addr);
+            break;
+        }
+
+        value &= mask;
+        switch (info.function) {
+        case 0: // 000: Always
+            finished = true;
+            break;
+        case 1: // 001: Less Than
+            finished = (value < reference);
+            break;
+        case 2: // 010: Less Than or Equal
+            finished = (value <= reference);
+            break;
+        case 3: // 011: Equal
+            finished = (value == reference);
+            break;
+        case 4: // 100: Not Equal
+            finished = (value != reference);
+            break;
+        case 5: // 101: Greater Than or Equal
+            finished = (value >= reference);
+            break;
+        case 6: // 110: Greater Than
+            finished = (value > reference);
+            break;
+        default:
+            fprintf(stderr, "%s: Invalid function!\n", __FUNCTION__);
+            return;
+        }
+
+        if (finished)
+            break;
+    }
+}
+
 /* cp packet types */
 static uint32_t cp_handle_pm4_type0(
     gfx_state_t *s, uint32_t vmid, const uint32_t *packet)
@@ -397,6 +478,9 @@ static uint32_t cp_handle_pm4_type3(
         break;
     case PM4_IT_SET_UCONFIG_REG:
         cp_handle_pm4_it_set_uconfig_reg(s, vmid, packet, count);
+        break;
+    case PM4_IT_WAIT_REG_MEM:
+        cp_handle_pm4_it_wait_reg_mem(s, vmid, packet);
         break;
     }
     return count + 1;
