@@ -37,14 +37,17 @@
 
 #include <array>
 #include <algorithm>
+#include <cstdint>
 #include <cstring>
 #include <unordered_map>
 
 typedef struct orbital_stats_usage_t {
-    bool used;
-    double last_r;
-    double last_w;
-    double last;
+    bool used;          //! Whether a read/write happened recently
+    double last_r;      //! Last time read from
+    double last_w;      //! Last time written to
+    double last;        //! Last time read from or written to
+    uint64_t num_r;     //! Number of reads
+    uint64_t num_w;     //! Number of writes
 } orbital_stats_usage_t;
 
 typedef struct orbital_stats_device_info_t {
@@ -134,6 +137,8 @@ struct orbital_stats_t
         ImGui::PushStyleColor(ImGuiCol_ButtonActive,
             (ImVec4)ImColor::HSV(hue, sv / 2.0, sv));
         ImGui::Button("RW");
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("Reads:  %llu\nWrites: %llu", usage.num_r, usage.num_w);
         ImGui::PopStyleColor(3);
     }
 
@@ -201,9 +206,11 @@ struct orbital_stats_t
         switch (event) {
         case UI_DEVICE_READ:
             usage->last_r = usage->last;
+            usage->num_r++;
             break;
         case UI_DEVICE_WRITE:
             usage->last_w = usage->last;
+            usage->num_w++;
             break;
         }
     }
