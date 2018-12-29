@@ -38,6 +38,7 @@
 #include "hw/boards.h"
 
 #define DEBUG_HAX 0
+#define DEBUG_CPU_UI 0
 
 #define DPRINTF(fmt, ...) \
     do { \
@@ -517,7 +518,7 @@ static inline int target_memory_rw_debug(CPUState *cpu, target_ulong addr,
     return cpu_memory_rw_debug(cpu, addr, buf, len, is_write);
 }
 
-static void hax_update_orbital_cpu_procs(CPUState *cpu) {
+static void hax_update_orbital_cpu_procs(CPUArchState *env, CPUState *cpu) {
     struct hax_msr_data md;
     struct vmx_msr *msrs = md.entries;
     int ret, i, n;
@@ -553,7 +554,7 @@ static void hax_update_orbital_cpu_procs(CPUState *cpu) {
             orbital_update_cpu_procs(cpu->cpu_index, gs, thread_ptr, proc_ptr, pid, name);
         }
     } else {
-        fprintf(stderr, "err syncing msrs for vcpu %x\n", vcpu->vcpu_id);
+        fprintf(stderr, "err syncing msrs for vcpu %x\n", cpu->cpu_index);
     }
 }
 
@@ -622,7 +623,9 @@ static int hax_vcpu_hax_exec(CPUArchState *env)
         cpu_exec_end(cpu);
         qemu_mutex_lock_iothread();
 
-        hax_update_orbital_cpu_procs(cpu);
+        if (DEBUG_CPU_UI) {
+            hax_update_orbital_cpu_procs(env, cpu);
+        }
 
         /* Simply continue the vcpu_run if system call interrupted */
         if (hax_ret == -EINTR || hax_ret == -EAGAIN) {
