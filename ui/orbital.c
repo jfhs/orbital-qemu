@@ -28,6 +28,7 @@
 #include "ui/vk-helpers.h"
 #include "qemu/thread.h"
 #include "qemu/error-report.h"
+#include "sysemu/sysemu.h"
 
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_vulkan.h>
@@ -226,15 +227,21 @@ static void orbital_display_draw(OrbitalUI *ui)
 {
     igBeginMainMenuBar();
     if (igBeginMenu("File", true)) {
-        if (igMenuItemBool("Open kernel...", NULL, false, false))   { /* TODO */ }
+        if (igMenuItemBool("Open kernel...", NULL, false, false)) { /* TODO */ }
         igSeparator();
         if (igMenuItemBool("Exit", NULL, false, true)) { /* TODO */ }
         igEndMenu();
     }
     if (igBeginMenu("Machine", true)) {
-        if (igMenuItemBool("Run", NULL, false, false))   { /* TODO */ }
-        if (igMenuItemBool("Pause", NULL, false, false)) { /* TODO */ }
-        if (igMenuItemBool("Stop", NULL, false, false))  { /* TODO */ }
+        bool running = runstate_is_running();
+        if (igMenuItemBool("Resume", NULL, false, !running)) {
+            vm_start();
+        }
+        if (igMenuItemBool("Pause", NULL, false, running)) {
+            qemu_system_suspend_request();
+            vm_prepare_start();
+        }
+        if (igMenuItemBool("Reset", NULL, false, false)) { /* TODO */ }
         igSeparator();
         if (igMenuItemBool("Load state", NULL, false, false)) { /* TODO */ }
         if (igMenuItemBool("Save state", NULL, false, false)) { /* TODO */ }
