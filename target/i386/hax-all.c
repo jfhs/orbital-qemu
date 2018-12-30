@@ -36,6 +36,7 @@
 #include "sysemu/sysemu.h"
 #include "qemu/main-loop.h"
 #include "hw/boards.h"
+#include "ui/orbital.h"
 
 #define DEBUG_HAX 0
 #define DEBUG_CPU_UI 0
@@ -521,7 +522,7 @@ static inline int target_memory_rw_debug(CPUState *cpu, target_ulong addr,
 static void hax_update_orbital_cpu_procs(CPUArchState *env, CPUState *cpu) {
     struct hax_msr_data md;
     struct vmx_msr *msrs = md.entries;
-    int ret, i, n;
+    int ret, n;
     const uint64_t PROC_NAME_LEN = 20;
 
     n = 0;
@@ -538,14 +539,14 @@ static void hax_update_orbital_cpu_procs(CPUArchState *env, CPUState *cpu) {
         memset(namebuf, 0, 21);
         char* name = NULL;
         if (gs) {
-            target_memory_rw_debug(cpu, gs, &thread_ptr, 8, false);
-            target_memory_rw_debug(cpu, thread_ptr+8, &proc_ptr, 8, false);
+            target_memory_rw_debug(cpu, gs, (uint8_t*)&thread_ptr, 8, false);
+            target_memory_rw_debug(cpu, thread_ptr+8, (uint8_t*)&proc_ptr, 8, false);
             if (proc_ptr) {
                 // TODO: can we use some header for this?
                 const uint64_t PID_OFFSET = 0xB0;
                 const uint64_t PROC_NAME_OFFSET = 0x44C;
-                target_memory_rw_debug(cpu, proc_ptr + PID_OFFSET, &pid, 4, false);
-                target_memory_rw_debug(cpu, proc_ptr + PROC_NAME_OFFSET, namebuf, PROC_NAME_LEN, false);
+                target_memory_rw_debug(cpu, proc_ptr + PID_OFFSET, (uint8_t*)&pid, 4, false);
+                target_memory_rw_debug(cpu, proc_ptr + PROC_NAME_OFFSET, (uint8_t*)namebuf, PROC_NAME_LEN, false);
                 name = namebuf;
             }
         }

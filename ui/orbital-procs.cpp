@@ -34,14 +34,29 @@
 #include "imgui/imgui_impl_sdl.h"
 #include "imgui/imgui_impl_vulkan.h"
 
+extern int smp_cpus;
+
 struct orbital_procs_t
 {
     // TODO: fix const cpu count
-    uint32_t cpu_count = 8;
-    orbital_procs_cpu_data cpus[8];
+    uint32_t cpu_count;
+    orbital_procs_cpu_data* cpus;
+
+    orbital_procs_t() {
+        cpu_count = smp_cpus;
+        cpus = (orbital_procs_cpu_data*)calloc(cpu_count, sizeof(orbital_procs_cpu_data));
+    }
+
+    ~orbital_procs_t() {
+        free(cpus);
+    }
 
     void Update(uint32_t cpuid, orbital_procs_cpu_data data)
     {
+        if (cpuid > cpu_count) {
+            printf("Got cpuid (%d) > than cpu_count (%d)", cpuid, cpu_count);
+            return;
+        }
         if (!strcmp(data.proc_name, "idle")) {
             cpus[cpuid].idle_counter++;
         } else {
