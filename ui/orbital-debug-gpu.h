@@ -1,7 +1,7 @@
 /*
  * QEMU-Orbital user interface
  *
- * Copyright (c) 2017-2018 Alexandro Sanchez Bach
+ * Copyright (c) 2017-2019 Alexandro Sanchez Bach
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -22,49 +22,28 @@
  * THE SOFTWARE.
  */
 
-#ifndef UI_ORBITAL_H_
-#define UI_ORBITAL_H_
+#ifndef UI_ORBITAL_DEBUG_GPU_H_
+#define UI_ORBITAL_DEBUG_GPU_H_
 
 #include "qemu/osdep.h"
 #include "qemu-common.h"
 
-enum ui_device_t {
-    UI_DEVICE_UNKNOWN = 0,
-    // Aeolia
-    UI_DEVICE_AEOLIA_ACPI,
-    UI_DEVICE_AEOLIA_GBE,
-    UI_DEVICE_AEOLIA_AHCI,
-    UI_DEVICE_AEOLIA_SDHCI,
-    UI_DEVICE_AEOLIA_PCIE,
-    UI_DEVICE_AEOLIA_DMAC,
-    UI_DEVICE_AEOLIA_DDR3,
-    UI_DEVICE_AEOLIA_XHCI,
-    // Liverpool
-    UI_DEVICE_LIVERPOOL_GC,
-    UI_DEVICE_LIVERPOOL_HDAC,
-};
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-enum {
-    UI_DEVICE_BAR0,
-    UI_DEVICE_BAR1,
-    UI_DEVICE_BAR2,
-    UI_DEVICE_BAR3,
-    UI_DEVICE_BAR4,
-    UI_DEVICE_BAR5,
-    UI_DEVICE_MSI,
-};
+struct orbital_debug_gpu_t;
 
-enum {
-    UI_DEVICE_READ,
-    UI_DEVICE_WRITE,
-};
+struct orbital_debug_gpu_t* orbital_debug_gpu_create(void);
 
-bool orbital_display_active(void);
+void orbital_debug_gpu_destroy(struct orbital_debug_gpu_t *widget);
 
-void orbital_log_uart(int index, char ch);
+void orbital_debug_gpu_draw(struct orbital_debug_gpu_t *widget, const char *title, bool* p_open);
 
-void orbital_log_event(int device, int component, int event);
+void orbital_debug_gpu_set_mmio(struct orbital_debug_gpu_t *widget, uint32_t *mmio);
 
-void orbital_debug_gpu_mmio(uint32_t *mmio);
+#ifdef __cplusplus
+} // extern "C"
+#endif
 
-#endif // UI_ORBITAL_H_
+#endif // UI_ORBITAL_DEBUG_GPU_H_

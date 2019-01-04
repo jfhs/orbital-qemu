@@ -461,8 +461,7 @@ static void liverpool_gc_mmio_write(
         break;
     /* dce */
     case mmCRTC_V_SYNC_A: // TODO
-        liverpool_gc_ih_push_iv(&s->ih, 0, GBASE_IH_DCE_EVENT_UPDATE, 0xFF /* TODO */);
-        liverpool_gc_ih_push_iv(&s->ih, 0, GBASE_IH_DCE_EVENT_UPDATE, 0xFF /* TODO */);
+        liverpool_gc_ih_push_iv(&s->ih, 0, GBASE_IH_DCE_EVENT_UPDATE, 0 /* TODO */);
         break;
     /* gfx */
     case mmCP_PFP_UCODE_DATA:
@@ -648,6 +647,10 @@ static void liverpool_gc_realize(PCIDevice *dev, Error **errp)
     s->gfx.ih = &s->ih;
     s->gfx.gart = &s->gart;
     s->gfx.mmio = &s->mmio[0];
+
+    // Debugger
+    if (orbital_display_active())
+        orbital_debug_gpu_mmio(s->mmio);
 
     // Command Processor
     qemu_thread_create(&s->gfx.cp_thread, "lvp-gfx-cp",

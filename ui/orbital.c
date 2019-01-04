@@ -43,6 +43,7 @@
 #include "orbital.h"
 #include "orbital-logs.h"
 #include "orbital-stats.h"
+#include "orbital-debug-gpu.h"
 
 // Configuration
 #define ORBITAL_WIDTH 1280
@@ -59,8 +60,10 @@ typedef struct OrbitalUI {
     ImGui_ImplVulkanH_WindowData imgui_WindowData;
     struct orbital_stats_t *stats;
     struct orbital_logs_t *logs_uart;
+    struct orbital_debug_gpu_t *gpu_debugger;
     bool show_stats;
     bool show_uart;
+    bool show_gpu_debugger;
     bool show_trace_cp;
     bool show_trace_icc;
     bool show_trace_samu;
@@ -87,6 +90,11 @@ void orbital_log_uart(int index, char ch)
 void orbital_log_event(int device, int component, int event)
 {
     orbital_stats_log(ui.stats, device, component, event);
+}
+
+void orbital_debug_gpu_mmio(uint32_t *mmio)
+{
+    orbital_debug_gpu_set_mmio(ui.gpu_debugger, mmio);
 }
 
 static void check_vk_result(VkResult err)
@@ -252,6 +260,7 @@ static void orbital_display_draw(OrbitalUI *ui)
     if (igBeginMenu("Tools", true)) {
         igMenuItemBoolPtr("Statistics", "Alt+1", &ui->show_stats, true);
         igMenuItemBoolPtr("UART Output", "Alt+2", &ui->show_uart, true);
+        igMenuItemBoolPtr("GPU Debugger", "Alt+2", &ui->show_gpu_debugger, true);
         igSeparator();
         igMenuItemBoolPtr("CP Commands", "Alt+3", &ui->show_trace_cp, false);
         igMenuItemBoolPtr("ICC Commands", "Alt+4", &ui->show_trace_icc, false);
@@ -274,9 +283,11 @@ static void orbital_display_draw(OrbitalUI *ui)
     if (ui->show_stats) {
         orbital_stats_draw(ui->stats, "Statistics", &ui->show_stats);
     }
-
     if (ui->show_uart) {
         orbital_logs_draw(ui->logs_uart, "UART Output", &ui->show_uart);
+    }
+    if (ui->show_gpu_debugger) {
+        orbital_debug_gpu_draw(ui->gpu_debugger, "GPU Debugger", &ui->show_gpu_debugger);
     }
 }
 
@@ -387,10 +398,12 @@ static void* orbital_display_main(void* arg)
     // Initialization
     float clear_color[4] = {0.45f, 0.55f, 0.60f, 1.00f};
     memcpy(&wd->ClearValue.color.float32[0], &clear_color, 4 * sizeof(float));
+    ui.gpu_debugger = orbital_debug_gpu_create();
     ui.logs_uart = orbital_logs_create();
     ui.stats = orbital_stats_create();
     ui.show_stats = true;
-    ui.show_uart = false;
+    ui.show_uart = true;
+    ui.show_gpu_debugger = true;
     ui.show_trace_cp = false;
     ui.show_trace_icc = false;
     ui.show_trace_samu = false;
@@ -398,6 +411,7 @@ static void* orbital_display_main(void* arg)
     ui.show_mem_gva = false;
     ui.show_mem_gart = false;
     ui.show_mem_iommu = false;
+    assert(ui.gpu_debugger);
     assert(ui.logs_uart);
     assert(ui.stats);
     ui.active = true;
@@ -452,12 +466,15 @@ static void* orbital_display_main(void* arg)
 
 static void orbital_display_early_init(DisplayOptions *o)
 {
+    qemu_thread_create(&ui.sdl_thread, "sdl_thread",
+        orbital_display_main, NULL, QEMU_THREAD_JOINABLE);
+
+    while (!ui.active)
+        usleep(1000);
 }
 
 static void orbital_display_init(DisplayState *ds, DisplayOptions *o)
 {
-    qemu_thread_create(&ui.sdl_thread, "sdl_thread",
-        orbital_display_main, NULL, QEMU_THREAD_JOINABLE);
 }
 
 static QemuDisplay qemu_display_orbital = {

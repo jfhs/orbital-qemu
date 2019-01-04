@@ -49,7 +49,7 @@ void liverpool_gc_ih_init(ih_state_t *s,
 }
 
 void liverpool_gc_ih_push_iv(ih_state_t *s,
-    uint32_t vmid, uint32_t id, uint32_t data)
+    uint32_t vmid, uint32_t src_id, uint32_t src_data)
 {
     PCIDevice* dev = s->dev;
     uint64_t msi_addr;
@@ -59,10 +59,12 @@ void liverpool_gc_ih_push_iv(ih_state_t *s,
 
     ringid = 0; // TODO
     pasid = 0; // TODO
-    assert(vmid <= 15);
-    data &= 0xFFFFFFF;
-    ih_rb_push(s, id);
-    ih_rb_push(s, data);
+    assert(vmid < 16);
+    assert(src_id < 0x100);
+    assert(src_data < 0x10000000);
+
+    ih_rb_push(s, src_id);
+    ih_rb_push(s, src_data);
     ih_rb_push(s, ((pasid << 16) | (vmid << 8) | ringid));
     ih_rb_push(s, 0 /* TODO: timestamp & 0xFFFFFFF */);
 

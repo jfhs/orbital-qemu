@@ -41,6 +41,10 @@ struct orbital_logs_t
     ImVector<int>       LineOffsets;
     bool                ScrollToBottom;
 
+    orbital_logs_t() :
+        Buf(), Filter(), ScrollToBottom() {
+    }
+
     void Clear()
     {
         Buf.clear();
@@ -60,13 +64,11 @@ struct orbital_logs_t
         ScrollToBottom = true;
     }
 
-    void Log(char c)
-    {
+    void Log(char c) {
         ImVector<char>& chars = Buf.Buf;
         if (c == '\n')
             LineOffsets.push_back(Buf.size());
-        chars[chars.Size - 1] = c;
-        chars.push_back(0);
+        chars.push_back(c);
         ScrollToBottom = true;
     }
 
