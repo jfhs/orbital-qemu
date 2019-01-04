@@ -311,6 +311,7 @@ static void* orbital_display_main(void* arg)
     }
 
     flags = 0;
+    flags |= SDL_WINDOW_MAXIMIZED;
     flags |= SDL_WINDOW_RESIZABLE;
     flags |= SDL_WINDOW_VULKAN;
     ui.sdl_window = SDL_CreateWindow("Orbital",

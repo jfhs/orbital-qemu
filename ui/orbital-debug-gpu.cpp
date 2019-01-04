@@ -37,23 +37,36 @@
 #include "hw/ps4/liverpool/dce/dce_8_0_d.h"
 #include <array>
 
+enum {
+    ATTR_U32_HEX,
+    ATTR_U32_DEC,
+};
+
 struct dcp_attribute_t {
+    int type;
     const char* name;
     int mmio_indices[6];
 };
 
 #define DCP_COUNT 6
-#define DCP_ATTR(x) \
-    { #x, { mmDCP0_##x, mmDCP1_##x, mmDCP2_##x, \
-            mmDCP3_##x, mmDCP4_##x, mmDCP5_##x }}
+#define CRTC_COUNT 6
 
-std::array<dcp_attribute_t, 6> dcp_attrs = {{
-    DCP_ATTR(GRPH_SURFACE_OFFSET_X),
-    DCP_ATTR(GRPH_SURFACE_OFFSET_Y),
-    DCP_ATTR(GRPH_X_START),
-    DCP_ATTR(GRPH_Y_START),
-    DCP_ATTR(GRPH_X_END),
-    DCP_ATTR(GRPH_Y_END),
+#define DCP_ATTR(t, x) \
+    { t, #x, { mmDCP0_##x, mmDCP1_##x, mmDCP2_##x, \
+               mmDCP3_##x, mmDCP4_##x, mmDCP5_##x }}
+
+std::array<dcp_attribute_t, 11> dcp_attrs = {{
+    DCP_ATTR(ATTR_U32_HEX, GRPH_PRIMARY_SURFACE_ADDRESS),
+    DCP_ATTR(ATTR_U32_HEX, GRPH_PRIMARY_SURFACE_ADDRESS_HIGH),
+    DCP_ATTR(ATTR_U32_HEX, GRPH_SECONDARY_SURFACE_ADDRESS),
+    DCP_ATTR(ATTR_U32_HEX, GRPH_SECONDARY_SURFACE_ADDRESS_HIGH),
+    DCP_ATTR(ATTR_U32_DEC, GRPH_PITCH),
+    DCP_ATTR(ATTR_U32_DEC, GRPH_SURFACE_OFFSET_X),
+    DCP_ATTR(ATTR_U32_DEC, GRPH_SURFACE_OFFSET_Y),
+    DCP_ATTR(ATTR_U32_DEC, GRPH_X_START),
+    DCP_ATTR(ATTR_U32_DEC, GRPH_Y_START),
+    DCP_ATTR(ATTR_U32_DEC, GRPH_X_END),
+    DCP_ATTR(ATTR_U32_DEC, GRPH_Y_END),
 }};
 
 struct orbital_debug_gpu_t
@@ -62,6 +75,8 @@ struct orbital_debug_gpu_t
 
     void Draw_DCE()
     {
+        static const uint32_t u32_one = 1;
+
         if (!mmio)
             return;
 
@@ -80,10 +95,38 @@ struct orbital_debug_gpu_t
                 ImGui::NextColumn();
                 for (int i = 0; i < DCP_COUNT; i++) {
                     int mm_index = attr.mmio_indices[i];
-                    ImGui::Text("%d", mmio[mm_index]);
+                    switch (attr.type) {
+                    case ATTR_U32_DEC:
+                        ImGui::InputScalar("", ImGuiDataType_U32, &mmio[mm_index], &u32_one, NULL, "%d",
+                            ImGuiInputTextFlags_CharsDecimal |
+                            ImGuiInputTextFlags_ReadOnly);
+                        break;
+                    case ATTR_U32_HEX:
+                        ImGui::InputScalar("", ImGuiDataType_U32, &mmio[mm_index], NULL, NULL, "0x%08X",
+                            ImGuiInputTextFlags_CharsHexadecimal |
+                            ImGuiInputTextFlags_CharsUppercase |
+                            ImGuiInputTextFlags_ReadOnly);
+                        break;
+                    default:
+                        ImGui::Text("???");
+                    }
                     ImGui::NextColumn();
                 }
             }
+            ImGui::Columns(1);
+            ImGui::Separator();
+        }
+        if (ImGui::CollapsingHeader("CRTC")) {
+            ImGui::Columns(DCP_COUNT + 1, "CRTC_Columns");
+            ImGui::Separator();
+            ImGui::Text("Attribute");
+            ImGui::NextColumn();
+            for (int i = 0; i < CRTC_COUNT; i++) {
+                ImGui::Text("CRTC%d", i);
+                ImGui::NextColumn();
+            }
+            ImGui::Columns(1);
+            ImGui::Separator();
         }
     }
 
@@ -112,7 +155,7 @@ struct orbital_debug_gpu_t
                 Draw_GFX();
                 ImGui::EndTabItem();
             }
-            if (ImGui::BeginTabItem("SAM")) {
+            if (ImGui::BeginTabItem("SAMU")) {
                 Draw_SAM();
                 ImGui::EndTabItem();
             }
