@@ -26,16 +26,32 @@
 /* forward declarations */
 typedef struct ih_state_t ih_state_t;
 
+typedef struct dce_crtc_state_t {
+    /* private */
+    bool flip_pending;
+    /* public */
+    union {
+        uint32_t value;
+        struct {
+            uint32_t master_en : 1;
+        };
+    } control;
+} dce_crtc_state_t;
+
 /* DCE State */
 typedef struct dce_state_t {
     QemuThread thread;
     ih_state_t *ih;
     uint32_t *mmio;
+
+    dce_crtc_state_t crtc[6];
 } dce_state_t;
 
 /* debugging */
 const char* liverpool_gc_dce_name(uint32_t index);
 
+/* functions */
 void *liverpool_gc_dce_thread(void *arg);
+void liverpool_gc_dce_page_flip(dce_state_t *dce, int crtc_id);
 
 #endif /* HW_PS4_LIVERPOOL_GC_DCE_H */

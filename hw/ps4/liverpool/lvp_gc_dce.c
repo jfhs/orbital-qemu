@@ -22,8 +22,7 @@
 #include "hw/ps4/liverpool_gc_mmio.h"
 #include "dce/dce_8_0_d.h"
 
-#define MAX_DCP_USED   2
-#define MAX_CRTC_USED  2
+#define MAX_PIPES_USED 2
 
 /* mmio */
 #define DCE_READ_FIELD(s, pipe, reg, field) \
@@ -143,43 +142,48 @@ static void dce_int_ext(dce_state_t *s, uint32_t index, uint32_t ext_id)
     liverpool_gc_ih_push_iv(ih, 0, src_id, src_data);
 }
 
-static void dce_dcp_process(dce_state_t *s, uint32_t index)
+static void dce_pipe_process(dce_state_t *s, uint32_t index)
 {
+    dce_crtc_state_t *crtc;
+
+    crtc = &s->crtc[index];
+    if (!crtc->control.master_en)
+        return;
+
     if (dce_reg_read(s, index, mmGRPH_X_END) <= 320) // TODO
         return;
 
-    if (DCE_READ_FIELD(s, index,
-            CRTC_INTERRUPT_CONTROL,
-            CRTC_V_UPDATE_INT_MSK)) {
-        dce_int_vupdate(s, index);
-    }
-    if (DCE_READ_FIELD(s, index,
-            GRPH_INTERRUPT_CONTROL,
-            GRPH_PFLIP_INT_MASK)) {
-        dce_int_pflip(s, index);
-    }
+    if (crtc->flip_pending) {
+        crtc->flip_pending = false;
 
-    // Send vertical interrupts
-    if (DCE_READ_FIELD(s, index,
-            CRTC_VERTICAL_INTERRUPT0_CONTROL,
-            CRTC_VERTICAL_INTERRUPT0_INT_ENABLE)) {
-        dce_int_ext(s, index, IV_EXTID_VERTICAL_INTERRUPT0);
-    }
-    if (DCE_READ_FIELD(s, index,
-            CRTC_VERTICAL_INTERRUPT1_CONTROL,
-            CRTC_VERTICAL_INTERRUPT1_INT_ENABLE)) {
-        dce_int_ext(s, index, IV_EXTID_VERTICAL_INTERRUPT1);
-    }
-    if (DCE_READ_FIELD(s, index,
-            CRTC_VERTICAL_INTERRUPT2_CONTROL,
-            CRTC_VERTICAL_INTERRUPT2_INT_ENABLE)) {
-        dce_int_ext(s, index, IV_EXTID_VERTICAL_INTERRUPT2);
-    }
-}
+        if (DCE_READ_FIELD(s, index,
+                CRTC_INTERRUPT_CONTROL,
+                CRTC_V_UPDATE_INT_MSK)) {
+            dce_int_vupdate(s, index);
+        }
+        if (DCE_READ_FIELD(s, index,
+                GRPH_INTERRUPT_CONTROL,
+                GRPH_PFLIP_INT_MASK)) {
+            dce_int_pflip(s, index);
+        }
 
-static void dce_crtc_process(dce_state_t *s, uint32_t index)
-{
-    return;
+        // Send vertical interrupts
+        if (DCE_READ_FIELD(s, index,
+                CRTC_VERTICAL_INTERRUPT0_CONTROL,
+                CRTC_VERTICAL_INTERRUPT0_INT_ENABLE)) {
+            dce_int_ext(s, index, IV_EXTID_VERTICAL_INTERRUPT0);
+        }
+        if (DCE_READ_FIELD(s, index,
+                CRTC_VERTICAL_INTERRUPT1_CONTROL,
+                CRTC_VERTICAL_INTERRUPT1_INT_ENABLE)) {
+            dce_int_ext(s, index, IV_EXTID_VERTICAL_INTERRUPT1);
+        }
+        if (DCE_READ_FIELD(s, index,
+                CRTC_VERTICAL_INTERRUPT2_CONTROL,
+                CRTC_VERTICAL_INTERRUPT2_INT_ENABLE)) {
+            dce_int_ext(s, index, IV_EXTID_VERTICAL_INTERRUPT2);
+        }
+    }
 }
 
 void *liverpool_gc_dce_thread(void *arg)
@@ -188,13 +192,20 @@ void *liverpool_gc_dce_thread(void *arg)
     dce_state_t *s = arg;
 
     while (true) {
-        for (i = 0; i < MAX_DCP_USED; i++) {
-            dce_dcp_process(s, i);
+        for (i = 0; i < MAX_PIPES_USED; i++) {
+            dce_pipe_process(s, i);
         }
-        for (i = 0; i < MAX_CRTC_USED; i++) {
-            dce_crtc_process(s, i);
-        }
-        usleep(500000);
+        usleep(1000);
     }
     return NULL;
+}
+
+void liverpool_gc_dce_page_flip(dce_state_t *s, int crtc_id)
+{
+    dce_crtc_state_t *crtc;
+
+    printf("%s(%d)\n", __FUNCTION__, crtc_id);
+    assert(crtc_id < MAX_PIPES_USED);
+    crtc = &s->crtc[crtc_id];
+    crtc->flip_pending = true;
 }

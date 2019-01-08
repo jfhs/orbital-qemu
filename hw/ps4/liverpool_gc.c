@@ -320,6 +320,14 @@ static uint64_t liverpool_gc_mmio_read(
     case mmIH_STATUS:
         return s->ih.status;
     /* dce */
+    case mmCRTC0_CRTC_CONTROL:
+        return s->dce.crtc[0].control.value;
+    case mmCRTC1_CRTC_CONTROL:
+        return s->dce.crtc[1].control.value;
+    case mmCRTC0_CRTC_MASTER_EN:
+        return s->dce.crtc[0].control.master_en;
+    case mmCRTC1_CRTC_MASTER_EN:
+        return s->dce.crtc[1].control.master_en;
     case mmCRTC_BLANK_CONTROL:
         value = 0;
         value = REG_SET_FIELD(value, CRTC_BLANK_CONTROL, CRTC_CURRENT_BLANK_STATE, 1);
@@ -461,6 +469,25 @@ static void liverpool_gc_mmio_write(
     case mmVM_CONTEXT8_PAGE_TABLE_BASE_ADDR ...
          mmVM_CONTEXT15_PAGE_TABLE_BASE_ADDR:
         liverpool_gc_gart_update_pde(s, index, value);
+        break;
+    /* dce */
+    case mmCRTC0_CRTC_CONTROL:
+        s->dce.crtc[0].control.value = value;
+        break;
+    case mmCRTC1_CRTC_CONTROL:
+        s->dce.crtc[1].control.value = value;
+        break;
+    case mmCRTC0_CRTC_MASTER_EN:
+        s->dce.crtc[0].control.master_en = value;
+        break;
+    case mmCRTC1_CRTC_MASTER_EN:
+        s->dce.crtc[1].control.master_en = value;
+        break;
+    case mmDCP0_GRPH_PRIMARY_SURFACE_ADDRESS:
+        liverpool_gc_dce_page_flip(&s->dce, 0);
+        break;
+    case mmDCP1_GRPH_PRIMARY_SURFACE_ADDRESS:
+        liverpool_gc_dce_page_flip(&s->dce, 1);
         break;
     /* gfx */
     case mmCP_PFP_UCODE_DATA:
