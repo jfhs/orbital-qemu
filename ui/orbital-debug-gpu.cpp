@@ -76,6 +76,7 @@ struct orbital_debug_gpu_t
     void Draw_DCE()
     {
         static const uint32_t u32_one = 1;
+        char tag[256];
 
         if (!mmio)
             return;
@@ -95,17 +96,22 @@ struct orbital_debug_gpu_t
                 ImGui::NextColumn();
                 for (int i = 0; i < DCP_COUNT; i++) {
                     int mm_index = attr.mmio_indices[i];
+                    snprintf(tag, sizeof(tag), "##dcp%d_%s", i, attr.name);
                     switch (attr.type) {
                     case ATTR_U32_DEC:
-                        ImGui::InputScalar("", ImGuiDataType_U32, &mmio[mm_index], &u32_one, NULL, "%d",
+                        ImGui::PushItemWidth(-1);
+                        ImGui::InputScalar(tag, ImGuiDataType_U32, &mmio[mm_index], &u32_one, NULL, "%d",
                             ImGuiInputTextFlags_CharsDecimal |
                             ImGuiInputTextFlags_ReadOnly);
+                        ImGui::PopItemWidth();
                         break;
                     case ATTR_U32_HEX:
-                        ImGui::InputScalar("", ImGuiDataType_U32, &mmio[mm_index], NULL, NULL, "0x%08X",
+                        ImGui::PushItemWidth(-1);
+                        ImGui::InputScalar(tag, ImGuiDataType_U32, &mmio[mm_index], NULL, NULL, "0x%08X",
                             ImGuiInputTextFlags_CharsHexadecimal |
                             ImGuiInputTextFlags_CharsUppercase |
                             ImGuiInputTextFlags_ReadOnly);
+                        ImGui::PopItemWidth();
                         break;
                     default:
                         ImGui::Text("???");
