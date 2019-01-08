@@ -19,10 +19,15 @@
 
 #include "lvp_gc_dce.h"
 #include "lvp_gc_ih.h"
+#include "hw/ps4/liverpool_gc_mmio.h"
 #include "dce/dce_8_0_d.h"
 
 #define MAX_DCP_USED   2
 #define MAX_CRTC_USED  2
+
+/* mmio */
+#define DCE_READ_FIELD(s, pipe, reg, field) \
+    REG_GET_FIELD(dce_reg_read(s, pipe, mm##reg), reg, field)
 
 static inline uint32_t dce_reg_read(dce_state_t *s,
     uint32_t pipe, uint32_t index)
@@ -41,18 +46,135 @@ static inline void dce_reg_write(dce_state_t *s,
     index += 0x300 * pipe;
     s->mmio[index] = value;
 }
+/* interrupts */
+static void dce_int_vupdate(dce_state_t *s, uint32_t index)
+{
+    ih_state_t *ih = s->ih;
+    uint32_t src_id;
+    uint32_t src_data;
+
+    switch (index) {
+    case 0:
+        src_id = IV_SRCID_DCE_DCP0_VUPDATE;
+        break;
+    case 1:
+        src_id = IV_SRCID_DCE_DCP1_VUPDATE;
+        break;
+    case 2:
+        src_id = IV_SRCID_DCE_DCP2_VUPDATE;
+        break;
+    case 3:
+        src_id = IV_SRCID_DCE_DCP3_VUPDATE;
+        break;
+    case 4:
+        src_id = IV_SRCID_DCE_DCP4_VUPDATE;
+        break;
+    case 5:
+        src_id = IV_SRCID_DCE_DCP5_VUPDATE;
+        break;
+    default:
+        assert(0);
+    }
+    src_data = 0; // TODO: Timestamp
+    liverpool_gc_ih_push_iv(ih, 0, src_id, src_data);
+}
+
+static void dce_int_pflip(dce_state_t *s, uint32_t index)
+{
+    ih_state_t *ih = s->ih;
+    uint32_t src_id;
+    uint32_t src_data;
+
+    switch (index) {
+    case 0:
+        src_id = IV_SRCID_DCE_DCP0_PFLIP;
+        break;
+    case 1:
+        src_id = IV_SRCID_DCE_DCP1_PFLIP;
+        break;
+    case 2:
+        src_id = IV_SRCID_DCE_DCP2_PFLIP;
+        break;
+    case 3:
+        src_id = IV_SRCID_DCE_DCP3_PFLIP;
+        break;
+    case 4:
+        src_id = IV_SRCID_DCE_DCP4_PFLIP;
+        break;
+    case 5:
+        src_id = IV_SRCID_DCE_DCP5_PFLIP;
+        break;
+    default:
+        assert(0);
+    }
+    src_data = 0; // TODO: Timestamp
+    liverpool_gc_ih_push_iv(ih, 0, src_id, src_data);
+}
+
+static void dce_int_ext(dce_state_t *s, uint32_t index, uint32_t ext_id)
+{
+    ih_state_t *ih = s->ih;
+    uint32_t src_id;
+    uint32_t src_data;
+
+    switch (index) {
+    case 0:
+        src_id = IV_SRCID_DCE_DCP0_EXT;
+        break;
+    case 1:
+        src_id = IV_SRCID_DCE_DCP1_EXT;
+        break;
+    case 2:
+        src_id = IV_SRCID_DCE_DCP2_EXT;
+        break;
+    case 3:
+        src_id = IV_SRCID_DCE_DCP3_EXT;
+        break;
+    case 4:
+        src_id = IV_SRCID_DCE_DCP4_EXT;
+        break;
+    case 5:
+        src_id = IV_SRCID_DCE_DCP5_EXT;
+        break;
+    default:
+        assert(0);
+    }
+    src_data = ext_id;
+    liverpool_gc_ih_push_iv(ih, 0, src_id, src_data);
+}
 
 static void dce_dcp_process(dce_state_t *s, uint32_t index)
 {
-    ih_state_t *ih = s->ih;
-
     if (dce_reg_read(s, index, mmGRPH_X_END) <= 320) // TODO
         return;
 
-    liverpool_gc_ih_push_iv(ih, 0, GBASE_IH_DCE_EVENT_PFLIP1, 0 /* TODO */);
-    liverpool_gc_ih_push_iv(ih, 0, GBASE_IH_DCE_EVENT_CRTC_LINE, 8);
-    liverpool_gc_ih_push_iv(ih, 0, GBASE_IH_DCE_EVENT_CRTC_LINE, 9);
-    liverpool_gc_ih_push_iv(ih, 0, GBASE_IH_DCE_EVENT_UPDATE, 0 /* TODO */);
+    if (DCE_READ_FIELD(s, index,
+            CRTC_INTERRUPT_CONTROL,
+            CRTC_V_UPDATE_INT_MSK)) {
+        dce_int_vupdate(s, index);
+    }
+    if (DCE_READ_FIELD(s, index,
+            GRPH_INTERRUPT_CONTROL,
+            GRPH_PFLIP_INT_MASK)) {
+        dce_int_pflip(s, index);
+    }
+
+    // Send vertical interrupts
+    if (DCE_READ_FIELD(s, index,
+            CRTC_VERTICAL_INTERRUPT0_CONTROL,
+            CRTC_VERTICAL_INTERRUPT0_INT_ENABLE)) {
+        dce_int_ext(s, index, IV_EXTID_VERTICAL_INTERRUPT0);
+    }
+    if (DCE_READ_FIELD(s, index,
+            CRTC_VERTICAL_INTERRUPT1_CONTROL,
+            CRTC_VERTICAL_INTERRUPT1_INT_ENABLE)) {
+        dce_int_ext(s, index, IV_EXTID_VERTICAL_INTERRUPT1);
+    }
+    if (DCE_READ_FIELD(s, index,
+            CRTC_VERTICAL_INTERRUPT2_CONTROL,
+            CRTC_VERTICAL_INTERRUPT2_INT_ENABLE)) {
+        dce_int_ext(s, index, IV_EXTID_VERTICAL_INTERRUPT2);
+    }
 }
 
 static void dce_crtc_process(dce_state_t *s, uint32_t index)

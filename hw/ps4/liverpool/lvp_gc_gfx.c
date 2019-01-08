@@ -208,10 +208,10 @@ static void cp_handle_pm4_it_event_write_eop(
     case 0: // 00: None
         break;
     case 1: // 01: Send Interrupt Only
-        liverpool_gc_ih_push_iv(ih, vmid, GBASE_IH_GFX_EOP, 0);
+        liverpool_gc_ih_push_iv(ih, vmid, IV_SRCID_GFX_EOP, 0);
         break;
     case 2: // 10: Send Interrupt when Write Confirm is received from the MC.
-        liverpool_gc_ih_push_iv(ih, vmid, GBASE_IH_GFX_EOP, 0);
+        liverpool_gc_ih_push_iv(ih, vmid, IV_SRCID_GFX_EOP, 0);
         break;
     }
 

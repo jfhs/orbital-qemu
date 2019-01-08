@@ -407,7 +407,7 @@ static void liverpool_gc_samu_doorbell(LiverpoolGCState *s, uint32_t value)
     }
 
     s->samu_ix[ixSAM_IH_AM32_CPU_INT_STATUS] |= 1;
-    liverpool_gc_ih_push_iv(&s->ih, 0, GBASE_IH_SAM, 0 /* TODO */);
+    liverpool_gc_ih_push_iv(&s->ih, 0, IV_SRCID_SAM, 0 /* TODO */);
 }
 
 static void liverpool_gc_mmio_write(
