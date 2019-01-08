@@ -1,4 +1,5 @@
 obj-y += sam/
+obj-y += lvp_gc_dce.o
 obj-y += lvp_gc_dce_d.o
 obj-y += lvp_gc_gart.o
 obj-y += lvp_gc_gfx_d.o

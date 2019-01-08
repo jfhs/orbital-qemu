@@ -23,30 +23,30 @@
 #include "qemu/osdep.h"
 
 // Interrupt handlers
-#define GBASE_IH_DCE_EVENT_UPDATE     0x07
-#define GBASE_IH_DCE_EVENT_PFLIP0     0x08
-#define GBASE_IH_DCE_EVENT_PFLIP1     0x0A
-#define GBASE_IH_DCE_EVENT_PFLIP2     0x0C
-#define GBASE_IH_DCE_EVENT_PFLIP3     0x0E
-#define GBASE_IH_DCE_EVENT_PFLIP4     0x10
-#define GBASE_IH_DCE_EVENT_PFLIP5     0x12
-#define GBASE_IH_DCE_EVENT_CRTC_LINE  0x13
-#define GBASE_IH_DCE_SCANIN           0x34
-#define GBASE_IH_DCE_SCANIN_ERROR     0x35
-#define GBASE_IH_SAM                  0x98
-#define GBASE_IH_ACP                  0xA2
-#define GBASE_IH_GFX_EOP              0xB5
-#define GBASE_IH_GFX_PRIV_REG         0xB8
-#define GBASE_IH_GFX_PRIV_INST        0xB9
+#define GBASE_IH_DCE_EVENT_UPDATE     0x07  // 7
+#define GBASE_IH_DCE_EVENT_PFLIP0     0x08  // 8
+#define GBASE_IH_DCE_EVENT_PFLIP1     0x0A  // 10
+#define GBASE_IH_DCE_EVENT_PFLIP2     0x0C  // 12
+#define GBASE_IH_DCE_EVENT_PFLIP3     0x0E  // 14
+#define GBASE_IH_DCE_EVENT_PFLIP4     0x10  // 16
+#define GBASE_IH_DCE_EVENT_PFLIP5     0x12  // 18
+#define GBASE_IH_DCE_EVENT_CRTC_LINE  0x13  // 19
+#define GBASE_IH_DCE_SCANIN           0x34  // 52
+#define GBASE_IH_DCE_SCANIN_ERROR     0x35  // 53
+#define GBASE_IH_UVD_TRAP             0x7C  // 124
+#define GBASE_IH_GMC_VM_FAULT0        0x92  // 146
+#define GBASE_IH_GMC_VM_FAULT1        0x93  // 147
+#define GBASE_IH_SAM                  0x98  // 152
+#define GBASE_IH_ACP                  0xA2  // 162
+#define GBASE_IH_GFX_EOP              0xB5  // 181
+#define GBASE_IH_GFX_PRIV_REG         0xB8  // 184
+#define GBASE_IH_GFX_PRIV_INST        0xB9  // 185
+#define GBASE_IH_SDMA_TRAP            0xE0  // 224
 
 #define GBASE_IH_UNK0_B4              0xB4
 #define GBASE_IH_UNK0_B7              0xB7
 #define GBASE_IH_UNK0_BC              0xBC
 #define GBASE_IH_UNK0_BD              0xBD
-#define GBASE_IH_UNK0_92              0x92
-#define GBASE_IH_UNK0_93              0x93
-#define GBASE_IH_UNK1_KMD             0x7C
-#define GBASE_IH_UNK2_E0              0xE0
 #define GBASE_IH_UNK2_F0              0xF0
 #define GBASE_IH_UNK2_F3              0xF3
 #define GBASE_IH_UNK2_F5              0xF5

@@ -1,7 +1,7 @@
 /*
  * QEMU model of Liverpool's DCE device.
  *
- * Copyright (c) 2017 Alexandro Sanchez Bach
+ * Copyright (c) 2017-2019 Alexandro Sanchez Bach
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -21,7 +21,21 @@
 #define HW_PS4_LIVERPOOL_GC_DCE_H
 
 #include "qemu/osdep.h"
+#include "qemu/thread.h"
 
+/* forward declarations */
+typedef struct ih_state_t ih_state_t;
+
+/* DCE State */
+typedef struct dce_state_t {
+    QemuThread thread;
+    ih_state_t *ih;
+    uint32_t *mmio;
+} dce_state_t;
+
+/* debugging */
 const char* liverpool_gc_dce_name(uint32_t index);
+
+void *liverpool_gc_dce_thread(void *arg);
 
 #endif /* HW_PS4_LIVERPOOL_GC_DCE_H */

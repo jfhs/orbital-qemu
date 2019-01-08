@@ -143,6 +143,7 @@ static void cp_handle_pm4_it_draw_index_auto(
 static void cp_handle_pm4_it_event_write_eop(
     gfx_state_t *s, uint32_t vmid, const uint32_t *packet)
 {
+    ih_state_t *ih = s->ih;
     gart_state_t *gart = s->gart;
     void *mapped_addr;
     hwaddr mapped_size;
@@ -204,13 +205,13 @@ static void cp_handle_pm4_it_event_write_eop(
 
     // Interrupt action for the end-of-pipe event
     switch (data_cntl.int_sel) {
-    case 0: // 00
+    case 0: // 00: None
         break;
-    case 1: // 01
-        // TODO: Send Interrupt Only
+    case 1: // 01: Send Interrupt Only
+        liverpool_gc_ih_push_iv(ih, vmid, GBASE_IH_GFX_EOP, 0);
         break;
-    case 2: // 10
-        // TODO: Send Interrupt when Write Confirm is received from the MC.
+    case 2: // 10: Send Interrupt when Write Confirm is received from the MC.
+        liverpool_gc_ih_push_iv(ih, vmid, GBASE_IH_GFX_EOP, 0);
         break;
     }
 

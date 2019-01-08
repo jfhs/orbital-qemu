@@ -72,6 +72,9 @@ typedef struct LiverpoolGCState {
 
     /*** MMIO ***/
 
+    /* dce */
+    dce_state_t dce;
+
     /* gfx */
     gfx_state_t gfx;
 
@@ -459,10 +462,6 @@ static void liverpool_gc_mmio_write(
          mmVM_CONTEXT15_PAGE_TABLE_BASE_ADDR:
         liverpool_gc_gart_update_pde(s, index, value);
         break;
-    /* dce */
-    case mmCRTC_V_SYNC_A: // TODO
-        liverpool_gc_ih_push_iv(&s->ih, 0, GBASE_IH_DCE_EVENT_UPDATE, 0 /* TODO */);
-        break;
     /* gfx */
     case mmCP_PFP_UCODE_DATA:
         liverpool_gc_ucode_load(s, mmCP_PFP_UCODE_ADDR, value);
@@ -644,6 +643,8 @@ static void liverpool_gc_realize(PCIDevice *dev, Error **errp)
 
     // Engines
     liverpool_gc_ih_init(&s->ih, &s->gart, dev);
+    s->dce.ih = &s->ih;
+    s->dce.mmio = &s->mmio[0];
     s->gfx.ih = &s->ih;
     s->gfx.gart = &s->gart;
     s->gfx.mmio = &s->mmio[0];
@@ -652,7 +653,9 @@ static void liverpool_gc_realize(PCIDevice *dev, Error **errp)
     if (orbital_display_active())
         orbital_debug_gpu_mmio(s->mmio);
 
-    // Command Processor
+    // Threads
+    qemu_thread_create(&s->dce.thread, "lvp-dce",
+        liverpool_gc_dce_thread, &s->dce, QEMU_THREAD_JOINABLE);
     qemu_thread_create(&s->gfx.cp_thread, "lvp-gfx-cp",
         liverpool_gc_gfx_cp_thread, &s->gfx, QEMU_THREAD_JOINABLE);
 }
