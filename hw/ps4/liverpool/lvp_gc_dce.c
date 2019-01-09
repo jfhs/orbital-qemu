@@ -28,6 +28,10 @@
 #define DCE_READ_FIELD(s, pipe, reg, field) \
     REG_GET_FIELD(dce_reg_read(s, pipe, mm##reg), reg, field)
 
+#define DCE_WRITE_FIELD(s, pipe, reg, field, value) \
+    dce_reg_write(s, pipe, mm##reg, REG_SET_FIELD( \
+        dce_reg_read(s, pipe, mm##reg), reg, field, value))
+
 static inline uint32_t dce_reg_read(dce_state_t *s,
     uint32_t pipe, uint32_t index)
 {
@@ -146,15 +150,35 @@ static void dce_pipe_process(dce_state_t *s, uint32_t index)
 {
     dce_crtc_state_t *crtc;
 
+    if (DCE_READ_FIELD(s, index, CRTC_DOUBLE_BUFFER_CONTROL, CRTC_UPDATE_PENDING)) {
+        DCE_WRITE_FIELD(s, index, CRTC_DOUBLE_BUFFER_CONTROL, CRTC_UPDATE_PENDING, 0);
+        printf("Disabled CRTC_UPDATE_PENDING!\n");
+    }
+    if (DCE_READ_FIELD(s, index, SCL_UPDATE, SCL_UPDATE_PENDING)) {
+        DCE_WRITE_FIELD(s, index, SCL_UPDATE, SCL_UPDATE_PENDING, 0);
+        printf("Disabled SCL_UPDATE_PENDING!\n");
+    }
+    if (DCE_READ_FIELD(s, index, GRPH_UPDATE, GRPH_SURFACE_UPDATE_PENDING)) {
+        DCE_WRITE_FIELD(s, index, GRPH_UPDATE, GRPH_SURFACE_UPDATE_PENDING, 0);
+        printf("Disabled GRPH_SURFACE_UPDATE_PENDING!\n");
+        // TODO: This register is cleared after double buffering is done.
+        // TODO: This signal also goes to both the RBBM wait_until and to the CP_RTS_discrete inputs.
+    }
+
+    // Page flips
     crtc = &s->crtc[index];
-    if (!crtc->control.master_en)
-        return;
+    /*if (!crtc->control.master_en)
+        return;*/
 
     if (dce_reg_read(s, index, mmGRPH_X_END) <= 320) // TODO
         return;
 
     if (crtc->flip_pending) {
         crtc->flip_pending = false;
+
+        // TODO: The driver wants to receive VUPDATE's from pipe #0.
+        // No idea why this is necessary, but lets play along for now.
+        dce_int_vupdate(s, 0);
 
         if (DCE_READ_FIELD(s, index,
                 CRTC_INTERRUPT_CONTROL,

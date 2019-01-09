@@ -66,7 +66,7 @@
 #define IV_SRCID_UNK2_F0                 0xF0
 #define IV_SRCID_UNK2_F3                 0xF3
 #define IV_SRCID_UNK2_F5                 0xF5
-#define IV_SRCID_UNK3_E9                 0xE9
+#define IV_SRCID_UNK3_GUI_IDLE           0xE9
 #define IV_SRCID_UNK4_EF                 0xEF
 
 // IV EXT identifiers
