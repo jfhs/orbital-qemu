@@ -228,7 +228,7 @@ static void cp_handle_pm4_it_indirect_buffer(
     hwaddr mapped_size;
 
     ib_base_lo = packet[1];
-    ib_base_hi = packet[2];
+    ib_base_hi = packet[2] & 0xFF;
     ib_base = ib_base_lo | (ib_base_hi << 32);
     ib_size = packet[3] & 0xFFFFF;
     ib_vmid = (packet[3] >> 24) & 0xF;
@@ -254,7 +254,7 @@ static void cp_handle_pm4_it_indirect_buffer_const(
     hwaddr mapped_size;
 
     ib_base_lo = packet[1];
-    ib_base_hi = packet[2];
+    ib_base_hi = packet[2] & 0xFF;
     ib_base = ib_base_lo | (ib_base_hi << 32);
     ib_size = packet[3] & 0xFFFFF;
     ib_vmid = (packet[3] >> 24) & 0xF;
