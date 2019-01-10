@@ -328,10 +328,13 @@ static uint64_t liverpool_gc_mmio_read(
         return s->dce.crtc[0].control.master_en;
     case mmCRTC1_CRTC_MASTER_EN:
         return s->dce.crtc[1].control.master_en;
-    case mmCRTC_BLANK_CONTROL:
+    case mmCRTC_BLANK_CONTROL: {
+        static uint32_t blank = 0;
         value = 0;
-        value = REG_SET_FIELD(value, CRTC_BLANK_CONTROL, CRTC_CURRENT_BLANK_STATE, 1);
+        blank ^= 1;
+        value = REG_SET_FIELD(value, CRTC_BLANK_CONTROL, CRTC_CURRENT_BLANK_STATE, blank);
         return value; // TODO
+    }
     case mmCRTC_STATUS:
         value = 1;
         return value; // TODO
@@ -349,8 +352,11 @@ static uint64_t liverpool_gc_mmio_read(
         value = REG_SET_FIELD(value, PLL_CNTL, PLL_LOCKED, 1);
         return value;
     /* gfx */
-    case mmGRBM_STATUS:
-        return 0; // TODO
+    case mmGRBM_STATUS: {
+        static uint32_t grbm_status = 0;
+        grbm_status ^= REG_SET_FIELD(grbm_status, GRBM_STATUS, GUI_ACTIVE, 1);
+        return grbm_status; // TODO
+    }
     case mmCP_RB0_RPTR:
         return s->gfx.cp_rb[0].rptr;
     case mmCP_RB1_RPTR:
