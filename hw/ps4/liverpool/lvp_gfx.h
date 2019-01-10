@@ -24,7 +24,7 @@
 #include "qemu/thread.h"
 #include "exec/hwaddr.h"
 
-#include "lvp_gc_gfx_shader.h"
+#include "lvp_gfx_shader.h"
 #include "gca/gfx_7_2_enum.h"
 
 /* forward declarations */

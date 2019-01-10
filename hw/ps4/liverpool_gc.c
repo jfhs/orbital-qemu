@@ -25,11 +25,11 @@
 #include "ui/orbital.h"
 
 #include "liverpool_gc_mmio.h"
-#include "liverpool/lvp_gc_dce.h"
-#include "liverpool/lvp_gc_gart.h"
-#include "liverpool/lvp_gc_gfx.h"
-#include "liverpool/lvp_gc_ih.h"
-#include "liverpool/lvp_gc_samu.h"
+#include "liverpool/lvp_dce.h"
+#include "liverpool/lvp_gart.h"
+#include "liverpool/lvp_gfx.h"
+#include "liverpool/lvp_ih.h"
+#include "liverpool/lvp_samu.h"
 
 #include "ui/console.h"
 #include "hw/display/vga.h"

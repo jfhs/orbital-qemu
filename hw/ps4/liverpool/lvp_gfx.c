@@ -17,9 +17,9 @@
  * License along with this library; if not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "lvp_gc_gfx.h"
-#include "lvp_gc_gart.h"
-#include "lvp_gc_ih.h"
+#include "lvp_gfx.h"
+#include "lvp_gart.h"
+#include "lvp_ih.h"
 #include "hw/ps4/liverpool/pm4.h"
 #include "hw/ps4/macros.h"
 #include "gca/gfx_7_2_d.h"

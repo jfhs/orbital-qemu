@@ -20,7 +20,7 @@
  */
 
 #include "sbl_authmgr.h"
-#include "hw/ps4/liverpool/lvp_gc_samu.h"
+#include "hw/ps4/liverpool/lvp_samu.h"
 #include "exec/address-spaces.h"
 
 #define CHUNK_TABLE_MAX_SIZE 0x4000

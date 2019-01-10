@@ -17,8 +17,8 @@
  * License along with this library; if not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "lvp_gc_ih.h"
-#include "lvp_gc_gart.h"
+#include "lvp_ih.h"
+#include "lvp_gart.h"
 #include "hw/pci/pci.h"
 
 #include "qemu-common.h"

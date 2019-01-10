@@ -17,7 +17,7 @@
  * License along with this library; if not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "lvp_gc_samu.h"
+#include "lvp_samu.h"
 #include "qapi/error.h"
 #include "crypto/hash.h"
 #include "crypto/random.h"

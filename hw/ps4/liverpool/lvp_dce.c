@@ -17,8 +17,8 @@
  * License along with this library; if not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "lvp_gc_dce.h"
-#include "lvp_gc_ih.h"
+#include "lvp_dce.h"
+#include "lvp_ih.h"
 #include "hw/ps4/liverpool_gc_mmio.h"
 #include "dce/dce_8_0_d.h"
 
