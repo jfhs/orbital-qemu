@@ -1,7 +1,7 @@
 /*
  * QEMU-Orbital user interface
  *
- * Copyright (c) 2017-2018 Alexandro Sanchez Bach
+ * Copyright (c) 2017-2018 Alexandro Sanchez Bach, jfhs
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -22,51 +22,37 @@
  * THE SOFTWARE.
  */
 
-#ifndef UI_ORBITAL_H_
-#define UI_ORBITAL_H_
+#ifndef UI_ORBITAL_PROCS_H_
+#define UI_ORBITAL_PROCS_H_
 
 #include "qemu/osdep.h"
 #include "qemu-common.h"
 
-enum ui_device_t {
-    UI_DEVICE_UNKNOWN = 0,
-    // Aeolia
-    UI_DEVICE_AEOLIA_ACPI,
-    UI_DEVICE_AEOLIA_GBE,
-    UI_DEVICE_AEOLIA_AHCI,
-    UI_DEVICE_AEOLIA_SDHCI,
-    UI_DEVICE_AEOLIA_PCIE,
-    UI_DEVICE_AEOLIA_DMAC,
-    UI_DEVICE_AEOLIA_DDR3,
-    UI_DEVICE_AEOLIA_XHCI,
-    // Liverpool
-    UI_DEVICE_LIVERPOOL_GC,
-    UI_DEVICE_LIVERPOOL_HDAC,
-};
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-enum {
-    UI_DEVICE_BAR0,
-    UI_DEVICE_BAR1,
-    UI_DEVICE_BAR2,
-    UI_DEVICE_BAR3,
-    UI_DEVICE_BAR4,
-    UI_DEVICE_BAR5,
-    UI_DEVICE_MSI,
-};
+struct orbital_procs_t;
 
-enum {
-    UI_DEVICE_READ,
-    UI_DEVICE_WRITE,
-};
+typedef struct orbital_procs_cpu_data {
+    uint64_t gs;
+    uint64_t thread_pointer;
+    uint64_t proc_pointer;
+    uint64_t pid;
+    uint64_t idle_counter;
+    char proc_name[256];
+} orbital_procs_cpu_data;
 
-bool orbital_display_active(void);
+struct orbital_procs_t* orbital_procs_create(void);
 
-void orbital_log_uart(int index, char ch);
+void orbital_procs_destroy(struct orbital_procs_t *procs);
 
-void orbital_log_event(int device, int component, int event);
+void orbital_procs_draw(struct orbital_procs_t *procs, const char *title, bool* p_open);
 
-void orbital_debug_gpu_mmio(uint32_t *mmio);
+void orbital_procs_update(struct orbital_procs_t *procs, uint32_t cpuid, orbital_procs_cpu_data data);
 
-void orbital_update_cpu_procs(int cpuid, uint64_t gs, uint64_t thread_ptr, uint64_t proc_ptr, uint64_t pid, const char* name);
+#ifdef __cplusplus
+} // extern "C"
+#endif
 
-#endif // UI_ORBITAL_H_
+#endif // UI_ORBITAL_PROCS_H_
