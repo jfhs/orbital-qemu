@@ -62,8 +62,33 @@
 #define ICC_CMD_QUERY_SERVICE                                 0x01
 #define ICC_CMD_QUERY_SERVICE_VERSION                       0x0000
 #define ICC_CMD_QUERY_BOARD                                   0x02
-#define ICC_CMD_QUERY_BOARD_OP_BOARD_ID                     0x0005
-#define ICC_CMD_QUERY_BOARD_OP_VERSION                      0x0006
+#define ICC_CMD_QUERY_BOARD_OP_GET_MAC_ADDR                 0x0001
+#define ICC_CMD_QUERY_BOARD_OP_GET_BD_ADDR                  0x0002
+#define ICC_CMD_QUERY_BOARD_OP_SET_BD_ADDR                  0x0003
+#define ICC_CMD_QUERY_BOARD_OP_CLEAR_BD_ADDR                0x0004
+#define ICC_CMD_QUERY_BOARD_OP_GET_BOARD_ID                 0x0005
+#define ICC_CMD_QUERY_BOARD_OP_GET_FW_VERSION               0x0006
+#define ICC_CMD_QUERY_BOARD_OP_GET_ERROR_LOG                0x0007
+#define ICC_CMD_QUERY_BOARD_OP_CLEAR_ERROR_LOG              0x0008
+#define ICC_CMD_QUERY_BOARD_OP_GET_DDR_CAPACITY             0x0009
+#define ICC_CMD_QUERY_BOARD_OP_SET_VDD                      0x000A
+#define ICC_CMD_QUERY_BOARD_OP_SAVE_CONTEXT                 0x000B
+#define ICC_CMD_QUERY_BOARD_OP_LOAD_CONTEXT                 0x000C
+#define ICC_CMD_QUERY_BOARD_OP_GET_DEVLAN                   0x000D
+#define ICC_CMD_QUERY_BOARD_OP_SET_DEVLAN                   0x000E
+#define ICC_CMD_QUERY_BOARD_OP_GET_CPU_INFOBIT              0x000F
+#define ICC_CMD_QUERY_BOARD_OP_SET_CPU_INFOBIT              0x0010
+#define ICC_CMD_QUERY_BOARD_OP_SET_DOWNLOAD_MODE            0x0011
+#define ICC_CMD_QUERY_BOARD_OP_GET_BDD_CHUCKING_STATE       0x0012
+#define ICC_CMD_QUERY_BOARD_OP_SET_PCIE_LINKDOWN_REC_MODE   0x0013
+#define ICC_CMD_QUERY_BOARD_OP_GET_CP_MODE                  0x0014
+#define ICC_CMD_QUERY_BOARD_OP_SET_CP_MODE                  0x0015
+#define ICC_CMD_QUERY_BOARD_OP_GET_HDMI_CONFIG              0x0016
+#define ICC_CMD_QUERY_BOARD_OP_GET_OS_DEBUGINFO             0x0017
+#define ICC_CMD_QUERY_BOARD_OP_SET_OS_DEBUGINFO             0x0018
+#define ICC_CMD_QUERY_BOARD_OP_SET_ACIN_DET_MODE            0x0019
+#define ICC_CMD_QUERY_BOARD_OP_GET_L2_SWITCH_DETECT         0x001B
+#define ICC_CMD_QUERY_BOARD_OP_GET_SYSTEM_SUSPEND_STATE     0x001C
 #define ICC_CMD_QUERY_BOARD_OP_HDMI_CONFIGURATION           0x0016
 #define ICC_CMD_QUERY_NVRAM                                   0x03
 #define ICC_CMD_QUERY_NVRAM_OP_WRITE                        0x0000
@@ -350,10 +375,10 @@ static void icc_query(AeoliaPCIEState *s)
         break;
     case ICC_CMD_QUERY_BOARD:
         switch (query->minor) {
-        case ICC_CMD_QUERY_BOARD_OP_BOARD_ID:
+        case ICC_CMD_QUERY_BOARD_OP_GET_BOARD_ID:
             icc_query_board_id(s, reply);
             break;
-        case ICC_CMD_QUERY_BOARD_OP_VERSION:
+        case ICC_CMD_QUERY_BOARD_OP_GET_FW_VERSION:
             icc_query_board_version(s, reply);
             break;
         default:

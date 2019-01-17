@@ -559,6 +559,7 @@ static void hax_update_orbital_cpu_procs(CPUArchState *env, CPUState *cpu) {
     if (orbital_display_active()) {
         orbital_update_cpu_procs(cpu->cpu_index, gs, thread_ptr, proc_ptr, pid, name);
     }
+}
 
 /*
  * Ask hax kernel module to run the CPU for us till:
