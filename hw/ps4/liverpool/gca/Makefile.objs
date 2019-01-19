@@ -1,0 +1,2 @@
+obj-y += gcn_disasm.o
+obj-y += gcn_parser.o
