@@ -297,6 +297,8 @@ static void generate_hdd_sce_partition_img(BlockBackend* blk, uint64_t size,
         blk_pwrite(blk, offset, buffer, count, 0);
         offset += count;
     }
+
+    fclose(file);
 }
 
 static void generate_hdd_sce(BlockBackend* blk, uint64_t size,
