@@ -1,7 +1,8 @@
 /*
  * QEMU-Orbital user interface
  *
- * Copyright (c) 2017-2018 Alexandro Sanchez Bach, jfhs
+ * Copyright (c) 2017-2018 Alexandro Sanchez Bach
+ * Copyright (c) 2017-2018 jfhs
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal

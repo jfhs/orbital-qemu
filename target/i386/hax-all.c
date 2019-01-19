@@ -541,7 +541,7 @@ static void hax_update_orbital_cpu_procs(CPUArchState *env, CPUState *cpu) {
     uint64_t proc_ptr = 0;
     uint32_t pid = 0;
     char namebuf[21];
-    memset(namebuf, 0, 21);
+    memset(namebuf, 0, sizeof(namebuf));
     char* name = NULL;
     if (gs) {
         target_memory_rw_debug(cpu, gs, (uint8_t*)&thread_ptr, 8, false);

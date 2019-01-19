@@ -89,7 +89,6 @@
 #define ICC_CMD_QUERY_BOARD_OP_SET_ACIN_DET_MODE            0x0019
 #define ICC_CMD_QUERY_BOARD_OP_GET_L2_SWITCH_DETECT         0x001B
 #define ICC_CMD_QUERY_BOARD_OP_GET_SYSTEM_SUSPEND_STATE     0x001C
-#define ICC_CMD_QUERY_BOARD_OP_HDMI_CONFIGURATION           0x0016
 #define ICC_CMD_QUERY_NVRAM                                   0x03
 #define ICC_CMD_QUERY_NVRAM_OP_WRITE                        0x0000
 #define ICC_CMD_QUERY_NVRAM_OP_READ                         0x0001
