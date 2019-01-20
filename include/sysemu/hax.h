@@ -51,6 +51,9 @@ int hax_remove_breakpoint(CPUState *cpu, target_ulong addr,
                           target_ulong len, int type);
 void hax_remove_all_breakpoints(CPUState *cpu);
 
+bool hax_get_gsbase(CPUArchState *env, CPUState *cpu, uint64_t *gs);
+int hax_target_memory_rw_debug(CPUState *cpu, target_ulong addr, uint8_t *buf, int len, bool is_write);
+
 #endif
 
 #ifdef CONFIG_HAX

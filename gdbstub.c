@@ -47,17 +47,6 @@
 #define GDB_ATTACHED "1"
 #endif
 
-static inline int target_memory_rw_debug(CPUState *cpu, target_ulong addr,
-                                         uint8_t *buf, int len, bool is_write)
-{
-    CPUClass *cc = CPU_GET_CLASS(cpu);
-
-    if (cc->memory_rw_debug) {
-        return cc->memory_rw_debug(cpu, addr, buf, len, is_write);
-    }
-    return cpu_memory_rw_debug(cpu, addr, buf, len, is_write);
-}
-
 /* Return the GDB index for a given vCPU state.
  *
  * For user mode this is simply the thread id. In system mode GDB
@@ -1145,7 +1134,7 @@ static int gdb_handle_packet(GDBState *s, const char *line_buf)
             break;
         }
 
-        if (target_memory_rw_debug(s->g_cpu, addr, mem_buf, len, false) != 0) {
+        if (hax_target_memory_rw_debug(s->g_cpu, addr, mem_buf, len, false) != 0) {
             put_packet (s, "E14");
         } else {
             memtohex(buf, mem_buf, len);
@@ -1166,7 +1155,7 @@ static int gdb_handle_packet(GDBState *s, const char *line_buf)
             break;
         }
         hextomem(mem_buf, p, len);
-        if (target_memory_rw_debug(s->g_cpu, addr, mem_buf, len,
+        if (hax_target_memory_rw_debug(s->g_cpu, addr, mem_buf, len,
                                    true) != 0) {
             put_packet(s, "E14");
         } else {

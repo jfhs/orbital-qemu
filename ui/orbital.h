@@ -28,7 +28,12 @@
 #include "qemu/osdep.h"
 #include "qemu-common.h"
 
-enum ui_device_t {
+struct thread;
+struct orbital_procs_cpu_data;
+struct orbital_proc_data;
+
+enum ui_device_t
+{
     UI_DEVICE_UNKNOWN = 0,
     // Aeolia
     UI_DEVICE_AEOLIA_ACPI,
@@ -59,14 +64,24 @@ enum {
     UI_DEVICE_WRITE,
 };
 
+// Status getters
 bool orbital_display_active(void);
+bool orbital_executing_processes_active(void);
+bool orbital_process_list_active(void);
 
+// Logging
 void orbital_log_uart(int index, char ch);
-
 void orbital_log_event(int device, int component, int event);
 
+// Debugging
 void orbital_debug_gpu_mmio(uint32_t *mmio);
 
-void orbital_update_cpu_procs(int cpuid, uint64_t gs, uint64_t thread_ptr, uint64_t proc_ptr, uint64_t pid, const char* name);
+// UI helpers
+// TODO: Refactor. We need these atm because we can't access the 'ui' variable
+void orbital_update_cpu_procs(int cpuid, struct orbital_procs_cpu_data *data);
+void orbital_update_cpu_procs_list_clear(void);
+void orbital_update_cpu_procs_list_add_proc(struct orbital_proc_data *p);
+void orbital_update_cpu_procs_list_add_proc_thread(int owner_pid, struct thread *td);
+bool orbital_should_update_procs(void);
 
 #endif // UI_ORBITAL_H_
