@@ -23,7 +23,14 @@
 #include "gcn.h"
 #include "gcn_parser.h"
 
+#include <stdio.h>
+
 typedef struct gcn_disasm_t {
+    gcn_instruction_t *cur_insn;
+    /* configuration */
+    FILE *stream;
+    size_t op_indent;
+    size_t op_padding;
 } gcn_disasm_t;
 
 /* callbacks */

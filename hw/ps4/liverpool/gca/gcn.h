@@ -367,8 +367,14 @@ enum gcn_opcode_vop3a_t {
 
 /* operands */
 
-enum gcn_operand_t {
+enum gcn_operand_scalar_t {
+    OP_SGPR0   = 0,
+    OP_SGPR103 = 103,
+    OP_TTMP0   = 112,
+    OP_TTMP11  = 123,
     OP_LITERAL = 255,
+    OP_VGPR0   = 256,
+    OP_VGPR255 = 511,
 };
 
 /* encodings */

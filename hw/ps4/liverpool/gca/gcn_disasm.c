@@ -19,23 +19,213 @@
 
 #include "gcn_disasm.h"
 
+#include <assert.h>
 #include <stdio.h>
 #include <string.h>
 
+#define INSN_SIZE 256
+
 #define UNUSED(arg) (void)(arg)
+
+static const char* get_type_suffix(gcn_operand_type_t type)
+{
+    switch (type) {
+    case GCN_TYPE_ANY:
+        return "";
+    case GCN_TYPE_B32:
+        return "_b32";
+    case GCN_TYPE_B64:
+        return "_b64";
+    case GCN_TYPE_F16:
+        return "_f16";
+    case GCN_TYPE_F32:
+        return "_f32";
+    case GCN_TYPE_F64:
+        return "_f64";
+    case GCN_TYPE_I16:
+        return "_i16";
+    case GCN_TYPE_I24:
+        return "_i24";
+    case GCN_TYPE_I32:
+        return "_i32";
+    case GCN_TYPE_I64:
+        return "_i64";
+    case GCN_TYPE_U16:
+        return "_u16";
+    case GCN_TYPE_U24:
+        return "_u24";
+    case GCN_TYPE_U32:
+        return "_u32";
+    case GCN_TYPE_U64:
+        return "_u64";
+    default:
+        return "_???";
+    }
+}
+
+static const char* get_operand_spr(uint32_t id)
+{
+    switch (id) {
+    case 104:
+        return "fltscr_lo";
+    case 105:
+        return "fltscr_hi";
+    case 106:
+        return "vcc_lo";
+    case 107:
+        return "vcc_hi";
+    case 108:
+        return "tba_lo";
+    case 109:
+        return "tba_hi";
+    case 110:
+        return "tma_lo";
+    case 111:
+        return "tma_hi";
+    case 124:
+        return "m0";
+    case 126:
+        return "exec_lo";
+    case 127:
+        return "exec_hi";
+    case 240:
+        return "0.5";
+    case 241:
+        return "-0.5";
+    case 242:
+        return "1.0";
+    case 243:
+        return "-1.0";
+    case 244:
+        return "2.0";
+    case 245:
+        return "-2.0";
+    case 246:
+        return "4.0";
+    case 247:
+        return "-4.0";
+    default:
+        return "???";
+    }
+}
 
 void gcn_disasm_init(gcn_disasm_t *ctxt)
 {
     memset(ctxt, 0, sizeof(gcn_disasm_t));
+    
+    /* configuration */
+    ctxt->stream = stdout;
+    ctxt->op_indent = 2;
+    ctxt->op_padding = 16;
+    assert(ctxt->op_indent < 32);
+    assert(ctxt->op_padding < 32);
 }
 
 /* utilities */
 
 static void disasm_print(gcn_disasm_t *ctxt, const char *name)
 {
-    UNUSED(ctxt);
+    fprintf(ctxt->stream, "> %s\n", name);
+}
 
-    printf("> %s\n", name);
+static void disasm_opcode_indent(gcn_disasm_t *ctxt, char *buf)
+{
+    char indent = ' ';
+
+    memset(buf, indent, ctxt->op_indent);
+    buf[ctxt->op_indent] = '\x00';
+}
+
+static void disasm_opcode_padding(gcn_disasm_t *ctxt, char *buf)
+{
+    char indent = ' ';
+    int pending;
+    int oplen;
+    
+    oplen = strlen(buf);
+    pending = ctxt->op_indent + ctxt->op_padding - oplen;
+    while (pending-- > 0)
+        buf[oplen++] = indent;
+    buf[oplen] = '\x00';
+}
+
+static void disasm_opcode(gcn_disasm_t *ctxt,
+    char *buf, const char *name)
+{
+    gcn_instruction_t *insn = ctxt->cur_insn;
+
+    disasm_opcode_indent(ctxt, buf);
+    strcat(buf, name);
+    if (insn->type_dst != insn->type_src) {
+        strcat(buf, get_type_suffix(insn->type_dst));
+    }
+    if (insn->type_dst != GCN_TYPE_ANY) {
+        strcat(buf, get_type_suffix(insn->type_src));
+    }
+    disasm_opcode_padding(ctxt, buf);
+}
+
+static void disasm_operand(gcn_disasm_t *ctxt,
+    char *buf, gcn_operand_t *op)
+{
+    gcn_instruction_t *insn = ctxt->cur_insn;
+    gcn_operand_type_t type;
+    char tmp[32];
+
+    type = (op->flags & GCN_FLAGS_OP_DEST) ? insn->type_dst : insn->type_src;
+    switch (op->kind) {
+    case GCN_KIND_SGPR:
+        snprintf(tmp, sizeof(tmp), "s%d", op->id);
+        strcat(buf, tmp);
+        break;
+    case GCN_KIND_VGPR:
+        snprintf(tmp, sizeof(tmp), "v%d", op->id);
+        strcat(buf, tmp);
+        break;
+    case GCN_KIND_TTMP:
+        snprintf(tmp, sizeof(tmp), "ttmp%d", op->id);
+        strcat(buf, tmp);
+        break;
+    case GCN_KIND_IMM:
+        if (type == GCN_TYPE_F16 || type == GCN_TYPE_F32 || type == GCN_TYPE_F64)
+            snprintf(tmp, sizeof(tmp), "%lg", op->const_f64);
+        else
+            snprintf(tmp, sizeof(tmp), "%ld", op->const_u64);
+        strcat(buf, tmp);
+        break;
+    case GCN_KIND_LIT:
+        if (type == GCN_TYPE_F16 || type == GCN_TYPE_F32 || type == GCN_TYPE_F64)
+            snprintf(tmp, sizeof(tmp), "lit(%lg)", op->const_f64);
+        else
+            snprintf(tmp, sizeof(tmp), "lit(%ld)", op->const_u64);
+        strcat(buf, tmp);
+        break;
+    case GCN_KIND_SPR:
+        strcat(buf, get_operand_spr(op->id));
+        break;
+    /* exp */
+    case GCN_KIND_EXP_MRT:
+        snprintf(tmp, sizeof(tmp), "mrt%d", op->id);
+        strcat(buf, tmp);
+        break;
+    case GCN_KIND_EXP_POS:
+        snprintf(tmp, sizeof(tmp), "pos%d", op->id);
+        strcat(buf, tmp);
+        break;
+    case GCN_KIND_EXP_PARAM:
+        snprintf(tmp, sizeof(tmp), "param%d", op->id);
+        strcat(buf, tmp);
+        break;
+    case GCN_KIND_EXP_MRTZ:
+        strcat(buf, "mrtz");
+        break;
+    case GCN_KIND_EXP_NULL:
+        strcat(buf, "null");
+        break;
+    case GCN_KIND_ANY:
+    default:
+        strcat(buf, "???");
+    }
 }
 
 /* disassembly */
@@ -57,8 +247,14 @@ static void disasm_sopk(gcn_disasm_t *ctxt,
 static void disasm_sop1(gcn_disasm_t *ctxt,
     gcn_instruction_t *insn, const char *name)
 {
-    UNUSED(insn);
-    disasm_print(ctxt, name);
+    char buf[INSN_SIZE];
+
+    ctxt->cur_insn = insn;
+    disasm_opcode(ctxt, buf, name);
+    disasm_operand(ctxt, buf, &insn->dst);
+    strcat(buf, ", ");
+    disasm_operand(ctxt, buf, &insn->src0);
+    disasm_print(ctxt, buf);
 }
 
 static void disasm_sopc(gcn_disasm_t *ctxt,
@@ -71,8 +267,39 @@ static void disasm_sopc(gcn_disasm_t *ctxt,
 static void disasm_sopp(gcn_disasm_t *ctxt,
     gcn_instruction_t *insn, const char *name)
 {
-    UNUSED(insn);
-    disasm_print(ctxt, name);
+    char buf[INSN_SIZE];
+
+    ctxt->cur_insn = insn;
+    disasm_opcode(ctxt, buf, name);
+    disasm_print(ctxt, buf);
+}
+
+static void disasm_vop1(gcn_disasm_t *ctxt,
+    gcn_instruction_t *insn, const char *name)
+{
+    char buf[INSN_SIZE];
+
+    ctxt->cur_insn = insn;
+    disasm_opcode(ctxt, buf, name);
+    disasm_operand(ctxt, buf, &insn->dst);
+    strcat(buf, ", ");
+    disasm_operand(ctxt, buf, &insn->src0);
+    disasm_print(ctxt, buf);
+}
+
+static void disasm_vop2(gcn_disasm_t *ctxt,
+    gcn_instruction_t *insn, const char *name)
+{
+    char buf[INSN_SIZE];
+
+    ctxt->cur_insn = insn;
+    disasm_opcode(ctxt, buf, name);
+    disasm_operand(ctxt, buf, &insn->dst);
+    strcat(buf, ", ");
+    disasm_operand(ctxt, buf, &insn->src0);
+    strcat(buf, ", ");
+    disasm_operand(ctxt, buf, &insn->src1);
+    disasm_print(ctxt, buf);
 }
 
 /* callbacks */
@@ -102,19 +329,36 @@ static void disasm_sopp(gcn_disasm_t *ctxt,
     };
 #define DISASM_VOP1(name) \
     DISASM_CALLBACK(name) { \
-        UNUSED(insn); \
-        disasm_print(ctxt, #name); \
+        disasm_vop1(ctxt, insn, #name); \
     };
 #define DISASM_VOP2(name) \
     DISASM_CALLBACK(name) { \
-        UNUSED(insn); \
-        disasm_print(ctxt, #name); \
+        disasm_vop2(ctxt, insn, #name); \
     };
 #define DISASM_VOPC(name) \
     DISASM_CALLBACK(name) { \
         UNUSED(insn); \
         disasm_print(ctxt, #name); \
     };
+
+// Export Instruction
+DISASM_CALLBACK(exp) {
+    char buf[INSN_SIZE];
+
+    disasm_opcode(ctxt, buf, "exp");
+    disasm_operand(ctxt, buf, &insn->dst);
+    strcat(buf, ", ");
+    disasm_operand(ctxt, buf, &insn->src0);
+    strcat(buf, ", ");
+    disasm_operand(ctxt, buf, &insn->src1);
+    strcat(buf, ", ");
+    disasm_operand(ctxt, buf, &insn->src2);
+    strcat(buf, ", ");
+    disasm_operand(ctxt, buf, &insn->src3);
+    if (insn->exp.done)
+        strcat(buf, " (done)");
+    disasm_print(ctxt, buf);
+}
 
 // SOP2 Instructions
 DISASM_SOP2(s_add);
@@ -178,7 +422,12 @@ DISASM_SOPP(s_trap);
 DISASM_SOPP(s_ttracedata);
 DISASM_SOPP(s_waitcnt);
 
+// VOP1 Instructions
+DISASM_VOP1(v_mov);
+DISASM_VOP1(v_cvt);
+
 // VOP2 Instructions
+DISASM_VOP2(v_add);
 DISASM_VOP2(v_and);
 DISASM_VOP2(v_ashr);
 DISASM_VOP2(v_ashrrev);
@@ -191,13 +440,17 @@ DISASM_VOP2(v_mac);
 DISASM_VOP2(v_madak);
 DISASM_VOP2(v_madmk);
 DISASM_VOP2(v_max);
+DISASM_VOP2(v_max_legacy);
 DISASM_VOP2(v_min);
+DISASM_VOP2(v_min_legacy);
 DISASM_VOP2(v_mul);
 DISASM_VOP2(v_mul_hi);
 DISASM_VOP2(v_or);
+DISASM_VOP2(v_sub);
 DISASM_VOP2(v_xor);
 
 gcn_parser_callbacks_t gcn_disasm_callbacks = {
+    .handle_exp                         = disasm_exp,
     .handle_s_add                       = disasm_s_add,
     .handle_s_addc                      = disasm_s_addc,
     .handle_s_and                       = disasm_s_and,
@@ -252,10 +505,12 @@ gcn_parser_callbacks_t gcn_disasm_callbacks = {
     .handle_s_waitcnt                   = disasm_s_waitcnt,
     .handle_s_xnor                      = disasm_s_xnor,
     .handle_s_xor                       = disasm_s_xor,
+    .handle_v_add                       = disasm_v_add,
     .handle_v_and                       = disasm_v_and,
     .handle_v_ashr                      = disasm_v_ashr,
     .handle_v_ashrrev                   = disasm_v_ashrrev,
     .handle_v_bfm                       = disasm_v_bfm,
+    .handle_v_cvt                       = disasm_v_cvt,
     .handle_v_lshl                      = disasm_v_lshl,
     .handle_v_lshlrev                   = disasm_v_lshlrev,
     .handle_v_lshr                      = disasm_v_lshr,
@@ -264,9 +519,13 @@ gcn_parser_callbacks_t gcn_disasm_callbacks = {
     .handle_v_madak                     = disasm_v_madak,
     .handle_v_madmk                     = disasm_v_madmk,
     .handle_v_max                       = disasm_v_max,
+    .handle_v_max_legacy                = disasm_v_max_legacy,
     .handle_v_min                       = disasm_v_min,
+    .handle_v_min_legacy                = disasm_v_min_legacy,
+    .handle_v_mov                       = disasm_v_mov,
     .handle_v_mul                       = disasm_v_mul,
     .handle_v_mul_hi                    = disasm_v_mul_hi,
     .handle_v_or                        = disasm_v_or,
+    .handle_v_sub                       = disasm_v_sub,
     .handle_v_xor                       = disasm_v_xor,
 };

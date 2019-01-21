@@ -29,10 +29,18 @@
 #define OP_SOPP()   0x7F
 
 #define OP_VOP2(op) (op)
-#define OP_VOP1()   0x3E
-#define OP_VOPC()   0x3F
+#define OP_VOPC()   0x3E
+#define OP_VOP1()   0x3F
 
 #define UNUSED(arg) (void)(arg)
+
+typedef struct gcn_orbis_footer_t {
+    uint8_t magic[7];
+    uint8_t unk0;
+    uint8_t unk1;
+    uint8_t size_lo;
+    uint8_t size_hi;
+} gcn_orbis_footer_t;
 
 /* helpers */
 
@@ -43,6 +51,138 @@ static uint32_t gcn_parser_read32(gcn_parser_t *ctxt)
     return 0;
 }
 
+static gcn_parser_error_t handle_operand_srcN(gcn_parser_t *ctxt,
+    gcn_operand_t *op, int32_t id)
+{
+    op->flags = 0;
+    op->flags |= GCN_FLAGS_OP_USED;
+
+    if (OP_SGPR0 <= id && id <= OP_SGPR103) {
+        op->id = id - OP_SGPR0;
+        op->kind = GCN_KIND_SGPR;
+    }
+    else if (OP_VGPR0 <= id && id <= OP_VGPR255) {
+        op->id = id - OP_VGPR0;
+        op->kind = GCN_KIND_VGPR;
+    }
+    else if (OP_TTMP0 <= id && id <= OP_TTMP11) {
+        op->id = id - OP_TTMP0;
+        op->kind = GCN_KIND_TTMP;
+    }
+    else if (128 <= id && id <= 192) {
+        op->const_u64 = id - 128;
+        op->flags |= GCN_FLAGS_OP_CONST;
+        op->kind = GCN_KIND_IMM;
+    }
+    else if (193 <= id && id <= 208) {
+        op->const_u64 = 192 - id;
+        op->flags |= GCN_FLAGS_OP_CONST;
+        op->kind = GCN_KIND_IMM;
+    }
+    else if (id == OP_LITERAL) {
+        op->const_u64 = gcn_parser_read32(ctxt);
+        op->flags |= GCN_FLAGS_OP_CONST;
+        op->kind = GCN_KIND_LIT;
+    }
+    else {
+        op->id = id;
+        op->kind = GCN_KIND_SPR;
+    }
+    return GCN_PARSER_OK;
+}
+
+static gcn_parser_error_t handle_operand_dst(gcn_parser_t *ctxt,
+    gcn_operand_t *op, int32_t id)
+{
+    gcn_parser_error_t err;
+
+    err = handle_operand_srcN(ctxt, op, id);
+    op->flags |= GCN_FLAGS_OP_DEST;
+    return err;
+}
+
+static gcn_parser_error_t handle_operand_vsrcN(gcn_parser_t *ctxt,
+    gcn_operand_t *op, int32_t id)
+{
+    UNUSED(ctxt);
+
+    if (id < 32) {
+        op->id = id;
+        op->kind = GCN_KIND_VGPR;
+        return GCN_PARSER_OK;
+    }
+    return GCN_PARSER_ERR_UNKNOWN_OPERAND;
+}
+
+static gcn_parser_error_t handle_operand_vdst(gcn_parser_t *ctxt,
+    gcn_operand_t *op, int32_t id)
+{
+    gcn_parser_error_t err;
+
+    err = handle_operand_vsrcN(ctxt, op, id);
+    op->flags |= GCN_FLAGS_OP_DEST;
+    return err;
+}
+
+static gcn_parser_error_t handle_operand_exp(gcn_parser_t *ctxt,
+    gcn_operand_t *op, int32_t id)
+{
+    UNUSED(ctxt);
+
+    if (0 <= id && id <= 7) {
+        op->id = id;
+        op->kind = GCN_KIND_EXP_MRT;
+    }
+    else if (id == 8) {
+        op->kind = GCN_KIND_EXP_MRTZ;
+    }
+    else if (id == 9) {
+        op->kind = GCN_KIND_EXP_NULL;
+    }
+    else if (12 <= id && id <= 15) {
+        op->id = id - 12;
+        op->kind = GCN_KIND_EXP_POS;
+    }
+    else if (32 <= id && id <= 63) {
+        op->id = id - 32;
+        op->kind = GCN_KIND_EXP_PARAM;
+    }
+    else {
+        return GCN_PARSER_ERR_UNKNOWN_OPERAND;
+    }
+    return GCN_PARSER_OK;
+}
+
+/* dispatch */
+
+static gcn_parser_error_t handle_op(gcn_parser_t *ctxt,
+    gcn_handler_t handler)
+{
+    gcn_instruction_t *insn = &ctxt->insn;
+
+    insn->cond = GCN_COND_ANY;
+    insn->dst.flags = 0;
+    insn->src0.flags = 0;
+    insn->src1.flags = 0;
+    insn->src2.flags = 0;
+    handler(insn, ctxt->callbacks_data);
+
+    return GCN_PARSER_OK;
+}
+
+static gcn_parser_error_t handle_op_ts(gcn_parser_t *ctxt,
+    gcn_operand_type_t type, gcn_handler_t handler)
+{
+    gcn_instruction_t *insn = &ctxt->insn;
+
+    insn->cond = GCN_COND_ANY;
+    insn->type_dst = type;
+    insn->type_src = type;
+    handler(insn, ctxt->callbacks_data);
+
+    return GCN_PARSER_OK;
+}
+
 static gcn_parser_error_t handle_op_td_ts(gcn_parser_t *ctxt,
     gcn_operand_type_t type_dst, gcn_operand_type_t type_src,
     gcn_handler_t handler)
@@ -50,8 +190,8 @@ static gcn_parser_error_t handle_op_td_ts(gcn_parser_t *ctxt,
     gcn_instruction_t *insn = &ctxt->insn;
 
     insn->cond = GCN_COND_ANY;
-    insn->type_src = type_src;
     insn->type_dst = type_dst;
+    insn->type_src = type_src;
     handler(insn, ctxt->callbacks_data);
 
     return GCN_PARSER_OK;
@@ -62,12 +202,7 @@ static gcn_parser_error_t handle_op_td_ts(gcn_parser_t *ctxt,
 static gcn_parser_error_t handle_sop2(gcn_parser_t *ctxt,
     gcn_operand_type_t type, gcn_handler_t handler)
 {
-    gcn_instruction_t *insn = &ctxt->insn;
-
-    insn->cond = GCN_COND_ANY;
-    insn->type_src = type;
-    insn->type_dst = type;
-    handler(insn, ctxt->callbacks_data);
+    handle_op_ts(ctxt, type, handler);
 
     return GCN_PARSER_OK;
 }
@@ -78,8 +213,8 @@ static gcn_parser_error_t handle_sopk(gcn_parser_t *ctxt,
     gcn_instruction_t *insn = &ctxt->insn;
 
     insn->cond = cond;
-    insn->type_src = type;
     insn->type_dst = type;
+    insn->type_src = type;
     handler(insn, ctxt->callbacks_data);
 
     return GCN_PARSER_OK;
@@ -89,6 +224,7 @@ static gcn_parser_error_t handle_sop1(gcn_parser_t *ctxt)
 {
     gcn_instruction_t *insn = &ctxt->insn;
     gcn_parser_callbacks_t *cbacks = ctxt->callbacks_funcs;
+    gcn_parser_error_t err;
     gcn_operand_cond_t type;
     gcn_handler_t handler;
     uint32_t op;
@@ -102,6 +238,11 @@ static gcn_parser_error_t handle_sop1(gcn_parser_t *ctxt)
             op -= 1;
         op -= 3;
     }
+
+    if ((err = handle_operand_dst(ctxt, &insn->dst, insn->sop1.sdst)))
+        return err;
+    if ((err = handle_operand_srcN(ctxt, &insn->src0, insn->sop1.ssrc0)))
+        return err;
 
     switch (op) {
     case S_MOV_B32:
@@ -132,12 +273,9 @@ static gcn_parser_error_t handle_sop1(gcn_parser_t *ctxt)
         return GCN_PARSER_ERR_UNKNOWN_OPCODE;
     }
 
-    if (insn->sop1.ssrc0 == OP_LITERAL)
-        insn->literal = gcn_parser_read32(ctxt);
-
     insn->cond = GCN_COND_ANY;
-    insn->type_src = type;
     insn->type_dst = type;
+    insn->type_src = type;
     handler(insn, ctxt->callbacks_data);
 
     return GCN_PARSER_OK;
@@ -154,97 +292,63 @@ static gcn_parser_error_t handle_sopp(gcn_parser_t *ctxt)
 {
     gcn_instruction_t *insn = &ctxt->insn;
     gcn_parser_callbacks_t *cbacks = ctxt->callbacks_funcs;
-    gcn_handler_t handler;
 
     switch (insn->sopp.op) {
     case S_NOP:
-        handler = cbacks->handle_s_nop;
-        break;
+        return handle_op(ctxt, cbacks->handle_s_nop);
     case S_ENDPGM:
-        handler = cbacks->handle_s_endpgm;
-        break;
+        return handle_op(ctxt, cbacks->handle_s_endpgm);
     case S_BRANCH:
-        handler = cbacks->handle_s_branch;
-        break;
+        return handle_op(ctxt, cbacks->handle_s_branch);
     case S_CBRANCH_SCC0:
-        handler = cbacks->handle_s_cbranch_scc0;
-        break;
+        return handle_op(ctxt, cbacks->handle_s_cbranch_scc0);
     case S_CBRANCH_SCC1:
-        handler = cbacks->handle_s_cbranch_scc1;
-        break;
+        return handle_op(ctxt, cbacks->handle_s_cbranch_scc1);
     case S_CBRANCH_VCCZ:
-        handler = cbacks->handle_s_cbranch_vccz;
-        break;
+        return handle_op(ctxt, cbacks->handle_s_cbranch_vccz);
     case S_CBRANCH_VCCNZ:
-        handler = cbacks->handle_s_cbranch_vccnz;
-        break;
+        return handle_op(ctxt, cbacks->handle_s_cbranch_vccnz);
     case S_CBRANCH_EXECZ:
-        handler = cbacks->handle_s_cbranch_execz;
-        break;
+        return handle_op(ctxt, cbacks->handle_s_cbranch_execz);
     case S_CBRANCH_EXECNZ:
-        handler = cbacks->handle_s_cbranch_execnz;
-        break;
+        return handle_op(ctxt, cbacks->handle_s_cbranch_execnz);
     case S_BARRIER:
-        handler = cbacks->handle_s_barrier;
-        break;
+        return handle_op(ctxt, cbacks->handle_s_barrier);
     case S_SETKILL:
-        handler = cbacks->handle_s_setkill;
-        break;
+        return handle_op(ctxt, cbacks->handle_s_setkill);
     case S_WAITCNT:
-        handler = cbacks->handle_s_waitcnt;
-        break;
+        return handle_op(ctxt, cbacks->handle_s_waitcnt);
     case S_SETHALT:
-        handler = cbacks->handle_s_sethalt;
-        break;
+        return handle_op(ctxt, cbacks->handle_s_sethalt);
     case S_SLEEP:
-        handler = cbacks->handle_s_sleep;
-        break;
+        return handle_op(ctxt, cbacks->handle_s_sleep);
     case S_SETPRIO:
-        handler = cbacks->handle_s_setprio;
-        break;
+        return handle_op(ctxt, cbacks->handle_s_setprio);
     case S_SENDMSG:
-        handler = cbacks->handle_s_sendmsg;
-        break;
+        return handle_op(ctxt, cbacks->handle_s_sendmsg);
     case S_SENDMSGHALT:
-        handler = cbacks->handle_s_sendmsghalt;
-        break;
+        return handle_op(ctxt, cbacks->handle_s_sendmsghalt);
     case S_TRAP:
-        handler = cbacks->handle_s_trap;
-        break;
+        return handle_op(ctxt, cbacks->handle_s_trap);
     case S_ICACHE_INV:
-        handler = cbacks->handle_s_icache_inv;
-        break;
+        return handle_op(ctxt, cbacks->handle_s_icache_inv);
     case S_INCPERFLEVEL:
-        handler = cbacks->handle_s_incperflevel;
-        break;
+        return handle_op(ctxt, cbacks->handle_s_incperflevel);
     case S_DECPERFLEVEL:
-        handler = cbacks->handle_s_decperflevel;
-        break;
+        return handle_op(ctxt, cbacks->handle_s_decperflevel);
     case S_TTRACEDATA:
-        handler = cbacks->handle_s_ttracedata;
-        break;
+        return handle_op(ctxt, cbacks->handle_s_ttracedata);
     case S_CBRANCH_CDBGSYS:
-        handler = cbacks->handle_s_cbranch_cdbgsys;
-        break;
+        return handle_op(ctxt, cbacks->handle_s_cbranch_cdbgsys);
     case S_CBRANCH_CDBGUSER:
-        handler = cbacks->handle_s_cbranch_cdbguser;
-        break;
+        return handle_op(ctxt, cbacks->handle_s_cbranch_cdbguser);
     case S_CBRANCH_CDBGSYS_OR_USER:
-        handler = cbacks->handle_s_cbranch_cdbgsys_or_user;
-        break;
+        return handle_op(ctxt, cbacks->handle_s_cbranch_cdbgsys_or_user);
     case S_CBRANCH_CDBGSYS_AND_USER:
-        handler = cbacks->handle_s_cbranch_cdbgsys_and_user;
-        break;
+        return handle_op(ctxt, cbacks->handle_s_cbranch_cdbgsys_and_user);
     default:
         return GCN_PARSER_ERR_UNKNOWN_OPCODE;
     }
-
-    insn->cond = GCN_COND_ANY;
-    insn->type_src = GCN_TYPE_ANY;
-    insn->type_dst = GCN_TYPE_ANY;
-    handler(insn, ctxt->callbacks_data);
-
-    return GCN_PARSER_OK;
 }
 
 static gcn_parser_error_t handle_salu(gcn_parser_t *ctxt)
@@ -402,9 +506,40 @@ static gcn_parser_error_t handle_vop1(gcn_parser_t *ctxt)
 {
     gcn_instruction_t *insn = &ctxt->insn;
     gcn_parser_callbacks_t *cbacks = ctxt->callbacks_funcs;
-    UNUSED(cbacks);
+    gcn_parser_error_t err;
+
+    if ((err = handle_operand_vdst(ctxt, &insn->dst, insn->vop1.vdst)))
+        return err;
+    if ((err = handle_operand_srcN(ctxt, &insn->src0, insn->vop1.src0)))
+        return err;
 
     switch (insn->vop1.op) {
+    case V_MOV_B32:
+        return handle_op_ts(ctxt, GCN_TYPE_B32, cbacks->handle_v_mov);
+    case V_CVT_I32_F64:
+        return handle_op_td_ts(ctxt, GCN_TYPE_I32, GCN_TYPE_F64, cbacks->handle_v_cvt);
+    case V_CVT_F64_I32:
+        return handle_op_td_ts(ctxt, GCN_TYPE_F64, GCN_TYPE_I32, cbacks->handle_v_cvt);
+    case V_CVT_F32_I32:
+        return handle_op_td_ts(ctxt, GCN_TYPE_F32, GCN_TYPE_I32, cbacks->handle_v_cvt);
+    case V_CVT_F32_U32:
+        return handle_op_td_ts(ctxt, GCN_TYPE_F32, GCN_TYPE_U32, cbacks->handle_v_cvt);
+    case V_CVT_U32_F32:
+        return handle_op_td_ts(ctxt, GCN_TYPE_U32, GCN_TYPE_F32, cbacks->handle_v_cvt);
+    case V_CVT_I32_F32:
+        return handle_op_td_ts(ctxt, GCN_TYPE_I32, GCN_TYPE_F32, cbacks->handle_v_cvt);
+    case V_CVT_F16_F32:
+        return handle_op_td_ts(ctxt, GCN_TYPE_F16, GCN_TYPE_F32, cbacks->handle_v_cvt);
+    case V_CVT_F32_F16:
+        return handle_op_td_ts(ctxt, GCN_TYPE_F32, GCN_TYPE_F16, cbacks->handle_v_cvt);
+    case V_CVT_F32_F64:
+        return handle_op_td_ts(ctxt, GCN_TYPE_F32, GCN_TYPE_F64, cbacks->handle_v_cvt);
+    case V_CVT_F64_F32:
+        return handle_op_td_ts(ctxt, GCN_TYPE_F64, GCN_TYPE_F32, cbacks->handle_v_cvt);
+    case V_CVT_U32_F64:
+        return handle_op_td_ts(ctxt, GCN_TYPE_U32, GCN_TYPE_F64, cbacks->handle_v_cvt);
+    case V_CVT_F64_U32:
+        return handle_op_td_ts(ctxt, GCN_TYPE_F64, GCN_TYPE_U32, cbacks->handle_v_cvt);
     default:
         return GCN_PARSER_ERR_UNKNOWN_OPCODE;
     }
@@ -414,14 +549,24 @@ static gcn_parser_error_t handle_vop2(gcn_parser_t *ctxt)
 {
     gcn_instruction_t *insn = &ctxt->insn;
     gcn_parser_callbacks_t *cbacks = ctxt->callbacks_funcs;
+    gcn_parser_error_t err;
     gcn_handler_t handler;
+
+    if ((err = handle_operand_vdst(ctxt, &insn->dst, insn->vop2.vdst)))
+        return err;
+    if ((err = handle_operand_srcN(ctxt, &insn->src0, insn->vop2.src0)))
+        return err;
+    if ((err = handle_operand_vsrcN(ctxt, &insn->src1, insn->vop2.vsrc1)))
+        return err;
 
     switch (insn->vop2.op) {
     case V_CNDMASK_B32:
     case V_READLANE_B32:
     case V_WRITELANE_B32:
     case V_ADD_F32:
+        return handle_op_ts(ctxt, GCN_TYPE_F32, cbacks->handle_v_add);
     case V_SUB_F32:
+        return handle_op_ts(ctxt, GCN_TYPE_F32, cbacks->handle_v_sub);
     case V_SUBREV_F32:
     case V_MAC_LEGACY_F32:
     case V_MUL_LEGACY_F32:
@@ -437,70 +582,54 @@ static gcn_parser_error_t handle_vop2(gcn_parser_t *ctxt)
     case V_MUL_HI_U32_U24:
         return handle_op_td_ts(ctxt, GCN_TYPE_U32, GCN_TYPE_U24, cbacks->handle_v_mul_hi);
     case V_MIN_LEGACY_F32:
+        return handle_op_ts(ctxt, GCN_TYPE_F32, cbacks->handle_v_min_legacy);
     case V_MAX_LEGACY_F32:
-        goto unknown_opcode;
+        return handle_op_ts(ctxt, GCN_TYPE_F32, cbacks->handle_v_max_legacy);
     case V_MIN_F32:
-        handler = cbacks->handle_v_min;
-        break;
+        return handle_op_ts(ctxt, GCN_TYPE_F32, cbacks->handle_v_min);
     case V_MAX_F32:
-        handler = cbacks->handle_v_max;
-        break;
+        return handle_op_ts(ctxt, GCN_TYPE_F32, cbacks->handle_v_max);
     case V_MIN_I32:
-        handler = cbacks->handle_v_min;
-        break;
+        return handle_op_ts(ctxt, GCN_TYPE_I32, cbacks->handle_v_min);
     case V_MAX_I32:
-        handler = cbacks->handle_v_max;
-        break;
+        return handle_op_ts(ctxt, GCN_TYPE_I32, cbacks->handle_v_max);
     case V_MIN_U32:
-        handler = cbacks->handle_v_min;
-        break;
+        return handle_op_ts(ctxt, GCN_TYPE_U32, cbacks->handle_v_min);
     case V_MAX_U32:
-        handler = cbacks->handle_v_max;
-        break;
+        return handle_op_ts(ctxt, GCN_TYPE_U32, cbacks->handle_v_max);
     case V_LSHR_B32:
-        handler = cbacks->handle_v_lshr;
-        break;
+        return handle_op_ts(ctxt, GCN_TYPE_B32, cbacks->handle_v_lshr);
     case V_LSHRREV_B32:
-        handler = cbacks->handle_v_lshrrev;
-        break;
+        return handle_op_ts(ctxt, GCN_TYPE_B32, cbacks->handle_v_lshrrev);
     case V_ASHR_I32:
-        handler = cbacks->handle_v_ashr;
-        break;
+        return handle_op_ts(ctxt, GCN_TYPE_I32, cbacks->handle_v_ashr);
     case V_ASHRREV_I32:
-        handler = cbacks->handle_v_ashrrev;
-        break;
+        return handle_op_ts(ctxt, GCN_TYPE_I32, cbacks->handle_v_ashrrev);
     case V_LSHL_B32:
-        handler = cbacks->handle_v_lshl;
-        break;
+        return handle_op_ts(ctxt, GCN_TYPE_B32, cbacks->handle_v_lshl);
     case V_LSHLREV_B32:
-        handler = cbacks->handle_v_lshlrev;
-        break;
+        return handle_op_ts(ctxt, GCN_TYPE_B32, cbacks->handle_v_lshlrev);
     case V_AND_B32:
-        handler = cbacks->handle_v_and;
-        break;
+        return handle_op_ts(ctxt, GCN_TYPE_B32, cbacks->handle_v_and);
     case V_OR_B32:
-        handler = cbacks->handle_v_or;
-        break;
+        return handle_op_ts(ctxt, GCN_TYPE_B32, cbacks->handle_v_or);
     case V_XOR_B32:
-        handler = cbacks->handle_v_xor;
-        break;
+        return handle_op_ts(ctxt, GCN_TYPE_B32, cbacks->handle_v_xor);
     case V_BFM_B32:
-        handler = cbacks->handle_v_bfm;
-        break;
+        return handle_op_ts(ctxt, GCN_TYPE_B32, cbacks->handle_v_bfm);
     case V_MAC_F32:
-        handler = cbacks->handle_v_mac;
-        break;
+        return handle_op_ts(ctxt, GCN_TYPE_F32, cbacks->handle_v_mac);
     case V_MADMK_F32:
-        handler = cbacks->handle_v_madmk;
-        break;
+        return handle_op_ts(ctxt, GCN_TYPE_F32, cbacks->handle_v_madmk);
     case V_MADAK_F32:
-        handler = cbacks->handle_v_madak;
-        break;
+        return handle_op_ts(ctxt, GCN_TYPE_F32, cbacks->handle_v_madak);
     case V_BCNT_U32_B32:
     case V_MBCNT_LO_U32_B32:
     case V_MBCNT_HI_U32_B32:
     case V_ADD_I32:
+        return handle_op_ts(ctxt, GCN_TYPE_I32, cbacks->handle_v_add);
     case V_SUB_I32:
+        return handle_op_ts(ctxt, GCN_TYPE_I32, cbacks->handle_v_sub);
     case V_SUBREV_I32:
     case V_ADDC_U32:
     case V_SUBB_U32:
@@ -518,8 +647,6 @@ static gcn_parser_error_t handle_vop2(gcn_parser_t *ctxt)
     }
 
     insn->cond = GCN_COND_ANY;
-    insn->type_src = GCN_TYPE_ANY;
-    insn->type_dst = GCN_TYPE_ANY;
     handler(insn, ctxt->callbacks_data);
 
     return GCN_PARSER_OK;
@@ -529,7 +656,17 @@ static gcn_parser_error_t handle_vop3(gcn_parser_t *ctxt)
 {
     gcn_instruction_t *insn = &ctxt->insn;
     gcn_parser_callbacks_t *cbacks = ctxt->callbacks_funcs;
+    gcn_parser_error_t err;
     uint32_t op;
+
+    if ((err = handle_operand_vdst(ctxt, &insn->dst, insn->vop3a.vdst)))
+        return err;
+    if ((err = handle_operand_srcN(ctxt, &insn->src0, insn->vop3a.src0)))
+        return err;
+    if ((err = handle_operand_srcN(ctxt, &insn->src1, insn->vop3a.src1)))
+        return err;
+    if ((err = handle_operand_srcN(ctxt, &insn->src2, insn->vop3a.src2)))
+        return err;
 
     // Opcode is identical in VOP3b-variants
     op = insn->vop3a.op;
@@ -538,6 +675,7 @@ static gcn_parser_error_t handle_vop3(gcn_parser_t *ctxt)
     }
     else if (op < 0x140) {
         op -= 0x100;
+        // TODO: De-duplicate code
         switch (op) {
         case V_MUL_F32:
             return handle_op_td_ts(ctxt, GCN_TYPE_F32, GCN_TYPE_F32, cbacks->handle_v_mul);
@@ -559,7 +697,35 @@ static gcn_parser_error_t handle_vop3(gcn_parser_t *ctxt)
     }
     else if (op < 0x200) {
         op -= 0x180;
-        return GCN_PARSER_ERR_UNKNOWN_OPCODE;
+        // TODO: De-duplicate code
+        switch (op) {
+        case V_CVT_I32_F64:
+            return handle_op_td_ts(ctxt, GCN_TYPE_I32, GCN_TYPE_F64, cbacks->handle_v_cvt);
+        case V_CVT_F64_I32:
+            return handle_op_td_ts(ctxt, GCN_TYPE_F64, GCN_TYPE_I32, cbacks->handle_v_cvt);
+        case V_CVT_F32_I32:
+            return handle_op_td_ts(ctxt, GCN_TYPE_F32, GCN_TYPE_I32, cbacks->handle_v_cvt);
+        case V_CVT_F32_U32:
+            return handle_op_td_ts(ctxt, GCN_TYPE_F32, GCN_TYPE_U32, cbacks->handle_v_cvt);
+        case V_CVT_U32_F32:
+            return handle_op_td_ts(ctxt, GCN_TYPE_U32, GCN_TYPE_F32, cbacks->handle_v_cvt);
+        case V_CVT_I32_F32:
+            return handle_op_td_ts(ctxt, GCN_TYPE_I32, GCN_TYPE_F32, cbacks->handle_v_cvt);
+        case V_CVT_F16_F32:
+            return handle_op_td_ts(ctxt, GCN_TYPE_F16, GCN_TYPE_F32, cbacks->handle_v_cvt);
+        case V_CVT_F32_F16:
+            return handle_op_td_ts(ctxt, GCN_TYPE_F32, GCN_TYPE_F16, cbacks->handle_v_cvt);
+        case V_CVT_F32_F64:
+            return handle_op_td_ts(ctxt, GCN_TYPE_F32, GCN_TYPE_F64, cbacks->handle_v_cvt);
+        case V_CVT_F64_F32:
+            return handle_op_td_ts(ctxt, GCN_TYPE_F64, GCN_TYPE_F32, cbacks->handle_v_cvt);
+        case V_CVT_U32_F64:
+            return handle_op_td_ts(ctxt, GCN_TYPE_U32, GCN_TYPE_F64, cbacks->handle_v_cvt);
+        case V_CVT_F64_U32:
+            return handle_op_td_ts(ctxt, GCN_TYPE_F64, GCN_TYPE_U32, cbacks->handle_v_cvt);
+        default:
+            return GCN_PARSER_ERR_UNKNOWN_OPCODE;
+        }
     }
 
     return GCN_PARSER_ERR_UNKNOWN_OPCODE;
@@ -589,6 +755,32 @@ static gcn_parser_error_t handle_vintrp(gcn_parser_t *ctxt)
     }
 }
 
+static gcn_parser_error_t handle_exp(gcn_parser_t *ctxt)
+{
+    gcn_instruction_t *insn = &ctxt->insn;
+    gcn_parser_callbacks_t *cbacks = ctxt->callbacks_funcs;
+    gcn_parser_error_t err;
+    gcn_handler_t handler;
+
+    if ((err = handle_operand_exp(ctxt, &insn->dst, insn->exp.target)))
+        return err;
+    if ((err = handle_operand_vsrcN(ctxt, &insn->src0, insn->exp.vsrc0)))
+        return err;
+    if ((err = handle_operand_vsrcN(ctxt, &insn->src1, insn->exp.vsrc1)))
+        return err;
+    if ((err = handle_operand_vsrcN(ctxt, &insn->src2, insn->exp.vsrc2)))
+        return err;
+    if ((err = handle_operand_vsrcN(ctxt, &insn->src3, insn->exp.vsrc3)))
+        return err;
+
+    insn->type_dst = GCN_TYPE_ANY;
+    insn->type_src = GCN_TYPE_ANY;
+    handler = cbacks->handle_exp;
+    handler(insn, ctxt->callbacks_data);
+
+    return GCN_PARSER_OK;
+}
+
 void gcn_parser_init(gcn_parser_t *ctxt)
 {
     memset(ctxt, 0, sizeof(gcn_parser_t));
@@ -600,6 +792,8 @@ void gcn_parser_analyze(gcn_parser_t *ctxt,
 {
     int i;
     const uint32_t *words = (const uint32_t *)bytecode;
+    const gcn_orbis_footer_t *info;
+    uint32_t size;
 
     i = 0;
     while (true) {
@@ -607,8 +801,10 @@ void gcn_parser_analyze(gcn_parser_t *ctxt,
             break;
         i += 1;
     }
+    info = (const gcn_orbis_footer_t *)&words[i];
+    size = (info->size_hi << 8) | info->size_lo;
     ctxt->bc_words = words;
-    ctxt->bc_count = i;
+    ctxt->bc_count = size / sizeof(uint32_t);
     ctxt->bc_index = 0;
     ctxt->analyzed = true;
 }
@@ -644,6 +840,10 @@ void gcn_parser_parse(gcn_parser_t *ctxt,
             case 0x4:
                 insn->words[1] = gcn_parser_read32(ctxt);
                 err = handle_vop3(ctxt);
+                break;
+            case 0xE:
+                insn->words[1] = gcn_parser_read32(ctxt);
+                err = handle_exp(ctxt);
                 break;
             default:
                 err = GCN_PARSER_ERR_UNKNOWN_INST;
