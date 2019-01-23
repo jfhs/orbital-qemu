@@ -301,6 +301,12 @@ enum gcn_opcode_vop1_t {
     V_EXP_LEGACY_F32            = 70,
 };
 
+enum gcn_opcode_vintrp_t {
+    V_INTERP_P1_F32             = 0,
+    V_INTERP_P2_F32             = 1,
+    V_INTERP_MOV_F32            = 2,
+};
+
 enum gcn_opcode_vop3a_t {
     // Remappings
     // - Remapping of VOPC opcodes at 0x000-0x0FF (see: gcn_opcode_vopc_t)
@@ -365,6 +371,117 @@ enum gcn_opcode_vop3a_t {
     V_MAD_I64_I32               = 375 - 0x140,
 };
 
+enum gcn_opcode_smrd_t {
+    S_LOAD_DWORD                = 0,   // Read from read-only constant memory.
+    S_LOAD_DWORDX2              = 1,   // Read from read-only constant memory.
+    S_LOAD_DWORDX4              = 2,   // Read from read-only constant memory.
+    S_LOAD_DWORDX8              = 3,   // Read from read-only constant memory.
+    S_LOAD_DWORDX16             = 4,   // Read from read-only constant memory.
+    S_BUFFER_LOAD_DWORD         = 8,   // Read from read-only constant memory.
+    S_BUFFER_LOAD_DWORDX2       = 9,   // Read from read-only constant memory.
+    S_BUFFER_LOAD_DWORDX4       = 10,  // Read from read-only constant memory.
+    S_BUFFER_LOAD_DWORDX8       = 11,  // Read from read-only constant memory.
+    S_BUFFER_LOAD_DWORDX16      = 12,  // Read from read-only constant memory.
+    S_DCACHE_INV_VOL            = 29,  // Invalidate all volatile lines in L1 constant cache.
+    S_MEMTIME                   = 30,  // Return current 64-bit timestamp.
+    S_DCACHE_INV                = 31,  // Invalidate entire L1 K cache.
+};
+
+enum gcn_opcode_mimg_t {
+    IMAGE_LOAD                  = 0,
+    IMAGE_LOAD_MIP              = 1,
+    IMAGE_LOAD_PCK              = 2,
+    IMAGE_LOAD_PCK_SGN          = 3,
+    IMAGE_LOAD_MIP_PCK          = 4,
+    IMAGE_LOAD_MIP_PCK_SGN      = 5,
+    IMAGE_STORE                 = 8,
+    IMAGE_STORE_MIP             = 9,
+    IMAGE_STORE_PCK             = 10,
+    IMAGE_STORE_MIP_PCK         = 11,
+    IMAGE_GET_RESINFO           = 14,
+    IMAGE_ATOMIC_SWAP           = 15,
+    IMAGE_ATOMIC_CMPSWAP        = 16,
+    IMAGE_ATOMIC_ADD            = 17,
+    IMAGE_ATOMIC_SUB            = 18,
+    IMAGE_ATOMIC_SMIN           = 20,
+    IMAGE_ATOMIC_UMIN           = 21,
+    IMAGE_ATOMIC_SMAX           = 22,
+    IMAGE_ATOMIC_UMAX           = 23,
+    IMAGE_ATOMIC_AND            = 24,
+    IMAGE_ATOMIC_OR             = 25,
+    IMAGE_ATOMIC_XOR            = 26,
+    IMAGE_ATOMIC_INC            = 27,
+    IMAGE_ATOMIC_DEC            = 28,
+    IMAGE_ATOMIC_FCMPSWAP       = 29,
+    IMAGE_ATOMIC_FMIN           = 30,
+    IMAGE_ATOMIC_FMAX           = 31,
+    IMAGE_SAMPLE                = 32,
+    IMAGE_SAMPLE_CL             = 33,
+    IMAGE_SAMPLE_D              = 34,
+    IMAGE_SAMPLE_D_CL           = 35,
+    IMAGE_SAMPLE_L              = 36,
+    IMAGE_SAMPLE_B              = 37,
+    IMAGE_SAMPLE_B_CL           = 38,
+    IMAGE_SAMPLE_LZ             = 39,
+    IMAGE_SAMPLE_C              = 40,
+    IMAGE_SAMPLE_C_CL           = 41,
+    IMAGE_SAMPLE_C_D            = 42,
+    IMAGE_SAMPLE_C_D_CL         = 43,
+    IMAGE_SAMPLE_C_L            = 44,
+    IMAGE_SAMPLE_C_B            = 45,
+    IMAGE_SAMPLE_C_B_CL         = 46,
+    IMAGE_SAMPLE_C_LZ           = 47,
+    IMAGE_SAMPLE_O              = 48,
+    IMAGE_SAMPLE_CL_O           = 49,
+    IMAGE_SAMPLE_D_O            = 50,
+    IMAGE_SAMPLE_D_CL_O         = 51,
+    IMAGE_SAMPLE_L_O            = 52,
+    IMAGE_SAMPLE_B_O            = 53,
+    IMAGE_SAMPLE_B_CL_O         = 54,
+    IMAGE_SAMPLE_LZ_O           = 55,
+    IMAGE_SAMPLE_C_O            = 56,
+    IMAGE_SAMPLE_C_CL_O         = 57,
+    IMAGE_SAMPLE_C_D_O          = 58,
+    IMAGE_SAMPLE_C_D_CL_O       = 59,
+    IMAGE_SAMPLE_C_L_O          = 60,
+    IMAGE_SAMPLE_C_B_O          = 61,
+    IMAGE_SAMPLE_C_B_CL_O       = 62,
+    IMAGE_SAMPLE_C_LZ_O         = 63,
+    IMAGE_GATHER4               = 64,
+    IMAGE_GATHER4_CL            = 65,
+    IMAGE_GATHER4_L             = 66,
+    IMAGE_GATHER4_B             = 67,
+    IMAGE_GATHER4_B_CL          = 68,
+    IMAGE_GATHER4_LZ            = 69,
+    IMAGE_GATHER4_C             = 70,
+    IMAGE_GATHER4_C_CL          = 71,
+    IMAGE_GATHER4_C_L           = 76,
+    IMAGE_GATHER4_C_B           = 77,
+    IMAGE_GATHER4_C_B_CL        = 78,
+    IMAGE_GATHER4_C_LZ          = 79,
+    IMAGE_GATHER4_O             = 80,
+    IMAGE_GATHER4_CL_O          = 81,
+    IMAGE_GATHER4_L_O           = 84,
+    IMAGE_GATHER4_B_O           = 85,
+    IMAGE_GATHER4_B_CL_O        = 86,
+    IMAGE_GATHER4_LZ_O          = 87,
+    IMAGE_GATHER4_C_O           = 88,
+    IMAGE_GATHER4_C_CL_O        = 89,
+    IMAGE_GATHER4_C_L_O         = 92,
+    IMAGE_GATHER4_C_B_O         = 93,
+    IMAGE_GATHER4_C_B_CL_O      = 94,
+    IMAGE_GATHER4_C_LZ_O        = 95,
+    IMAGE_GET_LOD               = 96,
+    IMAGE_SAMPLE_CD             = 104,
+    IMAGE_SAMPLE_CD_CL          = 105,
+    IMAGE_SAMPLE_C_CD           = 106,
+    IMAGE_SAMPLE_C_CD_CL        = 107,
+    IMAGE_SAMPLE_CD_O           = 108,
+    IMAGE_SAMPLE_CD_CL_O        = 109,
+    IMAGE_SAMPLE_C_CD_O         = 110,
+    IMAGE_SAMPLE_C_CD_CL_O      = 111,
+};
+
 /* operands */
 
 enum gcn_operand_scalar_t {
@@ -377,7 +494,7 @@ enum gcn_operand_scalar_t {
     OP_VGPR255 = 511,
 };
 
-/* encodings */
+/* instruction encodings */
 
 // Sea Islands ISA. Chapter 5: Scalar ALU Operations.
 // Section 5.1: SALU Instruction Formats.
@@ -444,6 +561,14 @@ struct gcn_encoding_valu_vopc_t {
     uint32_t        : 6;
     uint32_t        : 1;
 };
+struct gcn_encoding_valu_vintrp_t {
+    uint32_t vsrc0  : 8;
+    uint32_t chan   : 2;
+    uint32_t attr   : 6;
+    uint32_t op     : 2;
+    uint32_t vdst   : 8;
+    uint32_t        : 6;
+};
 struct gcn_encoding_valu_vop3a_t {
     struct {
         uint32_t vdst   : 8;
@@ -475,6 +600,41 @@ struct gcn_encoding_valu_vop3b_t {
         uint32_t src2   : 9;
         uint32_t omod   : 2;
         uint32_t neg    : 3;
+    };
+};
+
+// Sea Islands ISA. Chapter 12: Instruction Set
+// Section 12.6: SMRD Instructions.
+struct gcn_encoding_smrd_t {
+    uint32_t offset  : 8;
+    uint32_t imm     : 1;
+    uint32_t sbase   : 6;
+    uint32_t sdst    : 7;
+    uint32_t op      : 5;
+    uint32_t         : 5;
+};
+
+// Sea Islands ISA. Chapter 12.16: MIMG Instructions
+struct gcn_encoding_mimg_t {
+    struct {
+        uint32_t        : 8;
+        uint32_t dmask  : 4; // Enable mask for image R/W data components.
+        uint32_t unrm   : 1; // Force address to be unnormalized.
+        uint32_t glc    : 1; // Global coherency.
+        uint32_t da     : 1; // Declare an array.
+        uint32_t r128   : 1; // Texture resource size.
+        uint32_t tfe    : 1; // Texture fail enable.
+        uint32_t lwe    : 1; // LOD warning enable.
+        uint32_t op     : 7; // Opcode.
+        uint32_t slc    : 1; // System level coherent.
+        uint32_t        : 6;
+    };
+    struct {
+        uint32_t vaddr  : 8; // VGPR address source.
+        uint32_t vdata  : 8; // VGPR for R/W result.
+        uint32_t srsrc  : 5; // SGPR that specifies resource constant.
+        uint32_t ssamp  : 5; // SGPR that specifies sampler constant.
+        uint32_t        : 6;
     };
 };
 
