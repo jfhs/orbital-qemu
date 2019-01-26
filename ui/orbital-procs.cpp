@@ -51,16 +51,16 @@ struct orbital_procs_t
         free(cpus);
     }
 
-    void Update(uint32_t cpuid, orbital_procs_cpu_data data)
+    void Update(uint32_t cpuid, orbital_procs_cpu_data *data)
     {
         if (cpuid > cpu_count) {
             printf("Got cpuid (%d) > than cpu_count (%d)", cpuid, cpu_count);
             return;
         }
-        if (!strcmp(data.proc_name, "idle")) {
+        if (!strcmp(data->proc_name, "idle")) {
             cpus[cpuid].idle_counter++;
         } else {
-            cpus[cpuid] = data;
+            cpus[cpuid] = *data;
             cpus[cpuid].idle_counter = 0;
         }
     }
@@ -88,8 +88,6 @@ struct orbital_procs_t* orbital_procs_create(void)
     struct orbital_procs_t *procs;
 
     procs = new orbital_procs_t();
-    procs->cpu_count = smp_cpus;
-    procs->cpus = new orbital_procs_cpu_data[smp_cpus];
     return procs;
 }
 
@@ -103,7 +101,7 @@ void orbital_procs_draw(struct orbital_procs_t *procs, const char *title, bool* 
     procs->Draw(title, p_open);
 }
 
-void orbital_procs_update(struct orbital_procs_t *procs, uint32_t cpuid, orbital_procs_cpu_data data)
+void orbital_procs_update(struct orbital_procs_t *procs, uint32_t cpuid, struct orbital_procs_cpu_data *data)
 {
     procs->Update(cpuid, data);
 }

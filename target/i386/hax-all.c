@@ -38,9 +38,13 @@
 #include "hw/boards.h"
 
 #include "ui/orbital.h"
+#include "ui/orbital-procs.h"
+#include "ui/orbital-procs-list.h"
+
+#include "freebsd/sys/sys/proc.h"
+#include "freebsd/sys/amd64/include/proc.h"
 
 #define DEBUG_HAX 0
-#define DEBUG_CPU_UI 0
 
 #define DPRINTF(fmt, ...) \
     do { \
@@ -509,8 +513,7 @@ void hax_raise_event(CPUState *cpu)
     vcpu->tunnel->user_event_pending = 1;
 }
 
-static inline int target_memory_rw_debug(CPUState *cpu, target_ulong addr,
-                                         uint8_t *buf, int len, bool is_write)
+int hax_target_memory_rw_debug(CPUState *cpu, target_ulong addr, uint8_t *buf, int len, bool is_write)
 {
     CPUClass *cc = CPU_GET_CLASS(cpu);
 
@@ -520,11 +523,11 @@ static inline int target_memory_rw_debug(CPUState *cpu, target_ulong addr,
     return cpu_memory_rw_debug(cpu, addr, buf, len, is_write);
 }
 
-static void hax_update_orbital_cpu_procs(CPUArchState *env, CPUState *cpu) {
+bool hax_get_gsbase(CPUArchState *env, CPUState *cpu, uint64_t *gs)
+{
     struct hax_msr_data md;
     struct vmx_msr *msrs = md.entries;
     int ret, n;
-    const uint64_t PROC_NAME_LEN = 20;
 
     n = 0;
     msrs[n++].entry = MSR_GSBASE;
@@ -533,31 +536,164 @@ static void hax_update_orbital_cpu_procs(CPUArchState *env, CPUState *cpu) {
 
     if (ret < 0) {
         fprintf(stderr, "err syncing msrs for vcpu %x\n", cpu->cpu_index);
-        return;
+        return false;
     }
+    *gs = msrs[0].value;
 
-    uint64_t gs = msrs[0].value;
-    uint64_t thread_ptr = 0;
-    uint64_t proc_ptr = 0;
+    return *gs != 0;
+}
+
+// TODO: Redesign
+// TODO: Refactor to use FreeBSD headers
+static void hax_update_executing_processes(CPUArchState *env, CPUState *cpu)
+{
+    const uint64_t PROC_NAME_LEN = 20;
+
+    uint64_t gs;
+
+    bool ret = hax_get_gsbase(env, cpu, &gs);
+    if (!ret)
+        return;
+
+    uint64_t thread_addr = 0;
+    uint64_t proc_addr = 0;
     uint32_t pid = 0;
     char namebuf[21];
     memset(namebuf, 0, sizeof(namebuf));
     char* name = NULL;
     if (gs) {
-        target_memory_rw_debug(cpu, gs, (uint8_t*)&thread_ptr, 8, false);
-        target_memory_rw_debug(cpu, thread_ptr+8, (uint8_t*)&proc_ptr, 8, false);
-        if (proc_ptr) {
+        hax_target_memory_rw_debug(cpu, gs, (uint8_t*)&thread_addr, 8, false);
+        hax_target_memory_rw_debug(cpu, thread_addr+8, (uint8_t*)&proc_addr, 8, false);
+        if (proc_addr) {
             // TODO: can we use some header for this?
             const uint64_t PID_OFFSET = 0xB0;
             const uint64_t PROC_NAME_OFFSET = 0x44C;
-            target_memory_rw_debug(cpu, proc_ptr + PID_OFFSET, (uint8_t*)&pid, 4, false);
-            target_memory_rw_debug(cpu, proc_ptr + PROC_NAME_OFFSET, (uint8_t*)namebuf, PROC_NAME_LEN, false);
+            hax_target_memory_rw_debug(cpu, proc_addr + PID_OFFSET, (uint8_t*)&pid, 4, false);
+            hax_target_memory_rw_debug(cpu, proc_addr + PROC_NAME_OFFSET, (uint8_t*)namebuf, PROC_NAME_LEN, false);
             name = namebuf;
         }
     }
 
-    if (orbital_display_active()) {
-        orbital_update_cpu_procs(cpu->cpu_index, gs, thread_ptr, proc_ptr, pid, name);
+    orbital_procs_cpu_data data;
+    data.gs = gs;
+    data.thread_pointer = thread_addr;
+    data.proc_pointer = proc_addr;
+    data.pid = pid;
+    if (name) {
+        size_t l = strlen(name);
+        memcpy(data.proc_name, name, l);
+        data.proc_name[l] = 0;
+    } else {
+        data.proc_name[0] = 0;
+    }
+    orbital_update_cpu_procs(cpu->cpu_index, &data);
+}
+
+// TODO: refactor out of here (?)
+
+// For reversing structures
+#define DUMP_PROC 1
+#define DUMP_THREAD 0
+#define DUMP_ALL_PROC_PTRS 1
+
+static void dump_bin(const char *filename, const void* data, size_t size)
+{
+    FILE *fp;
+    fp = fopen(filename, "w");
+    fwrite(data, size, 1, fp);
+    fclose(fp);
+}
+
+static void hax_update_process_list(CPUArchState *env, CPUState *cpu) {
+    uint64_t gs;
+
+    bool ret = hax_get_gsbase(env, cpu, &gs);
+    if (!ret)
+        return;
+
+    uint64_t thread_addr = 0;
+    uint64_t proc_addr = 0;
+
+    struct thread *td = calloc(1, sizeof(struct thread));
+    struct proc *p = calloc(1, sizeof(struct proc));
+
+    // Get running thread ptr
+    hax_target_memory_rw_debug(cpu, gs, (uint8_t*)&thread_addr, 8, false);
+
+    if (!thread_addr)
+        return;
+
+    hax_target_memory_rw_debug(cpu, thread_addr, (uint8_t *)td, sizeof(struct thread), false);
+
+#if DUMP_THREAD
+    char tdname[50];
+    sprintf(tdname, "thread_dump_%d.bin", cpu->thread_id);
+    dump_bin(tdname, (const void *)td, sizeof(struct thread));
+#endif
+
+    // Get running process ptr
+    hax_target_memory_rw_debug(cpu, thread_addr + 8, (uint8_t*)&proc_addr, 8, false);
+
+    if (!proc_addr)
+        return;
+
+    // Get running process data
+    hax_target_memory_rw_debug(cpu, proc_addr, (uint8_t *)p, sizeof(struct proc), false);
+
+    // Only the kernel has the list of all processes
+    if (p->p_pid != 0) {
+        return;
+    }
+
+    struct proc *p_iter = p;
+    orbital_update_cpu_procs_list_clear();
+    LIST_FOREACH(p_iter, &p_iter->p_children, p_list)
+    {
+        struct orbital_proc_data *proc_data = calloc(1, sizeof(struct orbital_proc_data));
+
+        hax_target_memory_rw_debug(cpu, (uint64_t)p_iter, (uint8_t *)&proc_data->proc, sizeof(struct proc), false);
+        p_iter = &proc_data->proc;
+
+#if DUMP_PROC
+        char pdname[50];
+        sprintf(pdname, "proc_dump_%02d_%s.bin", p_iter->p_pid, p_iter->p_comm);
+        dump_bin(pdname, (const void *)p_iter, sizeof(struct proc));
+#endif
+
+#if DUMP_ALL_PROC_PTRS
+        uint64_t p_base = (uint64_t)p_iter;
+        uint64_t p_ptr;
+        struct proc temp;
+
+        for (uint32_t i = 0; i < sizeof(struct proc); i = i + 8)
+        {
+            p_ptr = p_base + i;
+            p_ptr = *(uint64_t *)p_ptr;
+
+            // heuristic to detect pointers
+            const uint64_t ptr_mask = 0xFFFF000000000000;
+            if ((p_ptr & ptr_mask) == ptr_mask) {
+                hax_target_memory_rw_debug(cpu, p_ptr, (uint8_t *)&temp, sizeof(struct proc), false);
+
+                char ppdname[100];
+                sprintf(ppdname, "proc_dump_%02d_%s_0x%04X.bin", p_iter->p_pid, p_iter->p_comm, i);
+                dump_bin(ppdname, (const void *)&temp, sizeof(struct proc));
+            }
+        }
+#endif
+
+        // printf("proc %s (%lld)\n ", p_iter->p_pid, p_iter->p_comm);
+        orbital_update_cpu_procs_list_add_proc(proc_data);
+
+        FOREACH_THREAD_IN_PROC(p_iter, td) {
+            struct thread *thread_data = calloc(1, sizeof(struct thread));
+
+            hax_target_memory_rw_debug(cpu, (uint64_t)td, (uint8_t *)thread_data, sizeof(struct thread), false);
+            td = thread_data;
+
+            orbital_update_cpu_procs_list_add_proc_thread(p_iter->p_pid, thread_data);
+            // printf("\tthread %s (%lld)\n", THREAD_NAME(td), td->td_tid);
+        }
     }
 }
 
@@ -621,13 +757,17 @@ static int hax_vcpu_hax_exec(CPUArchState *env)
             hax_vcpu_sync_state(env, 1);
             cpu->vcpu_dirty = false;
         }
-
         hax_ret = hax_vcpu_run(vcpu);
         cpu_exec_end(cpu);
         qemu_mutex_lock_iothread();
 
-        if (DEBUG_CPU_UI) {
-            hax_update_orbital_cpu_procs(env, cpu);
+        if (orbital_should_update_procs()) {
+            if (orbital_executing_processes_active()) {
+                hax_update_executing_processes(env, cpu);
+            }
+            if (orbital_process_list_active()) {
+                hax_update_process_list(env, cpu);
+            }
         }
 
         /* Simply continue the vcpu_run if system call interrupted */

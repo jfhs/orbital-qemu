@@ -1,8 +1,7 @@
 /*
  * QEMU-Orbital user interface
  *
- * Copyright (c) 2017-2018 Alexandro Sanchez Bach
- * Copyright (c) 2017-2018 jfhs
+ * Copyright (c) 2019-2019 Nick Renieris
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -23,37 +22,40 @@
  * THE SOFTWARE.
  */
 
-#ifndef UI_ORBITAL_PROCS_H_
-#define UI_ORBITAL_PROCS_H_
+#ifndef UI_orbital_procs_list_LIST_H_
+#define UI_orbital_procs_list_LIST_H_
 
-#include "qemu/osdep.h"
-#include "qemu-common.h"
+#include "freebsd/sys/sys/proc.h"
+#include "freebsd/sys/vm/vm_map.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-struct orbital_procs_t;
+struct proc;
+struct vmspace;
+struct orbital_procs_list_t;
 
-typedef struct orbital_procs_cpu_data {
-    uint64_t gs;
-    uint64_t thread_pointer;
-    uint64_t proc_pointer;
-    uint64_t pid;
-    uint64_t idle_counter;
-    char proc_name[256];
-} orbital_procs_cpu_data;
+struct orbital_proc_data {
+    struct proc proc;
+    struct vmspace vmspace; // unused until we find its offset
+};
 
-struct orbital_procs_t* orbital_procs_create(void);
+struct orbital_procs_list_t *
+orbital_procs_list_create(void);
 
-void orbital_procs_destroy(struct orbital_procs_t *procs);
+void orbital_procs_list_destroy(struct orbital_procs_list_t *procs_list);
 
-void orbital_procs_draw(struct orbital_procs_t *procs, const char *title, bool* p_open);
+void orbital_procs_list_add_proc(struct orbital_procs_list_t *procs_list, struct orbital_proc_data *p);
 
-void orbital_procs_update(struct orbital_procs_t *procs, uint32_t cpuid, orbital_procs_cpu_data *data);
+void orbital_procs_list_add_proc_thread(struct orbital_procs_list_t *procs_list, int owner_pid, struct thread *td);
+
+void orbital_procs_list_clear(struct orbital_procs_list_t *procs_list);
+
+void orbital_procs_list_draw(struct orbital_procs_list_t *procs_list, const char *title, bool* p_open);
 
 #ifdef __cplusplus
 } // extern "C"
 #endif
 
-#endif // UI_ORBITAL_PROCS_H_
+#endif // UI_orbital_procs_list_LIST_H_

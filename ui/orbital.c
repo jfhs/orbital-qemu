@@ -45,6 +45,9 @@
 #include "orbital-stats.h"
 #include "orbital-debug-gpu.h"
 #include "orbital-procs.h"
+#include "orbital-procs-list.h"
+
+#include <time.h>
 
 // Configuration
 #define ORBITAL_WIDTH 1280
@@ -63,10 +66,12 @@ typedef struct OrbitalUI {
     struct orbital_logs_t *logs_uart;
     struct orbital_debug_gpu_t *gpu_debugger;
     struct orbital_procs_t *procs;
+    struct orbital_procs_list_t *procs_list;
     bool show_stats;
     bool show_uart;
     bool show_gpu_debugger;
     bool show_executing_processes;
+    bool show_process_list;
     bool show_trace_cp;
     bool show_trace_icc;
     bool show_trace_samu;
@@ -74,6 +79,9 @@ typedef struct OrbitalUI {
     bool show_mem_gva;
     bool show_mem_gart;
     bool show_mem_iommu;
+
+    struct timespec last_procs_update;
+    float procs_updates_per_second; // Maximum rate, not accurate
 } OrbitalUI;
 
 // Global state
@@ -82,6 +90,16 @@ OrbitalUI ui;
 bool orbital_display_active(void)
 {
     return ui.active;
+}
+
+bool orbital_executing_processes_active(void)
+{
+    return ui.show_executing_processes;
+}
+
+bool orbital_process_list_active(void)
+{
+    return ui.show_process_list;
 }
 
 void orbital_log_uart(int index, char ch)
@@ -100,22 +118,56 @@ void orbital_debug_gpu_mmio(uint32_t *mmio)
     orbital_debug_gpu_set_mmio(ui.gpu_debugger, mmio);
 }
 
-void orbital_update_cpu_procs(int cpuid, uint64_t gs, uint64_t thread_ptr, uint64_t proc_ptr, uint64_t pid, const char* name)
+void orbital_update_cpu_procs(int cpuid, struct orbital_procs_cpu_data *data)
 {
-    // TODO: this is some bad code, too much copying
-    orbital_procs_cpu_data data;
-    data.gs = gs;
-    data.thread_pointer = thread_ptr;
-    data.proc_pointer = proc_ptr;
-    data.pid = pid;
-    if (name) {
-        size_t l = strlen(name);
-        memcpy(data.proc_name, name, l);
-        data.proc_name[l] = 0;
-    } else {
-        data.proc_name[0] = 0;
-    }
     orbital_procs_update(ui.procs, cpuid, data);
+}
+
+void orbital_update_cpu_procs_list_clear(void)
+{
+    orbital_procs_list_clear(ui.procs_list);
+}
+
+void orbital_update_cpu_procs_list_add_proc(struct orbital_proc_data *p)
+{
+    orbital_procs_list_add_proc(ui.procs_list, p);
+}
+
+void orbital_update_cpu_procs_list_add_proc_thread(int owner_pid, struct thread *td)
+{
+    orbital_procs_list_add_proc_thread(ui.procs_list, owner_pid, td);
+}
+
+static void timespec_diff(struct timespec *start, struct timespec *stop,
+                   struct timespec *result)
+{
+    if ((stop->tv_nsec - start->tv_nsec) < 0) {
+        result->tv_sec = stop->tv_sec - start->tv_sec - 1;
+        result->tv_nsec = stop->tv_nsec - start->tv_nsec + 1000000000;
+    } else {
+        result->tv_sec = stop->tv_sec - start->tv_sec;
+        result->tv_nsec = stop->tv_nsec - start->tv_nsec;
+    }
+
+    return;
+}
+
+bool orbital_should_update_procs(void) {
+    struct timespec time_now;
+    clock_gettime(CLOCK_MONOTONIC, &time_now);
+
+    struct timespec time_diff;
+    timespec_diff(&ui.last_procs_update, &time_now, &time_diff);
+
+    uint64_t diff_abs = time_diff.tv_nsec + time_diff.tv_sec * 1000000;
+
+    bool should_update = (float)diff_abs >= (1.0 / ui.procs_updates_per_second * 1000.0) * 1000000.0;
+
+    if (should_update) {
+        ui.last_procs_update.tv_sec = time_now.tv_sec;
+        ui.last_procs_update.tv_nsec = time_now.tv_nsec;
+    }
+    return should_update;
 }
 
 static void check_vk_result(VkResult err)
@@ -283,10 +335,11 @@ static void orbital_display_draw(OrbitalUI *ui)
         igMenuItemBoolPtr("UART Output", "Alt+2", &ui->show_uart, true);
         igMenuItemBoolPtr("GPU Debugger", "Alt+3", &ui->show_gpu_debugger, true);
         igMenuItemBoolPtr("Executing Processes", "Alt+4", &ui->show_executing_processes, true);
+        igMenuItemBoolPtr("Process List", "Alt+5", &ui->show_process_list, true);
         igSeparator();
-        igMenuItemBoolPtr("CP Commands", "Alt+5", &ui->show_trace_cp, false);
-        igMenuItemBoolPtr("ICC Commands", "Alt+6", &ui->show_trace_icc, false);
-        igMenuItemBoolPtr("SAMU Commands", "Alt+7", &ui->show_trace_samu, false);
+        igMenuItemBoolPtr("CP Commands", "Alt+6", &ui->show_trace_cp, false);
+        igMenuItemBoolPtr("ICC Commands", "Alt+7", &ui->show_trace_icc, false);
+        igMenuItemBoolPtr("SAMU Commands", "Alt+8", &ui->show_trace_samu, false);
         igSeparator();
         igMenuItemBoolPtr("Memory Editor (GPA)", "Ctrl+1", &ui->show_mem_gpa, false);
         igMenuItemBoolPtr("Memory Editor (GVA)", "Ctrl+2", &ui->show_mem_gva, false);
@@ -313,6 +366,9 @@ static void orbital_display_draw(OrbitalUI *ui)
     }
     if (ui->show_executing_processes) {
         orbital_procs_draw(ui->procs, "Executing Processes", &ui->show_executing_processes);
+    }
+    if (ui->show_process_list) {
+        orbital_procs_list_draw(ui->procs_list, "Process List", &ui->show_process_list);
     }
 }
 
@@ -428,10 +484,12 @@ static void* orbital_display_main(void* arg)
     ui.logs_uart = orbital_logs_create();
     ui.stats = orbital_stats_create();
     ui.procs = orbital_procs_create();
+    ui.procs_list = orbital_procs_list_create();
     ui.show_stats = true;
     ui.show_uart = true;
     ui.show_gpu_debugger = true;
     ui.show_executing_processes = true;
+    ui.show_process_list = true;
     ui.show_trace_cp = false;
     ui.show_trace_icc = false;
     ui.show_trace_samu = false;
@@ -443,7 +501,9 @@ static void* orbital_display_main(void* arg)
     assert(ui.logs_uart);
     assert(ui.stats);
     assert(ui.procs);
+    assert(ui.procs_list);
     ui.active = true;
+    ui.procs_updates_per_second = 2.0;
 
     quit = false;
     while (!quit) {
