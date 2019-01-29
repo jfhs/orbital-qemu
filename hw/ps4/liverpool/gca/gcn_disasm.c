@@ -257,14 +257,15 @@ static void disasm_encoding_sop1(gcn_disasm_t *ctxt,
     disasm_print(ctxt, buf);
 }
 
-#if 0
 static void disasm_encoding_sopc(gcn_disasm_t *ctxt,
     gcn_instruction_t *insn, const char *name)
 {
-    UNUSED(insn);
-    disasm_print(ctxt, name);
+    char buf[INSN_SIZE];
+
+    ctxt->cur_insn = insn;
+    disasm_opcode(ctxt, buf, name);
+    disasm_print(ctxt, buf);
 }
-#endif
 
 static void disasm_encoding_sopp(gcn_disasm_t *ctxt,
     gcn_instruction_t *insn, const char *name)
@@ -273,6 +274,21 @@ static void disasm_encoding_sopp(gcn_disasm_t *ctxt,
 
     ctxt->cur_insn = insn;
     disasm_opcode(ctxt, buf, name);
+    disasm_print(ctxt, buf);
+}
+
+static void disasm_encoding_vop2(gcn_disasm_t *ctxt,
+    gcn_instruction_t *insn, const char *name)
+{
+    char buf[INSN_SIZE];
+
+    ctxt->cur_insn = insn;
+    disasm_opcode(ctxt, buf, name);
+    disasm_operand(ctxt, buf, &insn->dst);
+    strcat(buf, ", ");
+    disasm_operand(ctxt, buf, &insn->src0);
+    strcat(buf, ", ");
+    disasm_operand(ctxt, buf, &insn->src1);
     disasm_print(ctxt, buf);
 }
 
@@ -289,18 +305,13 @@ static void disasm_encoding_vop1(gcn_disasm_t *ctxt,
     disasm_print(ctxt, buf);
 }
 
-static void disasm_encoding_vop2(gcn_disasm_t *ctxt,
+static void disasm_encoding_vopc(gcn_disasm_t *ctxt,
     gcn_instruction_t *insn, const char *name)
 {
     char buf[INSN_SIZE];
 
     ctxt->cur_insn = insn;
     disasm_opcode(ctxt, buf, name);
-    disasm_operand(ctxt, buf, &insn->dst);
-    strcat(buf, ", ");
-    disasm_operand(ctxt, buf, &insn->src0);
-    strcat(buf, ", ");
-    disasm_operand(ctxt, buf, &insn->src1);
     disasm_print(ctxt, buf);
 }
 
@@ -321,6 +332,11 @@ static void disasm_encoding_vop3a(gcn_disasm_t *ctxt,
 
     ctxt->cur_insn = insn;
     disasm_opcode(ctxt, buf, name);
+    disasm_operand(ctxt, buf, &insn->dst);
+    strcat(buf, ", ");
+    disasm_operand(ctxt, buf, &insn->src0);
+    strcat(buf, ", ");
+    disasm_operand(ctxt, buf, &insn->src1);
     disasm_print(ctxt, buf);
 }
 
@@ -374,61 +390,61 @@ static void disasm_encoding_exp(gcn_disasm_t *ctxt,
 #define DISASM_CALLBACK(name) \
     static void disasm_##name(gcn_instruction_t *insn, void *ctxt)
 
-#define DISASM_SOP2(name) \
+static void disasm_insn(gcn_disasm_t *ctxt,
+    gcn_instruction_t *insn, const char *name)
+{
+    switch (insn->encoding) {
+    case GCN_ENCODING_SOP2:
+        disasm_encoding_sop2(ctxt, insn, name);
+        break;
+    case GCN_ENCODING_SOPK:
+        disasm_encoding_sopk(ctxt, insn, name);
+        break;
+    case GCN_ENCODING_SOP1:
+        disasm_encoding_sop1(ctxt, insn, name);
+        break;
+    case GCN_ENCODING_SOPC:
+        disasm_encoding_sopc(ctxt, insn, name);
+        break;
+    case GCN_ENCODING_SOPP:
+        disasm_encoding_sopp(ctxt, insn, name);
+        break;
+    case GCN_ENCODING_VOP2:
+        disasm_encoding_vop2(ctxt, insn, name);
+        break;
+    case GCN_ENCODING_VOP1:
+        disasm_encoding_vop1(ctxt, insn, name);
+        break;
+    case GCN_ENCODING_VOPC:
+        disasm_encoding_vopc(ctxt, insn, name);
+        break;
+    case GCN_ENCODING_VINTRP:
+        disasm_encoding_vintrp(ctxt, insn, name);
+        break;
+    case GCN_ENCODING_VOP3A:
+        disasm_encoding_vop3a(ctxt, insn, name);
+        break;
+    case GCN_ENCODING_SMRD:
+        disasm_encoding_smrd(ctxt, insn, name);
+        break;
+    case GCN_ENCODING_MIMG:
+        disasm_encoding_mimg(ctxt, insn, name);
+        break;
+    case GCN_ENCODING_EXP:
+        disasm_encoding_exp(ctxt, insn, name);
+        break;
+    default:
+        disasm_print(ctxt, "???");
+    }
+}
+
+#define DISASM_INSN(name) \
     DISASM_CALLBACK(name) { \
-        disasm_encoding_sop2(ctxt, insn, #name); \
-    };
-#define DISASM_SOPK(name) \
-    DISASM_CALLBACK(name) { \
-        disasm_encoding_sopk(ctxt, insn, #name); \
-    };
-#define DISASM_SOP1(name) \
-    DISASM_CALLBACK(name) { \
-        disasm_encoding_sop1(ctxt, insn, #name); \
-    };
-#define DISASM_SOPC(name) \
-    DISASM_CALLBACK(name) { \
-        disasm_encoding_sopc(ctxt, insn, #name); \
-    };
-#define DISASM_SOPP(name) \
-    DISASM_CALLBACK(name) { \
-        disasm_encoding_sopp(ctxt, insn, #name); \
-    };
-#define DISASM_VOP1(name) \
-    DISASM_CALLBACK(name) { \
-        disasm_encoding_vop1(ctxt, insn, #name); \
-    };
-#define DISASM_VOP2(name) \
-    DISASM_CALLBACK(name) { \
-        disasm_encoding_vop2(ctxt, insn, #name); \
-    };
-#define DISASM_VOPC(name) \
-    DISASM_CALLBACK(name) { \
-        disasm_encoding_vopc(ctxt, insn, #name); \
-    };
-#define DISASM_VINTRP(name) \
-    DISASM_CALLBACK(name) { \
-        disasm_encoding_vintrp(ctxt, insn, #name); \
-    };
-#define DISASM_VOP3A(name) \
-    DISASM_CALLBACK(name) { \
-        disasm_encoding_vop3a(ctxt, insn, #name); \
-    };
-#define DISASM_SMRD(name) \
-    DISASM_CALLBACK(name) { \
-        disasm_encoding_smrd(ctxt, insn, #name); \
-    };
-#define DISASM_MIMG(name) \
-    DISASM_CALLBACK(name) { \
-        disasm_encoding_mimg(ctxt, insn, #name); \
-    };
-#define DISASM_EXP(name) \
-    DISASM_CALLBACK(name) { \
-        disasm_encoding_exp(ctxt, insn, #name); \
+        disasm_insn(ctxt, insn, #name); \
     };
 
 #define GCN_HANDLER(encoding, name) \
-    DISASM_##encoding(name);
+    DISASM_INSN(name);
 #include "gcn_handlers.inc"
 #undef GCN_HANDLER
 

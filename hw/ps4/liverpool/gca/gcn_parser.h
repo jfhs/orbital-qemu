@@ -135,6 +135,7 @@ typedef struct gcn_operand_t {
 typedef struct gcn_instruction_t {
     /* properties */
     int flags;
+    enum gcn_encoding_t encoding;
     enum gcn_operand_cond_t cond;
     enum gcn_operand_type_t type_dst;
     enum gcn_operand_type_t type_src;

@@ -358,9 +358,10 @@ static gcn_parser_error_t handle_opcode_vop2(gcn_parser_t *ctxt, uint32_t op)
 static gcn_parser_error_t handle_sop2(gcn_parser_t *ctxt,
     gcn_operand_type_t type, gcn_handler_t handler)
 {
-    handle_op_ts(ctxt, type, handler);
+    gcn_instruction_t *insn = &ctxt->insn;
 
-    return GCN_PARSER_OK;
+    insn->encoding = GCN_ENCODING_SOP2;
+    return handle_op_ts(ctxt, type, handler);
 }
 
 static gcn_parser_error_t handle_sopk(gcn_parser_t *ctxt,
@@ -368,6 +369,7 @@ static gcn_parser_error_t handle_sopk(gcn_parser_t *ctxt,
 {
     gcn_instruction_t *insn = &ctxt->insn;
 
+    insn->encoding = GCN_ENCODING_SOPK;
     insn->cond = cond;
     insn->type_dst = type;
     insn->type_src = type;
@@ -382,6 +384,8 @@ static gcn_parser_error_t handle_sop1(gcn_parser_t *ctxt)
     gcn_parser_callbacks_t *cbacks = ctxt->callbacks_funcs;
     gcn_parser_error_t err;
     uint32_t op;
+
+    insn->encoding = GCN_ENCODING_SOP1;
 
     // Remap pre-GCN3 SOP1 opcodes into the new opcodes
     op = insn->sop1.op;
@@ -422,8 +426,9 @@ static gcn_parser_error_t handle_sop1(gcn_parser_t *ctxt)
 
 static gcn_parser_error_t handle_sopc(gcn_parser_t *ctxt)
 {
-    UNUSED(ctxt);
+    gcn_instruction_t *insn = &ctxt->insn;
 
+    insn->encoding = GCN_ENCODING_SOPC;
     return GCN_PARSER_OK;
 }
 
@@ -431,6 +436,8 @@ static gcn_parser_error_t handle_sopp(gcn_parser_t *ctxt)
 {
     gcn_instruction_t *insn = &ctxt->insn;
     gcn_parser_callbacks_t *cbacks = ctxt->callbacks_funcs;
+
+    insn->encoding = GCN_ENCODING_SOPP;
 
     switch (insn->sopp.op) {
     case S_NOP:
@@ -647,6 +654,7 @@ static gcn_parser_error_t handle_vop1(gcn_parser_t *ctxt)
     gcn_parser_error_t err;
     uint32_t op;
 
+    insn->encoding = GCN_ENCODING_VOP1;
     if ((err = handle_operand_vdst(ctxt, &insn->dst, insn->vop1.vdst)))
         return err;
     if ((err = handle_operand_ssrc(ctxt, &insn->src0, insn->vop1.src0)))
@@ -662,6 +670,7 @@ static gcn_parser_error_t handle_vop2(gcn_parser_t *ctxt)
     gcn_parser_error_t err;
     uint32_t op;
 
+    insn->encoding = GCN_ENCODING_VOP2;
     if ((err = handle_operand_vdst(ctxt, &insn->dst, insn->vop2.vdst)))
         return err;
     if ((err = handle_operand_ssrc(ctxt, &insn->src0, insn->vop2.src0)))
@@ -680,6 +689,7 @@ static gcn_parser_error_t handle_vop3(gcn_parser_t *ctxt)
     gcn_parser_error_t err;
     uint32_t op;
 
+    insn->encoding = GCN_ENCODING_VOP3A;
     insn->words[1] = gcn_parser_read32(ctxt);
     if ((err = handle_operand_vdst(ctxt, &insn->dst, insn->vop3a.vdst)))
         return err;
@@ -828,6 +838,7 @@ static gcn_parser_error_t handle_vopc(gcn_parser_t *ctxt)
     gcn_parser_callbacks_t *cbacks = ctxt->callbacks_funcs;
     UNUSED(cbacks);
 
+    insn->encoding = GCN_ENCODING_VOPC;
     switch (insn->vopc.op) {
     default:
         return GCN_PARSER_ERR_UNKNOWN_OPCODE;
@@ -840,6 +851,7 @@ static gcn_parser_error_t handle_vintrp(gcn_parser_t *ctxt)
     gcn_parser_callbacks_t *cbacks = ctxt->callbacks_funcs;
     gcn_parser_error_t err;
 
+    insn->encoding = GCN_ENCODING_VINTRP;
     if ((err = handle_operand_vdst(ctxt, &insn->dst, insn->vintrp.vdst)))
         return err;
     if ((err = handle_operand_vsrc(ctxt, &insn->src0, insn->vintrp.vsrc0)))
@@ -862,6 +874,8 @@ static gcn_parser_error_t handle_smrd(gcn_parser_t *ctxt)
     gcn_instruction_t *insn = &ctxt->insn;
     gcn_parser_callbacks_t *cbacks = ctxt->callbacks_funcs;
     gcn_parser_error_t err;
+
+    insn->encoding = GCN_ENCODING_SMRD;
     if ((err = handle_operand_sdst(ctxt, &insn->dst, insn->smrd.sdst)))
         return err;
 
@@ -902,6 +916,7 @@ static gcn_parser_error_t handle_mimg(gcn_parser_t *ctxt)
     gcn_instruction_t *insn = &ctxt->insn;
     gcn_parser_callbacks_t *cbacks = ctxt->callbacks_funcs;
 
+    insn->encoding = GCN_ENCODING_MIMG;
     insn->words[1] = gcn_parser_read32(ctxt);
 
     switch (insn->mimg.op) {
@@ -1255,6 +1270,7 @@ static gcn_parser_error_t handle_exp(gcn_parser_t *ctxt)
     gcn_parser_error_t err;
     gcn_handler_t handler;
 
+    insn->encoding = GCN_ENCODING_EXP;
     insn->words[1] = gcn_parser_read32(ctxt);
     if ((err = handle_operand_exp(ctxt, &insn->dst, insn->exp.target)))
         return err;
@@ -1318,6 +1334,7 @@ void gcn_parser_parse(gcn_parser_t *ctxt,
 
     insn = &ctxt->insn;
     while (ctxt->bc_index < ctxt->bc_count) {
+        memset(insn, 0, sizeof(gcn_instruction_t));
         value = gcn_parser_read32(ctxt);
         insn->words[0] = value;
 
