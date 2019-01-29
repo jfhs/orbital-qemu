@@ -37,14 +37,14 @@ void gcn_analyzer_init(gcn_analyzer_t *ctxt)
     ctxt->has_isolated_components = 1;
 }
 
-void gcn_analyzer_dump_deps(gcn_analyzer_t *ctxt, FILE *stream)
+void gcn_analyzer_print_deps(gcn_analyzer_t *ctxt, FILE *stream)
 {
     UNUSED(ctxt);
     
     fprintf(stream, "...\n");
 }
 
-void gcn_analyzer_dump_usage(gcn_analyzer_t *ctxt, FILE *stream)
+void gcn_analyzer_print_usage(gcn_analyzer_t *ctxt, FILE *stream)
 {
     bool comma;
     unsigned int i;
@@ -100,7 +100,7 @@ void gcn_analyzer_dump_usage(gcn_analyzer_t *ctxt, FILE *stream)
     fprintf(stream, "\n");
 }
 
-void gcn_analyzer_dump_props(gcn_analyzer_t *ctxt, FILE *stream)
+void gcn_analyzer_print_props(gcn_analyzer_t *ctxt, FILE *stream)
 {
 #define DUMP_PROP(prop) \
     fprintf(stream, "- %-20s: %s\n", #prop, ctxt->prop ? "true" : "false");
@@ -109,14 +109,14 @@ void gcn_analyzer_dump_props(gcn_analyzer_t *ctxt, FILE *stream)
 #undef DUMP_PROP
 }
 
-void gcn_analyzer_dump(gcn_analyzer_t *ctxt, FILE *stream)
+void gcn_analyzer_print(gcn_analyzer_t *ctxt, FILE *stream)
 {
     fprintf(stream, "## usage\n");
-    gcn_analyzer_dump_usage(ctxt, stream);
+    gcn_analyzer_print_usage(ctxt, stream);
     fprintf(stream, "\n## properties\n");
-    gcn_analyzer_dump_props(ctxt, stream);
+    gcn_analyzer_print_props(ctxt, stream);
     fprintf(stream, "\n## dependencies\n");
-    gcn_analyzer_dump_deps(ctxt, stream);
+    gcn_analyzer_print_deps(ctxt, stream);
 }
 
 /* helpers */

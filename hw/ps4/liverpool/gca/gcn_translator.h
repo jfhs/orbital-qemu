@@ -20,10 +20,20 @@
 #ifndef HW_PS4_LIVERPOOL_GCA_GCN_TRANSLATOR_H
 #define HW_PS4_LIVERPOOL_GCA_GCN_TRANSLATOR_H
 
+#include "gcn.h"
 #include "gcn_parser.h"
 
-typedef struct gcn_translator_t {
-} gcn_translator_t;
+#ifdef __cplusplus
+#include <vector>
+#endif
+
+/* forward declarations */
+typedef struct gcn_analyzer_t gcn_analyzer_t;
+typedef struct gcn_translator_t gcn_translator_t;
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /* callbacks */
 
@@ -31,6 +41,14 @@ extern gcn_parser_callbacks_t gcn_translator_callbacks;
 
 /* functions */
 
-void gcn_translator_init(gcn_translator_t *ctxt);
+gcn_translator_t* gcn_translator_create(gcn_analyzer_t *analyzer,
+    gcn_stage_t stage);
+
+void gcn_translator_destroy(gcn_translator_t *ctxt);
+uint8_t* gcn_translator_dump(gcn_translator_t *ctxt, uint32_t *size);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // HW_PS4_LIVERPOOL_GCA_GCN_TRANSLATOR_H

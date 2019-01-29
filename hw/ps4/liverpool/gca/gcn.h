@@ -23,6 +23,16 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+typedef enum gcn_stage_t {
+    GCN_STAGE_PS = 0,
+    GCN_STAGE_VS = 1,
+    GCN_STAGE_GS = 2,
+    GCN_STAGE_ES = 3,
+    GCN_STAGE_HS = 4,
+    GCN_STAGE_LS = 5,
+    GCN_STAGE_CS = 6,
+} gcn_stage_t;
+
 /* opcodes */
 
 enum gcn_opcode_sop2_t {

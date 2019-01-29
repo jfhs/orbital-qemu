@@ -48,10 +48,10 @@ extern gcn_parser_callbacks_t gcn_analyzer_callbacks;
 
 void gcn_analyzer_init(gcn_analyzer_t *ctxt);
 
-void gcn_analyzer_dump(gcn_analyzer_t *ctxt, FILE *stream);
-void gcn_analyzer_dump_deps(gcn_analyzer_t *ctxt, FILE *stream);
-void gcn_analyzer_dump_usage(gcn_analyzer_t *ctxt, FILE *stream);
-void gcn_analyzer_dump_props(gcn_analyzer_t *ctxt, FILE *stream);
+void gcn_analyzer_print(gcn_analyzer_t *ctxt, FILE *stream);
+void gcn_analyzer_print_deps(gcn_analyzer_t *ctxt, FILE *stream);
+void gcn_analyzer_print_usage(gcn_analyzer_t *ctxt, FILE *stream);
+void gcn_analyzer_print_props(gcn_analyzer_t *ctxt, FILE *stream);
 
 #ifdef __cplusplus
 }
