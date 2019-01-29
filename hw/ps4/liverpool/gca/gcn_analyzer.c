@@ -25,6 +25,10 @@
 
 #define ARRAYCOUNT(x) ((sizeof(x)/sizeof(0[x])) / ((size_t)(!(sizeof(x) % sizeof(0[x])))))
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* dumper */
 
 void gcn_analyzer_init(gcn_analyzer_t *ctxt)
@@ -157,13 +161,13 @@ static void analyze_insn(gcn_analyzer_t *ctxt,
     analyze_operand(ctxt, &insn->src3);
 }
 
-#define ANALYZER_INSN(name) \
+#define ANALYZE_INSN(name) \
     ANALYZER_CALLBACK(name) { \
         analyze_insn(ctxt, insn); \
     };
 
 #define GCN_HANDLER(encoding, name) \
-    ANALYZER_INSN(name);
+    ANALYZE_INSN(name);
 #include "gcn_handlers.inc"
 #undef GCN_HANDLER
 
@@ -173,3 +177,7 @@ gcn_parser_callbacks_t gcn_analyzer_callbacks = {
 #include "gcn_handlers.inc"
 #undef GCN_HANDLER
 };
+
+#ifdef __cplusplus
+}
+#endif

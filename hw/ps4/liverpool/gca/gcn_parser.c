@@ -42,6 +42,10 @@ typedef struct gcn_orbis_footer_t {
     uint8_t size_hi;
 } gcn_orbis_footer_t;
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* helpers */
 
 static uint32_t gcn_parser_read32(gcn_parser_t *ctxt)
@@ -1385,3 +1389,7 @@ void gcn_parser_parse(gcn_parser_t *ctxt,
         }
     }
 }
+
+#ifdef __cplusplus
+}
+#endif

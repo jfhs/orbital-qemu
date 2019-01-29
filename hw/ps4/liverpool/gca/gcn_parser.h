@@ -199,6 +199,10 @@ typedef struct gcn_parser_t {
     gcn_arch_t arch;
 } gcn_parser_t;
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* functions */
 void gcn_parser_init(gcn_parser_t *ctxt);
 
@@ -207,5 +211,9 @@ void gcn_parser_analyze(gcn_parser_t *ctxt,
 
 void gcn_parser_parse(gcn_parser_t *ctxt,
     const uint8_t *bytecode, gcn_parser_callbacks_t *cbacks, void *data);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // HW_PS4_LIVERPOOL_GCA_GCN_PARSER_H

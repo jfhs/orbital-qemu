@@ -27,6 +27,10 @@
 
 #define UNUSED(arg) (void)(arg)
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 static const char* get_type_suffix(gcn_operand_type_t type)
 {
     switch (type) {
@@ -454,3 +458,7 @@ gcn_parser_callbacks_t gcn_disasm_callbacks = {
 #include "gcn_handlers.inc"
 #undef GCN_HANDLER
 };
+
+#ifdef __cplusplus
+}
+#endif

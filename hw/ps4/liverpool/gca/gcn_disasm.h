@@ -33,6 +33,10 @@ typedef struct gcn_disasm_t {
     size_t op_padding;
 } gcn_disasm_t;
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* callbacks */
 
 extern gcn_parser_callbacks_t gcn_disasm_callbacks;
@@ -40,5 +44,9 @@ extern gcn_parser_callbacks_t gcn_disasm_callbacks;
 /* functions */
 
 void gcn_disasm_init(gcn_disasm_t *ctxt);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // HW_PS4_LIVERPOOL_GCA_GCN_DISASM_H
