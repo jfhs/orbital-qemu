@@ -248,7 +248,7 @@ struct orbital_procs_list_t
             if (ImGui::IsItemHovered()) {
                 std::string flag_str = flags_to_str(data.proc.p_flag);
                 ImGui::SetTooltip("%s", flag_str.c_str());
-                ImGui::EndTooltip()
+                ImGui::EndTooltip();
             }
             ImGui::NextColumn();
             snprintf(text, 50, "%lld", threads_map.count(data.proc.p_pid));
