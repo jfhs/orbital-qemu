@@ -78,8 +78,12 @@ typedef struct gcn_dependency_t {
 typedef struct gcn_analyzer_t {
     /* usage */
     uint32_t used_types;
-    uint8_t used_sgprs[103];
-    uint8_t used_vgprs[256];
+    uint8_t used_sgpr[103];
+    uint8_t used_vgpr[256];
+    uint8_t used_exp_mrt[8];
+    uint8_t used_exp_mrtz[1];
+    uint8_t used_exp_pos[4];
+    uint8_t used_exp_param[32];
 
     /* properties */
     struct {

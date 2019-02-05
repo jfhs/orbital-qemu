@@ -124,7 +124,10 @@ static gcn_parser_error_t handle_operand_vsrc(gcn_parser_t *ctxt,
 {
     UNUSED(ctxt);
 
-    if (id < 32) {
+    op->flags = 0;
+    op->flags |= GCN_FLAGS_OP_USED;
+
+    if (id < 256) {
         op->id = id;
         op->kind = GCN_KIND_VGPR;
         return GCN_PARSER_OK;
@@ -146,6 +149,9 @@ static gcn_parser_error_t handle_operand_exp(gcn_parser_t *ctxt,
     gcn_operand_t *op, int32_t id)
 {
     UNUSED(ctxt);
+
+    op->flags = 0;
+    op->flags |= GCN_FLAGS_OP_USED;
 
     if (0 <= id && id <= 7) {
         op->id = id;

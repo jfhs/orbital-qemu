@@ -48,10 +48,14 @@ typedef struct gcn_translator_t {
     spv::Id type_u16;
     spv::Id type_u32;
     spv::Id type_u64;
+    spv::Id type_f32_x4;
+    spv::Id type_u32_x4;
 
     /* registers */
     spv::Id var_sgpr[103];
     spv::Id var_vgpr[256];
+    spv::Id var_exp_pos[4];
+    spv::Id var_exp_param[32];
 
     /* functions */
     spv::Block *block_main;
@@ -75,9 +79,15 @@ static void gcn_translator_init_vs(gcn_translator_t *ctxt)
     char name[16];
     size_t i;
 
-    // Make sure U32 is available, since we need it unconditionally
+    // Types needed unconditionally
     if (ctxt->type_u32 == 0)
         ctxt->type_u32 = b.makeUintType(32);
+    if (ctxt->type_f32 == 0)
+        ctxt->type_f32 = b.makeUintType(32);
+    if (ctxt->type_u32_x4 == 0)
+        ctxt->type_u32_x4 = b.makeVectorType(ctxt->type_u32, 4);
+    if (ctxt->type_f32_x4 == 0)
+        ctxt->type_f32_x4 = b.makeVectorType(ctxt->type_f32, 4);
 
     // Define entry point
     ctxt->entry_main = b.addEntryPoint(spv::ExecutionModel::ExecutionModelVertex,
@@ -85,18 +95,36 @@ static void gcn_translator_init_vs(gcn_translator_t *ctxt)
 
     // Define registers
     assert(analyzer->has_isolated_components);
-    for (i = 0; i < ARRAYCOUNT(analyzer->used_sgprs); i++) {
-        if (analyzer->used_sgprs[i]) {
+    for (i = 0; i < ARRAYCOUNT(analyzer->used_sgpr); i++) {
+        if (analyzer->used_sgpr[i]) {
             snprintf(name, sizeof(name), "s%zd", i);
             ctxt->var_sgpr[i] = b.createVariable(spv::StorageClass::StorageClassFunction,
                 ctxt->type_u32, name);
         }
     }
-    for (i = 0; i < ARRAYCOUNT(analyzer->used_vgprs); i++) {
-        if (analyzer->used_vgprs[i]) {
+    for (i = 0; i < ARRAYCOUNT(analyzer->used_vgpr); i++) {
+        if (analyzer->used_vgpr[i]) {
             snprintf(name, sizeof(name), "v%zd", i);
             ctxt->var_vgpr[i] = b.createVariable(spv::StorageClass::StorageClassFunction,
                 ctxt->type_u32, name);
+        }
+    }
+    for (i = 0; i < ARRAYCOUNT(analyzer->used_exp_pos); i++) {
+        if (analyzer->used_exp_pos[i]) {
+            snprintf(name, sizeof(name), "pos%zd", i);
+            ctxt->var_exp_pos[i] = b.createVariable(spv::StorageClass::StorageClassOutput,
+                ctxt->type_f32_x4, name);
+            b.addDecoration(ctxt->var_exp_pos[i], spv::Decoration::DecorationBuiltIn,
+                spv::BuiltIn::BuiltInPosition);
+            ctxt->entry_main->addIdOperand(ctxt->var_exp_pos[i]);
+        }
+    }
+    for (i = 0; i < ARRAYCOUNT(analyzer->used_exp_param); i++) {
+        if (analyzer->used_exp_param[i]) {
+            snprintf(name, sizeof(name), "param%zd", i);
+            ctxt->var_exp_param[i] = b.createVariable(spv::StorageClass::StorageClassOutput,
+                ctxt->type_f32_x4, name);
+            ctxt->entry_main->addIdOperand(ctxt->var_exp_param[i]);
         }
     }
 
@@ -203,19 +231,15 @@ void gcn_translator_destroy(gcn_translator_t *ctxt)
     free(ctxt);
 }
 
-static spv::Id translate_operand_get_constant(gcn_translator_t *ctxt,
+static spv::Id translate_operand_get_imm(gcn_translator_t *ctxt,
     gcn_operand_t *op)
 {
     spv::Builder& b = *ctxt->builder;
-    gcn_instruction_t *insn = ctxt->cur_insn;
 
     // Note: Regardless of instruction type, constants are always 32-bit.
-    switch (insn->type_src) {
-    case GCN_TYPE_F16:
-    case GCN_TYPE_F32:
-    case GCN_TYPE_F64:
+    if (op->flags & GCN_FLAGS_OP_FLOAT) {
         return b.makeFloatConstant(op->const_f64);
-    default:
+    } else {
         return b.makeUintConstant(op->const_u64);
     }
 }
@@ -225,22 +249,18 @@ static spv::Id translate_operand_get_vgpr(gcn_translator_t *ctxt,
 {
     spv::Builder& b = *ctxt->builder;
     spv::Id var, value;
+    gcn_instruction_t *insn = ctxt->cur_insn;
 
     assert(op->id < ARRAYCOUNT(ctxt->var_vgpr));
     var = ctxt->var_vgpr[op->id];
     value = b.createLoad(var);
-    return value;
-}
 
-static void translate_operand_set_vgpr(gcn_translator_t *ctxt,
-    gcn_operand_t *op, spv::Id value)
-{
-    spv::Builder& b = *ctxt->builder;
-    spv::Id var;
-
-    assert(op->id < ARRAYCOUNT(ctxt->var_vgpr));
-    var = ctxt->var_vgpr[op->id];
-    b.createStore(value, var);
+    switch (insn->type_src) {
+    case GCN_TYPE_F32:
+        return b.createUnaryOp(spv::Op::OpBitcast, ctxt->type_f32, value);
+    default:
+        return value;
+    }
 }
 
 static spv::Id translate_operand_get(gcn_translator_t *ctxt, gcn_operand_t *op)
@@ -249,10 +269,76 @@ static spv::Id translate_operand_get(gcn_translator_t *ctxt, gcn_operand_t *op)
     case GCN_KIND_VGPR:
         return translate_operand_get_vgpr(ctxt, op);
     case GCN_KIND_IMM:
-    case GCN_KIND_LIT:
-        return translate_operand_get_constant(ctxt, op);
+        return translate_operand_get_imm(ctxt, op);
     default:
         return spv::NoResult;
+    }
+}
+
+static void translate_operand_set_vgpr(gcn_translator_t *ctxt,
+    gcn_operand_t *op, spv::Id value)
+{
+    spv::Builder& b = *ctxt->builder;
+    spv::Id var;
+    gcn_instruction_t *insn = ctxt->cur_insn;
+
+    assert(op->id < ARRAYCOUNT(ctxt->var_vgpr));
+    var = ctxt->var_vgpr[op->id];
+
+    switch (insn->type_dst) {
+    case GCN_TYPE_F32:
+        value = b.createUnaryOp(spv::Op::OpBitcast, ctxt->type_u32, value);
+        break;
+    case GCN_TYPE_B32:
+        value = b.createUnaryOp(spv::Op::OpBitcast, ctxt->type_u32, value);
+        break;
+    default:
+        break;
+    }
+    b.createStore(value, var);
+}
+
+static void translate_operand_set_exp_pos(gcn_translator_t *ctxt,
+    gcn_operand_t *op, spv::Id value)
+{
+    spv::Builder& b = *ctxt->builder;
+    spv::Id var;
+
+    assert(op->id < ARRAYCOUNT(ctxt->var_exp_pos));
+    var = ctxt->var_exp_pos[op->id];
+
+    value = b.createUnaryOp(spv::Op::OpBitcast, ctxt->type_f32_x4, value);
+    b.createStore(value, var);
+}
+
+static void translate_operand_set_exp_param(gcn_translator_t *ctxt,
+    gcn_operand_t *op, spv::Id value)
+{
+    spv::Builder& b = *ctxt->builder;
+    spv::Id var;
+
+    assert(op->id < ARRAYCOUNT(ctxt->var_exp_param));
+    var = ctxt->var_exp_param[op->id];
+
+    value = b.createUnaryOp(spv::Op::OpBitcast, ctxt->type_f32_x4, value);
+    b.createStore(value, var);
+}
+
+static void translate_operand_set(gcn_translator_t *ctxt,
+    gcn_operand_t *op, spv::Id value)
+{
+    switch (op->kind) {
+    case GCN_KIND_VGPR:
+        translate_operand_set_vgpr(ctxt, op, value);
+        break;
+    case GCN_KIND_EXP_POS:
+        translate_operand_set_exp_pos(ctxt, op, value);
+        break;
+    case GCN_KIND_EXP_PARAM:
+        translate_operand_set_exp_param(ctxt, op, value);
+        break;
+    default:
+        break;
     }
 }
 
@@ -289,6 +375,8 @@ static spv::Id translate_opcode_vop1(gcn_translator_t *ctxt,
     spv::Builder& b = *ctxt->builder;
 
     switch (op) {
+    case V_MOV_B32:
+        return src;
     case V_CVT_I32_F64:
         return b.createUnaryOp(spv::Op::OpConvertFToS, ctxt->type_u32, src);
     case V_CVT_F64_I32:
@@ -367,6 +455,22 @@ static void translate_encoding_vop3a(gcn_translator_t *ctxt,
     translate_operand_set_vgpr(ctxt, &insn->dst, dst);
 }
 
+static void translate_encoding_exp(gcn_translator_t *ctxt,
+    gcn_instruction_t *insn)
+{
+    spv::Builder& b = *ctxt->builder;
+    spv::Id dst, src0, src1, src2, src3;
+
+    src0 = translate_operand_get(ctxt, &insn->src0);
+    src1 = translate_operand_get(ctxt, &insn->src1);
+    src2 = translate_operand_get(ctxt, &insn->src2);
+    src3 = translate_operand_get(ctxt, &insn->src3);
+
+    dst = b.createCompositeConstruct(ctxt->type_u32_x4, { src0, src1, src2, src3 });
+
+    translate_operand_set(ctxt, &insn->dst, dst);
+}
+
 /* callbacks */
 
 #define TRANSLATOR_CALLBACK(name) \
@@ -389,6 +493,9 @@ static void translate_insn(gcn_translator_t *ctxt,
         break;
     case GCN_ENCODING_VOP3A:
         translate_encoding_vop3a(ctxt, insn);
+        break;
+    case GCN_ENCODING_EXP:
+        translate_encoding_exp(ctxt, insn);
         break;
 #if 0        
     case GCN_ENCODING_SOP2:
@@ -414,9 +521,6 @@ static void translate_insn(gcn_translator_t *ctxt,
         break;
     case GCN_ENCODING_MIMG:
         translate_encoding_mimg(ctxt, insn);
-        break;
-    case GCN_ENCODING_EXP:
-        translate_encoding_exp(ctxt, insn);
         break;
     default:
         assert(0);

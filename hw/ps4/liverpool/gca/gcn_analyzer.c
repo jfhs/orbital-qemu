@@ -52,7 +52,7 @@ void gcn_analyzer_print_usage(gcn_analyzer_t *ctxt, FILE *stream)
 
     // Show type usage
     comma = false;
-    fprintf(stream, "- used_types: ");
+    fprintf(stream, "- %-16s: ", "used_types");
     for (i = 0; i < 32; i++) {
         if (!(ctxt->used_types & (1 << i)))
             continue;
@@ -81,22 +81,21 @@ void gcn_analyzer_print_usage(gcn_analyzer_t *ctxt, FILE *stream)
     }
 
     // Show register usage
-    comma = false;
-    fprintf(stream, "\n- used_sgprs: ");
-    for (i = 0; i < ARRAYCOUNT(ctxt->used_sgprs); i++) {
-        if (!ctxt->used_sgprs[i])
-            continue;
-        fprintf(stream, "%ss%d", comma ? ", " : "", i);
-        comma = true;
+#define USAGE_REG(array, name) {                               \
+        comma = false;                                         \
+        fprintf(stream, "\n- %-16s: ", #array);                \
+        for (i = 0; i < ARRAYCOUNT(ctxt->array); i++) {        \
+            if (!ctxt->array[i]) continue;                     \
+            fprintf(stream, "%s" name, comma ? ", " : "", i);  \
+            comma = true;                                      \
+        }                                                      \
     }
-    comma = false;
-    fprintf(stream, "\n- used_vgprs: ");
-    for (i = 0; i < ARRAYCOUNT(ctxt->used_vgprs); i++) {
-        if (!ctxt->used_vgprs[i])
-            continue;
-        fprintf(stream, "%sv%d", comma ? ", " : "", i);
-        comma = true;
-    }
+    USAGE_REG(used_sgpr, "s%d");
+    USAGE_REG(used_vgpr, "v%d");
+    USAGE_REG(used_exp_mrt, "mrt%d");
+    USAGE_REG(used_exp_mrtz, "mrtz%d");
+    USAGE_REG(used_exp_pos, "pos%d");
+    USAGE_REG(used_exp_param, "param%d");
     fprintf(stream, "\n");
 }
 
@@ -129,12 +128,28 @@ static void analyze_operand(gcn_analyzer_t *ctxt, gcn_operand_t *op)
 
     switch (op->kind) {
     case GCN_KIND_SGPR:
-        assert(op->id < ARRAYCOUNT(ctxt->used_sgprs));
-        ctxt->used_sgprs[op->id] = 1;
+        assert(op->id < ARRAYCOUNT(ctxt->used_sgpr));
+        ctxt->used_sgpr[op->id] = 1;
         break;
     case GCN_KIND_VGPR:
-        assert(op->id < ARRAYCOUNT(ctxt->used_vgprs));
-        ctxt->used_vgprs[op->id] = 1;
+        assert(op->id < ARRAYCOUNT(ctxt->used_vgpr));
+        ctxt->used_vgpr[op->id] = 1;
+        break;
+    case GCN_KIND_EXP_MRT:
+        assert(op->id < ARRAYCOUNT(ctxt->used_exp_mrt));
+        ctxt->used_exp_mrt[op->id] = 1;
+        break;
+    case GCN_KIND_EXP_MRTZ:
+        assert(op->id < ARRAYCOUNT(ctxt->used_exp_mrtz));
+        ctxt->used_exp_mrtz[op->id] = 1;
+        break;
+    case GCN_KIND_EXP_POS:
+        assert(op->id < ARRAYCOUNT(ctxt->used_exp_pos));
+        ctxt->used_exp_pos[op->id] = 1;
+        break;
+    case GCN_KIND_EXP_PARAM:
+        assert(op->id < ARRAYCOUNT(ctxt->used_exp_param));
+        ctxt->used_exp_param[op->id] = 1;
         break;
     default:
         break;
