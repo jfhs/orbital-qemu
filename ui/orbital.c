@@ -138,6 +138,11 @@ void orbital_update_cpu_procs_list_add_proc_thread(int owner_pid, struct thread 
     orbital_procs_list_add_proc_thread(ui.procs_list, owner_pid, td);
 }
 
+void orbital_update_cpu_procs_list_done()
+{
+    orbital_procs_list_done(ui.procs_list);
+}
+
 static void timespec_diff(struct timespec *start, struct timespec *stop,
                    struct timespec *result)
 {
