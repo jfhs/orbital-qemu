@@ -592,9 +592,17 @@ static void hax_update_executing_processes(CPUArchState *env, CPUState *cpu)
 // TODO: refactor out of here (?)
 
 // For reversing structures
-#define DUMP_PROC 1
+#define DUMP_PROC 0
 #define DUMP_THREAD 0
-#define DUMP_ALL_PROC_PTRS 1
+#define DUMP_ALL_PROC_PTRS 0
+
+static int makedir(const char *path) {
+#ifdef __MINGW32__
+    return mkdir(path);
+#else
+    return mkdir(path, 0666);
+#endif
+}
 
 static void dump_bin(const char *filename, const void* data, size_t size)
 {
@@ -625,9 +633,14 @@ static void hax_update_process_list(CPUArchState *env, CPUState *cpu) {
 
     hax_target_memory_rw_debug(cpu, thread_addr, (uint8_t *)td, sizeof(struct thread), false);
 
+#if DUMP_PROC || DUMP_THREAD || DUMP_ALL_PROC_PTRS
+    makedir("dump");
+#endif
+
 #if DUMP_THREAD
+    makedir("dump/thread");
     char tdname[50];
-    sprintf(tdname, "thread_dump_%d.bin", cpu->thread_id);
+    sprintf(tdname, "dump/thread/thread_%d.bin", cpu->thread_id);
     dump_bin(tdname, (const void *)td, sizeof(struct thread));
 #endif
 
@@ -655,12 +668,14 @@ static void hax_update_process_list(CPUArchState *env, CPUState *cpu) {
         p_iter = &proc_data->proc;
 
 #if DUMP_PROC
+        makedir("dump/proc");
         char pdname[50];
-        sprintf(pdname, "proc_dump_%02d_%s.bin", p_iter->p_pid, p_iter->p_comm);
+        sprintf(pdname, "dump/proc/proc_%02d_%s.bin", p_iter->p_pid, p_iter->p_comm);
         dump_bin(pdname, (const void *)p_iter, sizeof(struct proc));
 #endif
 
 #if DUMP_ALL_PROC_PTRS
+        makedir("dump/proc_ptr");
         uint64_t p_base = (uint64_t)p_iter;
         uint64_t p_ptr;
         struct proc temp;
@@ -676,7 +691,7 @@ static void hax_update_process_list(CPUArchState *env, CPUState *cpu) {
                 hax_target_memory_rw_debug(cpu, p_ptr, (uint8_t *)&temp, sizeof(struct proc), false);
 
                 char ppdname[100];
-                sprintf(ppdname, "proc_dump_%02d_%s_0x%04X.bin", p_iter->p_pid, p_iter->p_comm, i);
+                sprintf(ppdname, "dump/proc_ptr/proc_ptr_%02d_%s_0x%04X.bin", p_iter->p_pid, p_iter->p_comm, i);
                 dump_bin(ppdname, (const void *)&temp, sizeof(struct proc));
             }
         }
