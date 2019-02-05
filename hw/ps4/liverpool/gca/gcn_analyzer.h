@@ -24,6 +24,57 @@
 
 #include <stdio.h>
 
+/* dependencies */
+
+enum gcn_dependency_type_t {
+    GCN_DEPENDENCY_TYPE_ANY,
+    GCN_DEPENDENCY_TYPE_BUFFER,
+    GCN_DEPENDENCY_TYPE_IMAGE,
+};
+
+enum gcn_dependency_source_t {
+    GCN_DEPENDENCY_SOURCE_ANY,
+    GCN_DEPENDENCY_SOURCE_IMM,
+    GCN_DEPENDENCY_SOURCE_SGPR,
+    GCN_DEPENDENCY_SOURCE_VGPR,
+    GCN_DEPENDENCY_SOURCE_MEMORY,
+};
+
+struct gcn_dependency_value_t {
+    enum gcn_dependency_source_t source;
+    union {
+        struct {
+            uint64_t value;
+        } imm;
+        struct {
+            uint32_t index;
+            uint32_t bit_lo;
+            uint32_t bit_hi;
+        } sgpr;
+        struct {
+            uint32_t index;
+        } vgpr;
+    };
+};
+
+struct gcn_dependency_buffer_t {
+    struct gcn_dependency_value_t base;
+    struct gcn_dependency_value_t size;
+};
+
+struct gcn_dependency_image_t {
+    struct gcn_dependency_value_t base;
+    struct gcn_dependency_value_t size;
+};
+
+typedef struct gcn_dependency_t {
+    enum gcn_dependency_type_t type;
+    union {
+        struct gcn_dependency_buffer_t buffer;
+        struct gcn_dependency_image_t image;
+    };
+} gcn_dependency_t;
+
 typedef struct gcn_analyzer_t {
     /* usage */
     uint32_t used_types;

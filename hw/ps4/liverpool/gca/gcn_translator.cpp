@@ -29,6 +29,7 @@
 typedef struct gcn_translator_t {
     gcn_analyzer_t *analyzer;
     gcn_stage_t stage;
+    gcn_instruction_t *cur_insn;
 
     /* spirv */
     spv::Builder *builder;
@@ -94,7 +95,7 @@ static void gcn_translator_init_vs(gcn_translator_t *ctxt)
     for (i = 0; i < ARRAYCOUNT(analyzer->used_vgprs); i++) {
         if (analyzer->used_vgprs[i]) {
             snprintf(name, sizeof(name), "v%zd", i);
-            ctxt->var_sgpr[i] = b.createVariable(spv::StorageClass::StorageClassFunction,
+            ctxt->var_vgpr[i] = b.createVariable(spv::StorageClass::StorageClassFunction,
                 ctxt->type_u32, name);
         }
     }
@@ -127,7 +128,7 @@ static void gcn_translator_init(gcn_translator_t *ctxt,
 
     // Create types
     /* misc */
-    ctxt->type_void = b.makeUintType(64);
+    ctxt->type_void = b.makeVoidType();
     /* fN */
     if ((analyzer->used_types >> GCN_TYPE_F16) & 1)
         ctxt->type_f16 = b.makeFloatType(16);
@@ -202,6 +203,171 @@ void gcn_translator_destroy(gcn_translator_t *ctxt)
     free(ctxt);
 }
 
+static spv::Id translate_operand_get_constant(gcn_translator_t *ctxt,
+    gcn_operand_t *op)
+{
+    spv::Builder& b = *ctxt->builder;
+    gcn_instruction_t *insn = ctxt->cur_insn;
+
+    // Note: Regardless of instruction type, constants are always 32-bit.
+    switch (insn->type_src) {
+    case GCN_TYPE_F16:
+    case GCN_TYPE_F32:
+    case GCN_TYPE_F64:
+        return b.makeFloatConstant(op->const_f64);
+    default:
+        return b.makeUintConstant(op->const_u64);
+    }
+}
+
+static spv::Id translate_operand_get_vgpr(gcn_translator_t *ctxt,
+    gcn_operand_t *op)
+{
+    spv::Builder& b = *ctxt->builder;
+    spv::Id var, value;
+
+    assert(op->id < ARRAYCOUNT(ctxt->var_vgpr));
+    var = ctxt->var_vgpr[op->id];
+    value = b.createLoad(var);
+    return value;
+}
+
+static void translate_operand_set_vgpr(gcn_translator_t *ctxt,
+    gcn_operand_t *op, spv::Id value)
+{
+    spv::Builder& b = *ctxt->builder;
+    spv::Id var;
+
+    assert(op->id < ARRAYCOUNT(ctxt->var_vgpr));
+    var = ctxt->var_vgpr[op->id];
+    b.createStore(value, var);
+}
+
+static spv::Id translate_operand_get(gcn_translator_t *ctxt, gcn_operand_t *op)
+{
+    switch (op->kind) {
+    case GCN_KIND_VGPR:
+        return translate_operand_get_vgpr(ctxt, op);
+    case GCN_KIND_IMM:
+    case GCN_KIND_LIT:
+        return translate_operand_get_constant(ctxt, op);
+    default:
+        return translate_operand_get_constant(ctxt, op);
+        return 0;
+    }
+}
+
+/* opcodes */
+
+static spv::Id translate_opcode_vop2(gcn_translator_t *ctxt,
+    uint32_t op, spv::Id src0, spv::Id src1)
+{
+    spv::Builder& b = *ctxt->builder;
+
+    switch (op) {
+    case V_ADD_F32:
+        return b.createBinOp(spv::Op::OpFAdd, ctxt->type_f32, src0, src1);
+    case V_SUB_F32:
+        return b.createBinOp(spv::Op::OpFSub, ctxt->type_f32, src0, src1);
+    case V_MUL_F32:
+        return b.createBinOp(spv::Op::OpFMul, ctxt->type_f32, src0, src1);
+    case V_MUL_I32_I24:
+        return b.createBinOp(spv::Op::OpIMul, ctxt->type_u32, src0, src1);
+    case V_AND_B32:
+        return b.createBinOp(spv::Op::OpBitwiseAnd, ctxt->type_u32, src0, src1);
+    case V_XOR_B32:
+        return b.createBinOp(spv::Op::OpBitwiseXor, ctxt->type_u32, src0, src1);
+    case V_OR_B32:
+        return b.createBinOp(spv::Op::OpBitwiseOr, ctxt->type_u32, src0, src1);
+    default:
+        return NULL;
+    }
+}
+
+static spv::Id translate_opcode_vop1(gcn_translator_t *ctxt,
+    uint32_t op, spv::Id src)
+{
+    spv::Builder& b = *ctxt->builder;
+
+    switch (op) {
+    case V_CVT_I32_F64:
+        return b.createUnaryOp(spv::Op::OpConvertFToS, ctxt->type_u32, src);
+    case V_CVT_F64_I32:
+        return b.createUnaryOp(spv::Op::OpConvertSToF, ctxt->type_f64, src);
+    case V_CVT_F32_I32:
+        return b.createUnaryOp(spv::Op::OpConvertSToF, ctxt->type_f32, src);
+    case V_CVT_F32_U32:
+        return b.createUnaryOp(spv::Op::OpConvertUToF, ctxt->type_f32, src);
+    case V_CVT_U32_F32:
+        return b.createUnaryOp(spv::Op::OpConvertFToU, ctxt->type_u32, src);
+    case V_CVT_I32_F32:
+        return b.createUnaryOp(spv::Op::OpConvertFToS, ctxt->type_i32, src);
+    default:
+        return NULL;
+    }
+}
+
+/* encodings */
+
+static void translate_encoding_sopp(gcn_translator_t *ctxt,
+    gcn_instruction_t *insn)
+{
+    spv::Builder& b = *ctxt->builder;
+
+    switch (insn->sopp.op) {
+    case S_ENDPGM:
+        b.makeReturn(false);
+        break;
+    default:
+        break;
+    }
+}
+
+static void translate_encoding_vop2(gcn_translator_t *ctxt,
+    gcn_instruction_t *insn)
+{
+    spv::Id dst, src0, src1;
+
+    src0 = translate_operand_get(ctxt, &insn->src0);
+    src1 = translate_operand_get(ctxt, &insn->src1);
+
+    dst = translate_opcode_vop2(ctxt, insn->vop2.op, src0, src1);
+    translate_operand_set_vgpr(ctxt, &insn->dst, dst);
+}
+
+static void translate_encoding_vop1(gcn_translator_t *ctxt,
+    gcn_instruction_t *insn)
+{
+    spv::Id dst, src;
+
+    src = translate_operand_get(ctxt, &insn->src0);
+
+    dst = translate_opcode_vop1(ctxt, insn->vop1.op, src);
+    translate_operand_set_vgpr(ctxt, &insn->dst, dst);
+}
+
+static void translate_encoding_vop3a(gcn_translator_t *ctxt,
+    gcn_instruction_t *insn)
+{
+    spv::Id dst, src0, src1;
+    uint32_t op;
+
+    src0 = translate_operand_get(ctxt, &insn->src0);
+    src1 = translate_operand_get(ctxt, &insn->src1);
+
+    op = insn->vop3a.op;
+    if (op < 0x100) {
+        assert(0);
+    } else if (op < 0x140) {
+        op -= 0x100;
+        dst = translate_opcode_vop2(ctxt, op, src0, src1);
+    } else {
+        assert(0);
+    }
+
+    translate_operand_set_vgpr(ctxt, &insn->dst, dst);
+}
+
 /* callbacks */
 
 #define TRANSLATOR_CALLBACK(name) \
@@ -210,8 +376,53 @@ void gcn_translator_destroy(gcn_translator_t *ctxt)
 static void translate_insn(gcn_translator_t *ctxt,
     gcn_instruction_t *insn)
 {
-    UNUSED(ctxt);
-    UNUSED(insn);
+    ctxt->cur_insn = insn;
+
+    switch (insn->encoding) {
+    case GCN_ENCODING_SOPP:
+        translate_encoding_sopp(ctxt, insn);
+        break;
+    case GCN_ENCODING_VOP2:
+        translate_encoding_vop2(ctxt, insn);
+        break;
+    case GCN_ENCODING_VOP1:
+        translate_encoding_vop1(ctxt, insn);
+        break;
+    case GCN_ENCODING_VOP3A:
+        translate_encoding_vop3a(ctxt, insn);
+        break;
+#if 0        
+    case GCN_ENCODING_SOP2:
+        translate_encoding_sop2(ctxt, insn);
+        break;
+    case GCN_ENCODING_SOPK:
+        translate_encoding_sopk(ctxt, insn);
+        break;
+    case GCN_ENCODING_SOP1:
+        translate_encoding_sop1(ctxt, insn);
+        break;
+    case GCN_ENCODING_SOPC:
+        translate_encoding_sopc(ctxt, insn);
+        break;
+    case GCN_ENCODING_VOPC:
+        translate_encoding_vopc(ctxt, insn);
+        break;
+    case GCN_ENCODING_VINTRP:
+        translate_encoding_vintrp(ctxt, insn);
+        break;
+    case GCN_ENCODING_SMRD:
+        translate_encoding_smrd(ctxt, insn);
+        break;
+    case GCN_ENCODING_MIMG:
+        translate_encoding_mimg(ctxt, insn);
+        break;
+    case GCN_ENCODING_EXP:
+        translate_encoding_exp(ctxt, insn);
+        break;
+    default:
+        assert(0);
+#endif
+    }
 }
 
 #define TRANSLATE_INSN(name) \
