@@ -31,6 +31,10 @@ typedef struct gcn_disasm_t {
     FILE *stream;
     size_t op_indent;
     size_t op_padding;
+    struct {
+        bool show_address   : 1;
+        bool show_encoding  : 1;
+    };
 } gcn_disasm_t;
 
 #ifdef __cplusplus
