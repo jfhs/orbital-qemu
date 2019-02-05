@@ -43,16 +43,22 @@
 #include <set>
 #include <sstream>
 #include <string>
+#include <utility>
 #include <vector>
 
 // TODO: Create proper layout for `thread` and remove this
 #define THREAD_NAME(td) (char *)(((uint64_t)(td)) + 0x284)
 
-// TODO: Look into list flickering issue
 struct orbital_procs_list_t
 {
     std::vector<orbital_proc_data> proc_data_list;
     std::multimap<int32_t, thread> threads_map; // threads for each pid
+
+    // The following fields are used as temporaries, to allow us to disregard new data when necessary.
+    // Every modifications happens in these, and the results are commited (if certains conditions pass)
+    // in orbital_procs_list_t::Done().
+    std::vector<orbital_proc_data> proc_data_list_temp;
+    std::multimap<int32_t, thread> threads_map_temp;
 
     static float calc_width_for_chars(uint32_t chars) {
         auto ig_style = ImGui::GetStyle();
@@ -117,16 +123,28 @@ struct orbital_procs_list_t
     }
 
     void AddProc(struct orbital_proc_data *p) {
-        proc_data_list.push_back(*p);
+        proc_data_list_temp.push_back(*p);
     }
 
     void AddProcThread(int32_t owner_pid, struct thread *td) {
-        threads_map.emplace(owner_pid, *td);
+        threads_map_temp.emplace(owner_pid, *td);
     }
 
     void Clear() {
-        proc_data_list.clear();
-        threads_map.clear();
+        proc_data_list_temp.clear();
+        threads_map_temp.clear();
+    }
+
+    void Done() {
+        if (proc_data_list_temp.size() >= proc_data_list.size()) {
+            // Commit new data
+            proc_data_list = std::move(proc_data_list_temp);
+            threads_map = std::move(threads_map_temp);
+        } else {
+            // Disregard new data
+            proc_data_list_temp.clear();
+            threads_map_temp.clear();
+        }
     }
 
     void Draw(const char* title, bool* p_open = NULL)
@@ -243,12 +261,13 @@ struct orbital_procs_list_t
             snprintf(text, 50, "%s", p_state_to_str(data.proc.p_state));
             ImGui::Selectable(text, &is_selected, ImGuiSelectableFlags_SpanAllColumns);
             ImGui::NextColumn();
+            ImGui::BeginGroup();
             snprintf(text, 50, "0x%08X", data.proc.p_flag);
             ImGui::Selectable(text, &is_selected, ImGuiSelectableFlags_SpanAllColumns);
+            ImGui::EndGroup();
             if (ImGui::IsItemHovered()) {
                 std::string flag_str = flags_to_str(data.proc.p_flag);
                 ImGui::SetTooltip("%s", flag_str.c_str());
-                ImGui::EndTooltip();
             }
             ImGui::NextColumn();
             snprintf(text, 50, "%lld", threads_map.count(data.proc.p_pid));
@@ -354,6 +373,11 @@ void orbital_procs_list_add_proc_thread(struct orbital_procs_list_t *procs_list,
 void orbital_procs_list_clear(struct orbital_procs_list_t *procs_list)
 {
     procs_list->Clear();
+}
+
+void orbital_procs_list_done(struct orbital_procs_list_t *procs_list)
+{
+    procs_list->Done();
 }
 
 void orbital_procs_list_draw(struct orbital_procs_list_t *procs_list, const char *title, bool* p_open)

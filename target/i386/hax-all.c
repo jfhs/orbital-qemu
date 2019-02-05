@@ -695,6 +695,7 @@ static void hax_update_process_list(CPUArchState *env, CPUState *cpu) {
             // printf("\tthread %s (%lld)\n", THREAD_NAME(td), td->td_tid);
         }
     }
+    orbital_update_cpu_procs_list_done();
 }
 
 /*
