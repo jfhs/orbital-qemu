@@ -83,6 +83,20 @@ static gcn_parser_error_t handle_operand_ssrc(gcn_parser_t *ctxt,
         op->flags |= GCN_FLAGS_OP_CONST;
         op->kind = GCN_KIND_IMM;
     }
+    else if (240 <= id && id <= 247) {
+        switch (id) {
+        case 240: op->const_f64 = +0.5; break;
+        case 241: op->const_f64 = -0.5; break;
+        case 242: op->const_f64 = +1.0; break;
+        case 243: op->const_f64 = -1.0; break;
+        case 244: op->const_f64 = +2.0; break;
+        case 245: op->const_f64 = -2.0; break;
+        case 246: op->const_f64 = +4.0; break;
+        case 247: op->const_f64 = -4.0; break;
+        }
+        op->flags |= GCN_FLAGS_OP_CONST | GCN_FLAGS_OP_FLOAT;
+        op->kind = GCN_KIND_IMM;
+    }
     else if (id == OP_LITERAL) {
         op->const_u64 = gcn_parser_read32(ctxt);
         op->flags |= GCN_FLAGS_OP_CONST;

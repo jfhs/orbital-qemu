@@ -252,8 +252,7 @@ static spv::Id translate_operand_get(gcn_translator_t *ctxt, gcn_operand_t *op)
     case GCN_KIND_LIT:
         return translate_operand_get_constant(ctxt, op);
     default:
-        return translate_operand_get_constant(ctxt, op);
-        return 0;
+        return spv::NoResult;
     }
 }
 
@@ -280,7 +279,7 @@ static spv::Id translate_opcode_vop2(gcn_translator_t *ctxt,
     case V_OR_B32:
         return b.createBinOp(spv::Op::OpBitwiseOr, ctxt->type_u32, src0, src1);
     default:
-        return NULL;
+        return spv::NoResult;
     }
 }
 
@@ -303,7 +302,7 @@ static spv::Id translate_opcode_vop1(gcn_translator_t *ctxt,
     case V_CVT_I32_F32:
         return b.createUnaryOp(spv::Op::OpConvertFToS, ctxt->type_i32, src);
     default:
-        return NULL;
+        return spv::NoResult;
     }
 }
 

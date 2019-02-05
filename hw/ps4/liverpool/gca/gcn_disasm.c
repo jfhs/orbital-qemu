@@ -90,22 +90,6 @@ static const char* get_operand_spr(uint32_t id)
         return "exec_lo";
     case 127:
         return "exec_hi";
-    case 240:
-        return "0.5";
-    case 241:
-        return "-0.5";
-    case 242:
-        return "1.0";
-    case 243:
-        return "-1.0";
-    case 244:
-        return "2.0";
-    case 245:
-        return "-2.0";
-    case 246:
-        return "4.0";
-    case 247:
-        return "-4.0";
     default:
         return "???";
     }
@@ -226,8 +210,8 @@ static void disasm_operand(gcn_disasm_t *ctxt,
         strcat(buf, tmp);
         break;
     case GCN_KIND_IMM:
-        if (type == GCN_TYPE_F16 || type == GCN_TYPE_F32 || type == GCN_TYPE_F64)
-            snprintf(tmp, sizeof(tmp), "%lg", op->const_f64);
+        if (op->flags & GCN_FLAGS_OP_FLOAT)
+            snprintf(tmp, sizeof(tmp), "%.1f", op->const_f64);
         else
             snprintf(tmp, sizeof(tmp), "%ld", op->const_u64);
         strcat(buf, tmp);

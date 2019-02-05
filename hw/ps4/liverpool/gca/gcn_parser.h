@@ -84,6 +84,7 @@ typedef enum gcn_operand_flags_t {
     GCN_FLAGS_OP_USED  = (1 << 0), // Operand is used
     GCN_FLAGS_OP_CONST = (1 << 1), // Operand is constant
     GCN_FLAGS_OP_DEST  = (1 << 2), // Operand is destination
+    GCN_FLAGS_OP_FLOAT = (1 << 3), // Operand is floating-point
 } gcn_operand_flags_t;
 
 typedef enum gcn_operand_type_t {
