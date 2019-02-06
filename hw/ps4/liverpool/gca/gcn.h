@@ -668,4 +668,106 @@ struct gcn_encoding_exp_t {
     };
 };
 
+/* resource constants */
+
+// V# Buffer Resource Constant (128-bit)
+struct gcn_resource_vh_t {
+    struct {
+        uint64_t base                : 44;  // Byte address.
+        uint64_t mtype_l1s           : 2;   // Mtype for L1-Scalar.
+        uint64_t mtype_l2            : 2;   // Mtype for L2.
+        uint64_t stride              : 14;  // Bytes 0 to 16383.
+        uint64_t cache_swizzle       : 1;   // Buffer access.
+        uint64_t swizzle_en          : 1;   // Swizzle AOS.
+        uint64_t num_records         : 32;  // Stride units.
+        uint64_t dst_sel_x           : 3;   // Destination channel select for X.
+        uint64_t dst_sel_y           : 3;   // Destination channel select for Y.
+        uint64_t dst_sel_z           : 3;   // Destination channel select for Z.
+        uint64_t dst_sel_w           : 3;   // Destination channel select for W.
+        uint64_t nfmt                : 3;   // Numeric format.
+        uint64_t dfmt                : 4;   // Data format.
+        uint64_t element_size        : 2;   // Element size: {2, 4, 8, 16}.
+        uint64_t index_stride        : 2;   // Index stride: {8, 16, 32, 64}.
+        uint64_t addtid_en           : 1;   // Add Thread ID.
+        uint64_t atc                 : 1;   // Memory space: 0=GPUVM, 1=ATC.
+        uint64_t hash_en             : 1;   // Hash buffer addresses.
+        uint64_t heap                : 1;   // Enabled if buffer is a heap.
+        uint64_t mtype               : 3;   // Memory type.
+        uint64_t type                : 2;   // Type.
+    };
+};
+
+// T# Buffer Resource Constant (128-bit or 256-bit)
+struct gcn_resource_th_t {
+    struct {
+        uint64_t base                : 38;  // Byte address (256-byte aligned).
+        uint64_t mtype_l2            : 2;   // Mtype for L2.
+        uint64_t min_lod             : 12;  // Minimum LOD as u:4:8 (0.0 to 16.0).
+        uint64_t dfmt                : 6;   // Texture data format.
+        uint64_t nfmt                : 4;   // Texture numeric format.
+        uint64_t mtype_l1_lsb        : 2;   // Mtype for L1 (LSBs).
+        uint64_t width               : 14;  // Texture width: 0 to 16383.
+        uint64_t height              : 14;  // Texture height: 0 to 16383.
+        uint64_t perf_mod            : 3;   // Scale factor applied to perf_*.
+        uint64_t interlaced          : 1;   // Texture is interlaced.
+        uint64_t dst_sel_x           : 3;   // Destination channel select for X.
+        uint64_t dst_sel_y           : 3;   // Destination channel select for Y.
+        uint64_t dst_sel_z           : 3;   // Destination channel select for Z.
+        uint64_t dst_sel_w           : 3;   // Destination channel select for W.
+        uint64_t base_level          : 4;   // First MIP level.
+        uint64_t last_level          : 4;   // Last MIP level.
+        uint64_t tiling_idx          : 5;   // Index into lookup table of tiling settings.
+        uint64_t pow2pad             : 1;   // Memory padded to power-of-two.
+        uint64_t mtype_l1_msb        : 1;   // Mtype for L1 (MSB).
+        uint64_t                     : 1;   // (reserved)
+        uint64_t type                : 4;   // Type.
+    };
+    struct {
+        uint64_t depth               : 13;  // Texture depth: 0 to 8191.
+        uint64_t pitch               : 14;  // Texture pitch: 0 to 16383 (in texels).
+        uint64_t                     : 5;   // (reserved)
+        uint64_t base_array          : 13;  // First array index: 0 to 16383.
+        uint64_t last_array          : 13;  // Last array index: 0 to 16383.
+        uint64_t                     : 6;   // (reserved)
+        uint64_t min_lod_warn        : 12;  // Minimum MIP level to trigger LWE as u:4:8.
+        uint64_t counter_bank_id     : 8;   // PRT counter ID.
+        uint64_t lod_hdw_cnt_en      : 1;   // PRT hardware counter enable.
+        uint64_t                     : 52;  // (reserved)
+    } ext;
+};
+
+// S# Sampler Resource Constant (128-bit)
+struct gcn_resource_sh_t {
+    struct {
+        uint64_t clamp_x             : 3;   // Clamp mode for OOB X-coord.
+        uint64_t clamp_y             : 3;   // Clamp mode for OOB Y-coord.
+        uint64_t clamp_z             : 3;   // Clamp mode for OOB Z-coord.
+        uint64_t max_aniso_ratio     : 3;   // Maximum anisotropy ratio.
+        uint64_t depth_compare_func  : 3;   // Depth compare function.
+        uint64_t force_unorm_coords  : 1;   // Force unnormalized coordinates.
+        uint64_t aniso_threshold     : 3;   // Threshold before sampling anisotropically.
+        uint64_t mc_coord_func       : 1;   // (undocumented)
+        uint64_t force_degamma       : 1;   // (undocumented)
+        uint64_t aniso_bias          : 6;   // Anisotropy bias factor.
+        uint64_t trunc_coord         : 1;   // Truncate coordinates
+        uint64_t disable_cube_wrap   : 1;   // Disable sampling/filtering on face boundaries.
+        uint64_t filter_mode         : 2;   // Filter mode: LERP, min, max.
+        uint64_t                     : 1;   // (reserved)
+        uint64_t min_lod             : 12;  // Minimum LOD to allow as u:4:8.
+        uint64_t max_lod             : 12;  // Maximum LOD to allow as u:4:8.
+        uint64_t perf_mip            : 4;   // (undocumented)
+        uint64_t perf_z              : 4;   // (undocumented)
+        uint64_t lod_bias            : 14;  // Bias to calculated LOD value as s:5:8.
+        uint64_t lod_bias_sec        : 6;   // Secondary fractional LOD bias as s:1:4.
+        uint64_t xy_mag_filter       : 2;   // Magnification filter.
+        uint64_t xy_min_filter       : 2;   // Minification filter.
+        uint64_t z_filter            : 2;   // Filter in Z-coord for volume textures.
+        uint64_t mip_filter          : 2;   // Filter in LOD-coord for mipped textures.
+        uint64_t                     : 4;   // (reserved)
+        uint64_t border_color_ptr    : 12;  // Offset into border color buffer.
+        uint64_t                     : 18;  // (reserved)
+        uint64_t border_color_type   : 2;   // Border color type.
+    };
+};
+
 #endif // HW_PS4_LIVERPOOL_GCA_GCN_H

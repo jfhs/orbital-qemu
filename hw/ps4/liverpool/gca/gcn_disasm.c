@@ -338,8 +338,17 @@ static void disasm_encoding_vop3a(gcn_disasm_t *ctxt,
 static void disasm_encoding_smrd(gcn_disasm_t *ctxt,
     gcn_instruction_t *insn, char *buf, const char *name)
 {
-    UNUSED(insn);
-    disasm_opcode(ctxt, buf, name);
+    char tmp[64];
+    char name_suffixed[64];
+
+    strncpy(name_suffixed, name, sizeof(tmp));
+    if (insn->lanes > 1) {
+        snprintf(tmp, sizeof(tmp), "x%d", insn->lanes);
+        strcat(name_suffixed, tmp);
+    }
+    disasm_opcode(ctxt, buf, name_suffixed);
+    snprintf(tmp, sizeof(tmp), "s[%d:%d], ", insn->dst.id, insn->dst.id + insn->lanes - 1);
+    strcat(buf, tmp);
 }
 
 static void disasm_encoding_mimg(gcn_disasm_t *ctxt,
