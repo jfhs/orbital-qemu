@@ -198,7 +198,10 @@ static void disasm_operand(gcn_disasm_t *ctxt,
     type = (op->flags & GCN_FLAGS_OP_DEST) ? insn->type_dst : insn->type_src;
     switch (op->kind) {
     case GCN_KIND_SGPR:
-        snprintf(tmp, sizeof(tmp), "s%d", op->id);
+        if (op->flags & GCN_FLAGS_OP_MULTI)
+            snprintf(tmp, sizeof(tmp), "s[%d:%d]", op->id, op->id + op->lanes - 1);
+        else
+            snprintf(tmp, sizeof(tmp), "s%d", op->id);
         strcat(buf, tmp);
         break;
     case GCN_KIND_VGPR:
@@ -342,13 +345,16 @@ static void disasm_encoding_smrd(gcn_disasm_t *ctxt,
     char name_suffixed[64];
 
     strncpy(name_suffixed, name, sizeof(tmp));
-    if (insn->lanes > 1) {
-        snprintf(tmp, sizeof(tmp), "x%d", insn->lanes);
+    if (insn->dst.lanes > 1) {
+        snprintf(tmp, sizeof(tmp), "x%d", insn->dst.lanes);
         strcat(name_suffixed, tmp);
     }
     disasm_opcode(ctxt, buf, name_suffixed);
-    snprintf(tmp, sizeof(tmp), "s[%d:%d], ", insn->dst.id, insn->dst.id + insn->lanes - 1);
-    strcat(buf, tmp);
+    disasm_operand(ctxt, buf, &insn->dst);
+    strcat(buf, ", ");
+    disasm_operand(ctxt, buf, &insn->src0);
+    strcat(buf, ", ");
+    disasm_operand(ctxt, buf, &insn->src1);
 }
 
 static void disasm_encoding_mimg(gcn_disasm_t *ctxt,

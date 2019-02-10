@@ -18,6 +18,7 @@
  */
 
 #include "gcn_analyzer.h"
+#include "gcn_resource.h"
 
 #include <assert.h>
 
@@ -29,19 +30,39 @@
 extern "C" {
 #endif
 
-/* dumper */
-
 void gcn_analyzer_init(gcn_analyzer_t *ctxt)
 {
     memset(ctxt, 0, sizeof(gcn_analyzer_t));
     ctxt->has_isolated_components = 1;
 }
 
-void gcn_analyzer_print_deps(gcn_analyzer_t *ctxt, FILE *stream)
+/* dumper */
+
+void gcn_analyzer_print_res(gcn_analyzer_t *ctxt, FILE *stream)
 {
-    UNUSED(ctxt);
+    gcn_resource_t *res;
+    size_t i;
     
-    fprintf(stream, "...\n");
+    // V# resource constants
+    fprintf(stream, "- V# resource constants:\n");
+    for (i = 0; i < ctxt->res_vh_count; i++) {
+        res = ctxt->res_vh[i];
+        fprintf(stream, "  + res_vh[%zu]\n", i);
+    }
+
+    // T# resource constants
+    fprintf(stream, "- T# resource constants:\n");
+    for (i = 0; i < ctxt->res_th_count; i++) {
+        res = ctxt->res_th[i];
+        fprintf(stream, "  + res_th[%zu]\n", i);
+    }
+
+    // S# resource constants
+    fprintf(stream, "- S# resource constants:\n");
+    for (i = 0; i < ctxt->res_sh_count; i++) {
+        res = ctxt->res_sh[i];
+        fprintf(stream, "  + res_sh[%zu]\n", i);
+    }
 }
 
 void gcn_analyzer_print_usage(gcn_analyzer_t *ctxt, FILE *stream)
@@ -114,11 +135,81 @@ void gcn_analyzer_print(gcn_analyzer_t *ctxt, FILE *stream)
     gcn_analyzer_print_usage(ctxt, stream);
     fprintf(stream, "\n## properties\n");
     gcn_analyzer_print_props(ctxt, stream);
-    fprintf(stream, "\n## dependencies\n");
-    gcn_analyzer_print_deps(ctxt, stream);
+    fprintf(stream, "\n## resources\n");
+    gcn_analyzer_print_res(ctxt, stream);
 }
 
+/* dependencies */
+
+static gcn_dependency_t* analyze_dependency_sgpr(gcn_analyzer_t *ctxt, uint32_t index)
+{
+    gcn_dependency_t *dep;
+    gcn_dependency_value_t value;
+
+    if (index >= ARRAYCOUNT(ctxt->deps_sgpr))
+        return NULL;
+
+    // Create dependency, if required
+    dep = ctxt->deps_sgpr[index];
+    if (dep && index < 16) {
+        value.sgpr.index = index;
+        dep = gcn_dependency_create(GCN_DEPENDENCY_TYPE_SGPR, value);
+    }
+    return dep;
+}
+
+/* resources */
+
+static void analyze_resource_vh(gcn_analyzer_t *ctxt, gcn_resource_t *res)
+{
+    uint32_t index;
+
+    assert(res);
+    index = ctxt->res_vh_count++;
+    assert(index < ARRAYCOUNT(ctxt->res_vh));
+    ctxt->res_vh[index] = res;
+}
+
+#if 0
+static void analyze_resource_th(gcn_analyzer_t *ctxt, gcn_resource_t *res)
+{
+    uint32_t index;
+
+    assert(res);
+    index = ctxt->res_th_count++;
+    assert(index < ARRAYCOUNT(ctxt->res_th));
+    ctxt->res_th[index] = res;
+}
+
+static void analyze_resource_sh(gcn_analyzer_t *ctxt, gcn_resource_t *res)
+{
+    uint32_t index;
+
+    assert(res);
+    index = ctxt->res_sh_count++;
+    assert(index < ARRAYCOUNT(ctxt->res_sh));
+    ctxt->res_sh[index] = res;
+}
+#endif
+
 /* helpers */
+
+static void analyze_operand_sgpr(gcn_analyzer_t *ctxt, gcn_operand_t *op)
+{
+    uint32_t index, lanes;
+
+    index = op->id;
+    if (op->flags & GCN_FLAGS_OP_MULTI) {
+        lanes = op->lanes;
+        assert(index + op->lanes <= ARRAYCOUNT(ctxt->used_sgpr));
+        while (lanes--) {
+            ctxt->used_sgpr[index++] = 1;
+        }
+    } else {
+        assert(index < ARRAYCOUNT(ctxt->used_sgpr));
+        ctxt->used_sgpr[index] = 1;
+    }
+}
 
 static void analyze_operand(gcn_analyzer_t *ctxt, gcn_operand_t *op)
 {
@@ -128,8 +219,7 @@ static void analyze_operand(gcn_analyzer_t *ctxt, gcn_operand_t *op)
 
     switch (op->kind) {
     case GCN_KIND_SGPR:
-        assert(op->id < ARRAYCOUNT(ctxt->used_sgpr));
-        ctxt->used_sgpr[op->id] = 1;
+        analyze_operand_sgpr(ctxt, op);
         break;
     case GCN_KIND_VGPR:
         assert(op->id < ARRAYCOUNT(ctxt->used_vgpr));
@@ -156,6 +246,29 @@ static void analyze_operand(gcn_analyzer_t *ctxt, gcn_operand_t *op)
     }
 }
 
+/* encodings */
+
+static void analyze_encoding_smrd(gcn_analyzer_t *ctxt,
+    gcn_instruction_t *insn)
+{
+    gcn_dependency_t *dep;
+    gcn_resource_t *res;
+
+    switch (insn->smrd.op) {
+    case S_BUFFER_LOAD_DWORD:
+    case S_BUFFER_LOAD_DWORDX2:
+    case S_BUFFER_LOAD_DWORDX4:
+    case S_BUFFER_LOAD_DWORDX8:
+    case S_BUFFER_LOAD_DWORDX16:
+        dep = analyze_dependency_sgpr(ctxt, insn->smrd.sbase);
+        res = gcn_resource_create(GCN_RESOURCE_TYPE_VH, dep);
+        analyze_resource_vh(ctxt, res);
+        break;
+    default:
+        break;
+    }
+}
+
 /* callbacks */
 
 #define ANALYZER_CALLBACK(name) \
@@ -174,6 +287,14 @@ static void analyze_insn(gcn_analyzer_t *ctxt,
     analyze_operand(ctxt, &insn->src1);
     analyze_operand(ctxt, &insn->src2);
     analyze_operand(ctxt, &insn->src3);
+
+    switch (insn->encoding) {
+    case GCN_ENCODING_SMRD:
+        analyze_encoding_smrd(ctxt, insn);
+        break;
+    default:
+        break;
+    }
 }
 
 #define ANALYZE_INSN(name) \

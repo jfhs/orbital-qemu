@@ -85,6 +85,7 @@ typedef enum gcn_operand_flags_t {
     GCN_FLAGS_OP_CONST = (1 << 1), // Operand is constant
     GCN_FLAGS_OP_DEST  = (1 << 2), // Operand is destination
     GCN_FLAGS_OP_FLOAT = (1 << 3), // Operand is floating-point
+    GCN_FLAGS_OP_MULTI = (1 << 4), // Operand is multi-lane/dword
 } gcn_operand_flags_t;
 
 typedef enum gcn_operand_type_t {
@@ -123,6 +124,7 @@ typedef enum gcn_operand_kind_t {
 
 typedef struct gcn_operand_t {
     int flags;
+    int lanes;
     enum gcn_operand_kind_t kind;
     union {
         uint32_t id;
@@ -136,7 +138,6 @@ typedef struct gcn_operand_t {
 typedef struct gcn_instruction_t {
     /* properties */
     int flags;
-    int lanes;
     enum gcn_encoding_t encoding;
     enum gcn_operand_cond_t cond;
     enum gcn_operand_type_t type_dst;

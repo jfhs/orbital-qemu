@@ -249,12 +249,20 @@ static gcn_parser_error_t handle_op_flags(gcn_parser_t *ctxt,
 }
 
 static gcn_parser_error_t handle_op_lanes(gcn_parser_t *ctxt,
-    gcn_handler_t handler, int lanes)
+    gcn_handler_t handler, int src_lanes, int dst_lanes)
 {
     gcn_instruction_t *insn = &ctxt->insn;
 
+    if (dst_lanes > 1) {
+        insn->dst.flags |= GCN_FLAGS_OP_MULTI;
+        insn->dst.lanes = dst_lanes;
+    }
+    if (src_lanes > 1) {
+        insn->src0.flags |= GCN_FLAGS_OP_MULTI;
+        insn->src0.lanes = src_lanes;
+    }
+
     insn->flags = 0;
-    insn->lanes = lanes;
     insn->cond = GCN_COND_ANY;
     insn->type_dst = GCN_TYPE_ANY;
     insn->type_src = GCN_TYPE_ANY;
@@ -932,7 +940,7 @@ static gcn_parser_error_t handle_smrd(gcn_parser_t *ctxt)
     if ((err = handle_operand_ssrc(ctxt, &insn->src0, insn->smrd.sdst)))
         return err;
     if (insn->smrd.imm) {
-        if ((err = handle_operand_imm(ctxt, &insn->src1, insn->smrd.offset << 2)))
+        if ((err = handle_operand_imm(ctxt, &insn->src1, insn->smrd.offset)))
             return err;
     } else {
         if ((err = handle_operand_ssrc(ctxt, &insn->src1, insn->smrd.offset)))
@@ -941,25 +949,25 @@ static gcn_parser_error_t handle_smrd(gcn_parser_t *ctxt)
 
     switch (insn->smrd.op) {
     case S_LOAD_DWORD:
-        return handle_op_lanes(ctxt, cbacks->handle_s_load_dword, 1);
+        return handle_op_lanes(ctxt, cbacks->handle_s_load_dword, 2, 1);
     case S_LOAD_DWORDX2:
-        return handle_op_lanes(ctxt, cbacks->handle_s_load_dword, 2);
+        return handle_op_lanes(ctxt, cbacks->handle_s_load_dword, 2, 2);
     case S_LOAD_DWORDX4:
-        return handle_op_lanes(ctxt, cbacks->handle_s_load_dword, 4);
+        return handle_op_lanes(ctxt, cbacks->handle_s_load_dword, 2, 4);
     case S_LOAD_DWORDX8:
-        return handle_op_lanes(ctxt, cbacks->handle_s_load_dword, 8);
+        return handle_op_lanes(ctxt, cbacks->handle_s_load_dword, 2, 8);
     case S_LOAD_DWORDX16:
-        return handle_op_lanes(ctxt, cbacks->handle_s_load_dword, 16);
+        return handle_op_lanes(ctxt, cbacks->handle_s_load_dword, 2, 16);
     case S_BUFFER_LOAD_DWORD:
-        return handle_op_lanes(ctxt, cbacks->handle_s_buffer_load_dword, 1);
+        return handle_op_lanes(ctxt, cbacks->handle_s_buffer_load_dword, 4, 1);
     case S_BUFFER_LOAD_DWORDX2:
-        return handle_op_lanes(ctxt, cbacks->handle_s_buffer_load_dword, 2);
+        return handle_op_lanes(ctxt, cbacks->handle_s_buffer_load_dword, 4, 2);
     case S_BUFFER_LOAD_DWORDX4:
-        return handle_op_lanes(ctxt, cbacks->handle_s_buffer_load_dword, 4);
+        return handle_op_lanes(ctxt, cbacks->handle_s_buffer_load_dword, 4, 4);
     case S_BUFFER_LOAD_DWORDX8:
-        return handle_op_lanes(ctxt, cbacks->handle_s_buffer_load_dword, 8);
+        return handle_op_lanes(ctxt, cbacks->handle_s_buffer_load_dword, 4, 8);
     case S_BUFFER_LOAD_DWORDX16:
-        return handle_op_lanes(ctxt, cbacks->handle_s_buffer_load_dword, 16);
+        return handle_op_lanes(ctxt, cbacks->handle_s_buffer_load_dword, 4, 16);
     case S_DCACHE_INV_VOL:
         return handle_op(ctxt, cbacks->handle_s_dcache_inv_vol);
     case S_MEMTIME:

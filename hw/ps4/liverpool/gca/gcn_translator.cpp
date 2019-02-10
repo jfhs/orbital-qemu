@@ -26,6 +26,9 @@
 
 #define ARRAYCOUNT(x) ((sizeof(x)/sizeof(0[x])) / ((size_t)(!(sizeof(x) % sizeof(0[x])))))
 
+#define DESCRIPTOR_SET_GUEST  0
+#define DESCRIPTOR_SET_HOST   1
+
 typedef struct gcn_translator_t {
     gcn_analyzer_t *analyzer;
     gcn_stage_t stage;
@@ -50,12 +53,21 @@ typedef struct gcn_translator_t {
     spv::Id type_u64;
     spv::Id type_f32_x4;
     spv::Id type_u32_x4;
+    spv::Id type_u32_xN;
 
     /* registers */
     spv::Id var_sgpr[103];
     spv::Id var_vgpr[256];
     spv::Id var_exp_pos[4];
     spv::Id var_exp_param[32];
+
+    /* resources */
+    spv::Id res_vh[16];
+    spv::Id res_th[16];
+    spv::Id res_sh[16];
+    size_t res_vh_index;
+    size_t res_th_index;
+    size_t res_sh_index;
 
     /* functions */
     spv::Block *block_main;
@@ -138,6 +150,10 @@ static void gcn_translator_init_vs(gcn_translator_t *ctxt)
 static void gcn_translator_init(gcn_translator_t *ctxt,
     gcn_analyzer_t *analyzer, gcn_stage_t stage)
 {
+    gcn_resource_t *res;
+    size_t i, binding;
+    char name[16];
+
     memset(ctxt, 0, sizeof(gcn_translator_t));
     ctxt->stage = stage;
     ctxt->analyzer = analyzer;
@@ -182,6 +198,49 @@ static void gcn_translator_init(gcn_translator_t *ctxt,
         ctxt->type_u32 = b.makeUintType(32);
     if ((analyzer->used_types >> GCN_TYPE_U64) & 1)
         ctxt->type_u64 = b.makeUintType(64);
+
+    // Types required for V# resources
+    if (analyzer->res_vh_count) {
+        if (ctxt->type_u32 == 0)
+            ctxt->type_u32 = b.makeIntType(8);
+        if (ctxt->type_u32_xN == 0)
+            ctxt->type_u32_xN = b.makeRuntimeArray(ctxt->type_u32);
+    }
+
+    // Create resources
+    binding = 0;
+    for (i = 0; i < analyzer->res_vh_count; i++) {
+        res = analyzer->res_vh[i];
+        snprintf(name, sizeof(name), "vh%zd", i);
+        ctxt->res_vh[i] = b.createVariable(spv::StorageClass::StorageClassUniform,
+            b.makePointer(spv::StorageClass::StorageClassUniform, ctxt->type_u32_xN), name);
+        b.addDecoration(ctxt->res_vh[i], spv::Decoration::DecorationDescriptorSet,
+            DESCRIPTOR_SET_GUEST);
+        b.addDecoration(ctxt->res_vh[i], spv::Decoration::DecorationBinding,
+            binding++);
+    }
+#if 0
+    for (i = 0; i < analyzer->res_th_count; i++) {
+        res = analyzer->res_th[i];
+        snprintf(name, sizeof(name), "th%zd", i);
+        ctxt->res_th[i] = b.createVariable(spv::StorageClass::StorageClassUniformConstant,
+            ..., name);
+        b.addDecoration(ctxt->res_th[i], spv::Decoration::DecorationDescriptorSet,
+            DESCRIPTOR_SET_GUEST);
+        b.addDecoration(ctxt->res_th[i], spv::Decoration::DecorationBinding,
+            binding++);
+    }
+    for (i = 0; i < analyzer->res_sh_count; i++) {
+        res = analyzer->res_sh[i];
+        snprintf(name, sizeof(name), "sh%zd", i);
+        ctxt->res_sh[i] = b.createVariable(spv::StorageClass::StorageClassUniformConstant,
+            ..., name);
+        b.addDecoration(ctxt->res_sh[i], spv::Decoration::DecorationDescriptorSet,
+            DESCRIPTOR_SET_GUEST);
+        b.addDecoration(ctxt->res_sh[i], spv::Decoration::DecorationBinding,
+            binding++);
+    }
+#endif
 
     // Create main function
     ctxt->func_main = b.makeFunctionEntry(spv::NoPrecision,
@@ -273,6 +332,29 @@ static spv::Id translate_operand_get(gcn_translator_t *ctxt, gcn_operand_t *op)
     default:
         return spv::NoResult;
     }
+}
+
+static void translate_operand_set_sgpr(gcn_translator_t *ctxt,
+    uint32_t index, spv::Id value)
+{
+    spv::Builder& b = *ctxt->builder;
+    spv::Id var;
+    gcn_instruction_t *insn = ctxt->cur_insn;
+
+    assert(index < ARRAYCOUNT(ctxt->var_sgpr));
+    var = ctxt->var_sgpr[index];
+
+    switch (insn->type_dst) {
+    case GCN_TYPE_F32:
+        value = b.createUnaryOp(spv::Op::OpBitcast, ctxt->type_u32, value);
+        break;
+    case GCN_TYPE_B32:
+        value = b.createUnaryOp(spv::Op::OpBitcast, ctxt->type_u32, value);
+        break;
+    default:
+        break;
+    }
+    b.createStore(value, var);
 }
 
 static void translate_operand_set_vgpr(gcn_translator_t *ctxt,
@@ -448,11 +530,42 @@ static void translate_encoding_vop3a(gcn_translator_t *ctxt,
     } else if (op < 0x140) {
         op -= 0x100;
         dst = translate_opcode_vop2(ctxt, op, src0, src1);
+    } else if (op < 0x180) {
+        op -= 0x140;
+    } else if (op < 0x200) {
+        op -= 0x180;
+        dst = translate_opcode_vop1(ctxt, op, src0);
     } else {
         assert(0);
     }
 
     translate_operand_set_vgpr(ctxt, &insn->dst, dst);
+}
+
+static void translate_encoding_smrd(gcn_translator_t *ctxt,
+    gcn_instruction_t *insn)
+{
+    spv::Builder& b = *ctxt->builder;
+    spv::Id dst, off, res;
+    size_t i;
+
+    switch (insn->smrd.op) {
+    case S_BUFFER_LOAD_DWORD:
+    case S_BUFFER_LOAD_DWORDX2:
+    case S_BUFFER_LOAD_DWORDX4:
+    case S_BUFFER_LOAD_DWORDX8:
+    case S_BUFFER_LOAD_DWORDX16:
+        res = ctxt->res_vh[ctxt->res_vh_index++];
+        off = translate_operand_get(ctxt, &insn->src1);
+        for (i = 0; i < insn->dst.lanes; i++) {
+            dst = b.createAccessChain(spv::StorageClass::StorageClassUniform, res, { off });
+            off = b.createBinOp(spv::Op::OpIAdd, ctxt->type_u32, off, b.makeUintConstant(4));
+            translate_operand_set_sgpr(ctxt, insn->dst.id + i, dst);
+        }
+        break;
+    default:
+        break;
+    }
 }
 
 static void translate_encoding_exp(gcn_translator_t *ctxt,
@@ -494,6 +607,9 @@ static void translate_insn(gcn_translator_t *ctxt,
     case GCN_ENCODING_VOP3A:
         translate_encoding_vop3a(ctxt, insn);
         break;
+    case GCN_ENCODING_SMRD:
+        translate_encoding_smrd(ctxt, insn);
+        break;
     case GCN_ENCODING_EXP:
         translate_encoding_exp(ctxt, insn);
         break;
@@ -516,15 +632,12 @@ static void translate_insn(gcn_translator_t *ctxt,
     case GCN_ENCODING_VINTRP:
         translate_encoding_vintrp(ctxt, insn);
         break;
-    case GCN_ENCODING_SMRD:
-        translate_encoding_smrd(ctxt, insn);
-        break;
     case GCN_ENCODING_MIMG:
         translate_encoding_mimg(ctxt, insn);
         break;
-    default:
-        assert(0);
 #endif
+    default:
+        break;
     }
 }
 
