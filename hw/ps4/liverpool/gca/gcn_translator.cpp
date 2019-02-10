@@ -21,6 +21,9 @@
 #include "gcn_analyzer.h"
 
 #include <SPIRV/SpvBuilder.h>
+#include <SPIRV/GLSL.std.450.h>
+
+#define EXT_GLSL(x) GLSLstd450::GLSLstd450##x
 
 #define UNUSED(x) (void)(x)
 
@@ -51,6 +54,7 @@ typedef struct gcn_translator_t {
     spv::Id type_u16;
     spv::Id type_u32;
     spv::Id type_u64;
+    spv::Id type_f32_x2;
     spv::Id type_f32_x4;
     spv::Id type_u32_x4;
     spv::Id type_u32_xN;
@@ -60,6 +64,8 @@ typedef struct gcn_translator_t {
     spv::Id var_vgpr[256];
     spv::Id var_exp_pos[4];
     spv::Id var_exp_param[32];
+    spv::Id var_exp_mrt[4];
+    spv::Id var_exp_mrtz;
 
     /* resources */
     spv::Id res_vh[16];
@@ -81,7 +87,55 @@ extern "C" {
 
 static void gcn_translator_init_ps(gcn_translator_t *ctxt)
 {
-    UNUSED(ctxt);
+    gcn_analyzer_t *analyzer = ctxt->analyzer;
+    spv::Builder& b = *ctxt->builder;
+    char name[16];
+    size_t i;
+
+    // Types needed unconditionally
+    if (ctxt->type_u32 == 0)
+        ctxt->type_u32 = b.makeUintType(32);
+    if (ctxt->type_f32 == 0)
+        ctxt->type_f32 = b.makeUintType(32);
+    if (ctxt->type_u32_x4 == 0)
+        ctxt->type_u32_x4 = b.makeVectorType(ctxt->type_u32, 4);
+    if (ctxt->type_f32_x4 == 0)
+        ctxt->type_f32_x4 = b.makeVectorType(ctxt->type_f32, 4);
+
+    // Define entry point
+    ctxt->entry_main = b.addEntryPoint(spv::ExecutionModel::ExecutionModelFragment,
+        ctxt->func_main, "main");
+
+    // Define registers
+    assert(analyzer->has_isolated_components);
+    for (i = 0; i < ARRAYCOUNT(analyzer->used_sgpr); i++) {
+        if (analyzer->used_sgpr[i]) {
+            snprintf(name, sizeof(name), "s%zd", i);
+            ctxt->var_sgpr[i] = b.createVariable(spv::StorageClass::StorageClassFunction,
+                ctxt->type_u32, name);
+        }
+    }
+    for (i = 0; i < ARRAYCOUNT(analyzer->used_vgpr); i++) {
+        if (analyzer->used_vgpr[i]) {
+            snprintf(name, sizeof(name), "v%zd", i);
+            ctxt->var_vgpr[i] = b.createVariable(spv::StorageClass::StorageClassFunction,
+                ctxt->type_u32, name);
+        }
+    }
+    for (i = 0; i < ARRAYCOUNT(analyzer->used_exp_mrt); i++) {
+        if (analyzer->used_exp_mrt[i]) {
+            snprintf(name, sizeof(name), "mrt%zd", i);
+            ctxt->var_exp_mrt[i] = b.createVariable(spv::StorageClass::StorageClassOutput,
+                ctxt->type_f32_x4, name);
+            b.addDecoration(ctxt->var_exp_mrt[i], spv::Decoration::DecorationLocation, i);
+        }
+    }
+    if (analyzer->used_exp_mrtz[0]) {
+        ctxt->var_exp_mrtz = b.createVariable(spv::StorageClass::StorageClassOutput,
+            ctxt->type_f32, "mrtz");
+        b.addDecoration(ctxt->var_exp_mrtz, spv::Decoration::DecorationBuiltIn,
+            spv::BuiltIn::BuiltInFragDepth);
+    }
 }
 
 static void gcn_translator_init_vs(gcn_translator_t *ctxt)
@@ -199,10 +253,17 @@ static void gcn_translator_init(gcn_translator_t *ctxt,
     if ((analyzer->used_types >> GCN_TYPE_U64) & 1)
         ctxt->type_u64 = b.makeUintType(64);
 
+    // Type dependencies
+    if (ctxt->type_f16) {
+        if (ctxt->type_f32 == 0)
+            ctxt->type_f32 = b.makeFloatType(32);
+        if (ctxt->type_f32_x2 == 0)
+            ctxt->type_f32_x2 = b.makeVectorType(ctxt->type_f32, 2);
+    }
     // Types required for V# resources
     if (analyzer->res_vh_count) {
         if (ctxt->type_u32 == 0)
-            ctxt->type_u32 = b.makeIntType(8);
+            ctxt->type_u32 = b.makeUintType(32);
         if (ctxt->type_u32_xN == 0)
             ctxt->type_u32_xN = b.makeRuntimeArray(ctxt->type_u32);
     }
@@ -427,6 +488,19 @@ static void translate_operand_set_exp_param(gcn_translator_t *ctxt,
     b.createStore(value, var);
 }
 
+static void translate_operand_set_exp_mrt(gcn_translator_t *ctxt,
+    gcn_operand_t *op, spv::Id value)
+{
+    spv::Builder& b = *ctxt->builder;
+    spv::Id var;
+
+    assert(op->id < ARRAYCOUNT(ctxt->var_exp_mrt));
+    var = ctxt->var_exp_mrt[op->id];
+
+    value = b.createUnaryOp(spv::Op::OpBitcast, ctxt->type_f32_x4, value);
+    b.createStore(value, var);
+}
+
 static void translate_operand_set(gcn_translator_t *ctxt,
     gcn_operand_t *op, spv::Id value)
 {
@@ -440,6 +514,9 @@ static void translate_operand_set(gcn_translator_t *ctxt,
     case GCN_KIND_EXP_PARAM:
         translate_operand_set_exp_param(ctxt, op, value);
         break;
+    case GCN_KIND_EXP_MRT:
+        translate_operand_set_exp_mrt(ctxt, op, value);
+        break;
     default:
         break;
     }
@@ -451,6 +528,7 @@ static spv::Id translate_opcode_vop2(gcn_translator_t *ctxt,
     uint32_t op, spv::Id src0, spv::Id src1, spv::Id dst)
 {
     spv::Builder& b = *ctxt->builder;
+    spv::Id tmp;
 
     switch (op) {
     case V_ADD_F32:
@@ -470,6 +548,10 @@ static spv::Id translate_opcode_vop2(gcn_translator_t *ctxt,
     case V_MAC_F32:
         return b.createBinOp(spv::Op::OpFAdd, ctxt->type_f32,
                b.createBinOp(spv::Op::OpFMul, ctxt->type_f32, src0, src1), dst);
+    case V_CVT_PKRTZ_F16_F32:
+        tmp = b.createCompositeConstruct(ctxt->type_f32_x2, { src0, src1 });
+        return b.createBuiltinCall(ctxt->type_u32, ctxt->import_glsl_std,
+            EXT_GLSL(PackHalf2x16), { tmp });
     default:
         return spv::NoResult;
     }
@@ -626,12 +708,24 @@ static void translate_encoding_exp(gcn_translator_t *ctxt,
     gcn_instruction_t *insn)
 {
     spv::Builder& b = *ctxt->builder;
-    spv::Id dst, src0, src1, src2, src3;
+    spv::Id dst, src0, src1, src2, src3, tmp;
 
     src0 = translate_operand_get(ctxt, &insn->src0);
     src1 = translate_operand_get(ctxt, &insn->src1);
     src2 = translate_operand_get(ctxt, &insn->src2);
     src3 = translate_operand_get(ctxt, &insn->src3);
+
+    if (insn->exp.compr) {
+        src0 = b.createBuiltinCall(ctxt->type_f32_x2, ctxt->import_glsl_std,
+            EXT_GLSL(UnpackHalf2x16), { src0 });
+        src1 = b.createBuiltinCall(ctxt->type_f32_x2, ctxt->import_glsl_std,
+            EXT_GLSL(UnpackHalf2x16), { src1 });
+
+        src3 = b.createCompositeExtract(src1, ctxt->type_u32, 1);
+        src2 = b.createCompositeExtract(src1, ctxt->type_u32, 0);
+        src1 = b.createCompositeExtract(src0, ctxt->type_u32, 1);
+        src0 = b.createCompositeExtract(src0, ctxt->type_u32, 0);
+    }
 
     dst = b.createCompositeConstruct(ctxt->type_u32_x4, { src0, src1, src2, src3 });
 

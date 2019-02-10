@@ -29,10 +29,10 @@ typedef struct gcn_analyzer_t {
     uint32_t used_types;
     uint8_t used_sgpr[103];
     uint8_t used_vgpr[256];
-    uint8_t used_exp_mrt[8];
-    uint8_t used_exp_mrtz[1];
     uint8_t used_exp_pos[4];
     uint8_t used_exp_param[32];
+    uint8_t used_exp_mrt[8];
+    uint8_t used_exp_mrtz[1];
 
     /* properties */
     struct {
