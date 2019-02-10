@@ -312,6 +312,7 @@ static gcn_parser_error_t handle_opcode_vop1(gcn_parser_t *ctxt, uint32_t op)
 static gcn_parser_error_t handle_opcode_vop2(gcn_parser_t *ctxt, uint32_t op)
 {
     gcn_parser_callbacks_t *cbacks = ctxt->callbacks_funcs;
+    gcn_instruction_t *insn = &ctxt->insn;
 
     switch (op) {
     case V_CNDMASK_B32:
@@ -373,6 +374,7 @@ static gcn_parser_error_t handle_opcode_vop2(gcn_parser_t *ctxt, uint32_t op)
     case V_BFM_B32:
         return handle_op_ts(ctxt, GCN_TYPE_B32, cbacks->handle_v_bfm);
     case V_MAC_F32:
+        insn->dst.flags |= GCN_FLAGS_OP_SRC;
         return handle_op_ts(ctxt, GCN_TYPE_F32, cbacks->handle_v_mac);
     case V_MADMK_F32:
         return handle_op_ts(ctxt, GCN_TYPE_F32, cbacks->handle_v_madmk);

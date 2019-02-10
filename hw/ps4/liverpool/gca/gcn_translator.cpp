@@ -303,6 +303,25 @@ static spv::Id translate_operand_get_imm(gcn_translator_t *ctxt,
     }
 }
 
+static spv::Id translate_operand_get_sgpr(gcn_translator_t *ctxt,
+    gcn_operand_t *op)
+{
+    spv::Builder& b = *ctxt->builder;
+    spv::Id var, value;
+    gcn_instruction_t *insn = ctxt->cur_insn;
+
+    assert(op->id < ARRAYCOUNT(ctxt->var_sgpr));
+    var = ctxt->var_sgpr[op->id];
+    value = b.createLoad(var);
+
+    switch (insn->type_src) {
+    case GCN_TYPE_F32:
+        return b.createUnaryOp(spv::Op::OpBitcast, ctxt->type_f32, value);
+    default:
+        return value;
+    }
+}
+
 static spv::Id translate_operand_get_vgpr(gcn_translator_t *ctxt,
     gcn_operand_t *op)
 {
@@ -325,6 +344,8 @@ static spv::Id translate_operand_get_vgpr(gcn_translator_t *ctxt,
 static spv::Id translate_operand_get(gcn_translator_t *ctxt, gcn_operand_t *op)
 {
     switch (op->kind) {
+    case GCN_KIND_SGPR:
+        return translate_operand_get_sgpr(ctxt, op);
     case GCN_KIND_VGPR:
         return translate_operand_get_vgpr(ctxt, op);
     case GCN_KIND_IMM:
@@ -427,7 +448,7 @@ static void translate_operand_set(gcn_translator_t *ctxt,
 /* opcodes */
 
 static spv::Id translate_opcode_vop2(gcn_translator_t *ctxt,
-    uint32_t op, spv::Id src0, spv::Id src1)
+    uint32_t op, spv::Id src0, spv::Id src1, spv::Id dst)
 {
     spv::Builder& b = *ctxt->builder;
 
@@ -446,6 +467,9 @@ static spv::Id translate_opcode_vop2(gcn_translator_t *ctxt,
         return b.createBinOp(spv::Op::OpBitwiseXor, ctxt->type_u32, src0, src1);
     case V_OR_B32:
         return b.createBinOp(spv::Op::OpBitwiseOr, ctxt->type_u32, src0, src1);
+    case V_MAC_F32:
+        return b.createBinOp(spv::Op::OpFAdd, ctxt->type_f32,
+               b.createBinOp(spv::Op::OpFMul, ctxt->type_f32, src0, src1), dst);
     default:
         return spv::NoResult;
     }
@@ -476,6 +500,26 @@ static spv::Id translate_opcode_vop1(gcn_translator_t *ctxt,
     }
 }
 
+static spv::Id translate_opcode_vop3a(gcn_translator_t *ctxt,
+    uint32_t op, spv::Id src0, spv::Id src1, spv::Id src2)
+{
+    spv::Builder& b = *ctxt->builder;
+
+    switch (op) {
+    case V_MAD_F32:
+        return b.createBinOp(spv::Op::OpFAdd, ctxt->type_f32,
+               b.createBinOp(spv::Op::OpFMul, ctxt->type_f32, src0, src1), src2);
+    case V_BFE_U32:
+        return b.createTriOp(spv::Op::OpBitFieldUExtract, ctxt->type_u32, src0, src1, src2);
+    case V_BFE_I32:
+        return b.createTriOp(spv::Op::OpBitFieldSExtract, ctxt->type_i32, src0, src1, src2);
+    case V_BFI_B32:
+        return b.createTriOp(spv::Op::OpBitFieldInsert, ctxt->type_u32, src0, src1, src2);
+    default:
+        return spv::NoResult;
+    }
+}
+
 /* encodings */
 
 static void translate_encoding_sopp(gcn_translator_t *ctxt,
@@ -495,12 +539,15 @@ static void translate_encoding_sopp(gcn_translator_t *ctxt,
 static void translate_encoding_vop2(gcn_translator_t *ctxt,
     gcn_instruction_t *insn)
 {
-    spv::Id dst, src0, src1;
+    spv::Id src0, src1;
+    spv::Id dst = spv::NoResult;
 
     src0 = translate_operand_get(ctxt, &insn->src0);
     src1 = translate_operand_get(ctxt, &insn->src1);
+    if (insn->dst.flags & GCN_FLAGS_OP_SRC)
+        dst = translate_operand_get(ctxt, &insn->dst);
 
-    dst = translate_opcode_vop2(ctxt, insn->vop2.op, src0, src1);
+    dst = translate_opcode_vop2(ctxt, insn->vop2.op, src0, src1, dst);
     translate_operand_set_vgpr(ctxt, &insn->dst, dst);
 }
 
@@ -518,22 +565,29 @@ static void translate_encoding_vop1(gcn_translator_t *ctxt,
 static void translate_encoding_vop3a(gcn_translator_t *ctxt,
     gcn_instruction_t *insn)
 {
-    spv::Id dst, src0, src1;
+    spv::Id src0, src1, src2;
+    spv::Id dst = spv::NoResult;
     uint32_t op;
-
-    src0 = translate_operand_get(ctxt, &insn->src0);
-    src1 = translate_operand_get(ctxt, &insn->src1);
 
     op = insn->vop3a.op;
     if (op < 0x100) {
         assert(0);
     } else if (op < 0x140) {
         op -= 0x100;
-        dst = translate_opcode_vop2(ctxt, op, src0, src1);
+        src0 = translate_operand_get(ctxt, &insn->src0);
+        src1 = translate_operand_get(ctxt, &insn->src1);
+        if (insn->dst.flags & GCN_FLAGS_OP_SRC)
+            dst = translate_operand_get(ctxt, &insn->dst);
+        dst = translate_opcode_vop2(ctxt, op, src0, src1, dst);
     } else if (op < 0x180) {
         op -= 0x140;
+        src0 = translate_operand_get(ctxt, &insn->src0);
+        src1 = translate_operand_get(ctxt, &insn->src1);
+        src2 = translate_operand_get(ctxt, &insn->src2);
+        dst = translate_opcode_vop3a(ctxt, op, src0, src1, src2);
     } else if (op < 0x200) {
         op -= 0x180;
+        src0 = translate_operand_get(ctxt, &insn->src0);
         dst = translate_opcode_vop1(ctxt, op, src0);
     } else {
         assert(0);

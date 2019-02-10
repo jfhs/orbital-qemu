@@ -336,6 +336,12 @@ static void disasm_encoding_vop3a(gcn_disasm_t *ctxt,
     disasm_operand(ctxt, buf, &insn->src0);
     strcat(buf, ", ");
     disasm_operand(ctxt, buf, &insn->src1);
+
+    if (insn->vop3a.op >= 0x140 &&
+        insn->vop3a.op < 0x180) {
+        strcat(buf, ", ");
+        disasm_operand(ctxt, buf, &insn->src2);
+    }
 }
 
 static void disasm_encoding_smrd(gcn_disasm_t *ctxt,
