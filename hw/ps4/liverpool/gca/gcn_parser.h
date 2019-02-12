@@ -86,7 +86,7 @@ typedef enum gcn_operand_flags_t {
     GCN_FLAGS_OP_SRC   = (1 << 2), // Operand is source
     GCN_FLAGS_OP_DEST  = (1 << 3), // Operand is destination
     GCN_FLAGS_OP_FLOAT = (1 << 4), // Operand is floating-point
-    GCN_FLAGS_OP_MULTI = (1 << 5), // Operand is multi-lane/dword
+    GCN_FLAGS_OP_MULTI = (1 << 5), // Operand is multi-lane/channel
 } gcn_operand_flags_t;
 
 typedef enum gcn_operand_type_t {
@@ -112,6 +112,7 @@ typedef enum gcn_operand_kind_t {
     GCN_KIND_ANY,
     GCN_KIND_SGPR,
     GCN_KIND_VGPR,
+    GCN_KIND_ATTR,
     GCN_KIND_TTMP,
     GCN_KIND_SPR,
     GCN_KIND_IMM,
@@ -128,7 +129,10 @@ typedef struct gcn_operand_t {
     unsigned lanes;
     enum gcn_operand_kind_t kind;
     union {
-        uint32_t id;
+        struct {
+            uint32_t id;
+            uint32_t chan;
+        };
         uint64_t const_u64;
         double const_f64;
     };

@@ -157,6 +157,27 @@ static gcn_parser_error_t handle_operand_vdst(gcn_parser_t *ctxt,
     return err;
 }
 
+static gcn_parser_error_t handle_operand_attr(gcn_parser_t *ctxt,
+    gcn_operand_t *op, int32_t id, int32_t chan)
+{
+    UNUSED(ctxt);
+
+    if (id >= 32 || chan >= 4)
+        return GCN_PARSER_ERR_UNKNOWN_OPERAND;
+
+    op->flags = 0;
+    op->flags |= GCN_FLAGS_OP_USED;
+    op->kind = GCN_KIND_ATTR;
+    op->id = id;
+
+    if (chan >= 0) {
+        op->chan = chan;
+    } else {
+        op->flags |= GCN_FLAGS_OP_MULTI;
+    }
+    return GCN_PARSER_OK;
+}
+
 static gcn_parser_error_t handle_operand_exp(gcn_parser_t *ctxt,
     gcn_operand_t *op, int32_t id)
 {
@@ -916,6 +937,8 @@ static gcn_parser_error_t handle_vintrp(gcn_parser_t *ctxt)
     if ((err = handle_operand_vdst(ctxt, &insn->dst, insn->vintrp.vdst)))
         return err;
     if ((err = handle_operand_vsrc(ctxt, &insn->src0, insn->vintrp.vsrc0)))
+        return err;
+    if ((err = handle_operand_attr(ctxt, &insn->src1, insn->vintrp.attr, insn->vintrp.chan)))
         return err;
 
     switch (insn->vintrp.op) {

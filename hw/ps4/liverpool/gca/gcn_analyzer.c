@@ -113,6 +113,7 @@ void gcn_analyzer_print_usage(gcn_analyzer_t *ctxt, FILE *stream)
     }
     USAGE_REG(used_sgpr, "s%d");
     USAGE_REG(used_vgpr, "v%d");
+    USAGE_REG(used_attr, "attr%d");
     USAGE_REG(used_exp_mrt, "mrt%d");
     USAGE_REG(used_exp_mrtz, "mrtz%d");
     USAGE_REG(used_exp_pos, "pos%d");
@@ -224,6 +225,10 @@ static void analyze_operand(gcn_analyzer_t *ctxt, gcn_operand_t *op)
     case GCN_KIND_VGPR:
         assert(op->id < ARRAYCOUNT(ctxt->used_vgpr));
         ctxt->used_vgpr[op->id] = 1;
+        break;
+    case GCN_KIND_ATTR:
+        assert(op->id < ARRAYCOUNT(ctxt->used_attr));
+        ctxt->used_attr[op->id] = 1;
         break;
     case GCN_KIND_EXP_MRT:
         assert(op->id < ARRAYCOUNT(ctxt->used_exp_mrt));

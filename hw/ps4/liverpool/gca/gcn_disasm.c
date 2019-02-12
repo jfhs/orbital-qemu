@@ -208,6 +208,21 @@ static void disasm_operand(gcn_disasm_t *ctxt,
         snprintf(tmp, sizeof(tmp), "v%d", op->id);
         strcat(buf, tmp);
         break;
+    case GCN_KIND_ATTR:
+        snprintf(tmp, sizeof(tmp), "attr%d", op->id);
+        strcat(buf, tmp);
+        if (!(op->flags & GCN_FLAGS_OP_MULTI)) {
+            switch (op->chan) {
+            case 0: strcat(buf, ".x"); break;
+            case 1: strcat(buf, ".y"); break;
+            case 2: strcat(buf, ".z"); break;
+            case 3: strcat(buf, ".w"); break;
+            default:
+                strcat(buf, ".???");
+                break;
+            }
+        }
+        break;
     case GCN_KIND_TTMP:
         snprintf(tmp, sizeof(tmp), "ttmp%d", op->id);
         strcat(buf, tmp);
@@ -323,8 +338,12 @@ static void disasm_encoding_vopc(gcn_disasm_t *ctxt,
 static void disasm_encoding_vintrp(gcn_disasm_t *ctxt,
     gcn_instruction_t *insn, char *buf, const char *name)
 {
-    UNUSED(insn);
     disasm_opcode(ctxt, buf, name);
+    disasm_operand(ctxt, buf, &insn->dst);
+    strcat(buf, ", ");
+    disasm_operand(ctxt, buf, &insn->src0);
+    strcat(buf, ", ");
+    disasm_operand(ctxt, buf, &insn->src1);
 }
 
 static void disasm_encoding_vop3a(gcn_disasm_t *ctxt,

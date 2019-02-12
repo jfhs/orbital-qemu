@@ -62,6 +62,7 @@ typedef struct gcn_translator_t {
     /* registers */
     spv::Id var_sgpr[103];
     spv::Id var_vgpr[256];
+    spv::Id var_attr[32];
     spv::Id var_exp_pos[4];
     spv::Id var_exp_param[32];
     spv::Id var_exp_mrt[4];
@@ -120,6 +121,13 @@ static void gcn_translator_init_ps(gcn_translator_t *ctxt)
             snprintf(name, sizeof(name), "v%zd", i);
             ctxt->var_vgpr[i] = b.createVariable(spv::StorageClass::StorageClassFunction,
                 ctxt->type_u32, name);
+        }
+    }
+    for (i = 0; i < ARRAYCOUNT(analyzer->used_attr); i++) {
+        if (analyzer->used_attr[i]) {
+            snprintf(name, sizeof(name), "attr%zd", i);
+            ctxt->var_attr[i] = b.createVariable(spv::StorageClass::StorageClassInput,
+                ctxt->type_f32_x4, name);
         }
     }
     for (i = 0; i < ARRAYCOUNT(analyzer->used_exp_mrt); i++) {
@@ -402,6 +410,20 @@ static spv::Id translate_operand_get_vgpr(gcn_translator_t *ctxt,
     }
 }
 
+static spv::Id translate_operand_get_attr(gcn_translator_t *ctxt,
+    gcn_operand_t *op)
+{
+    spv::Builder& b = *ctxt->builder;
+    spv::Id var, value;
+
+    assert(op->chan < 4);
+    assert(op->id < ARRAYCOUNT(ctxt->var_attr));
+    var = ctxt->var_attr[op->id];
+    value = b.createLoad(var);
+    value = b.createCompositeExtract(value, ctxt->type_f32, op->chan);
+    return value;
+}
+
 static spv::Id translate_operand_get(gcn_translator_t *ctxt, gcn_operand_t *op)
 {
     switch (op->kind) {
@@ -409,6 +431,8 @@ static spv::Id translate_operand_get(gcn_translator_t *ctxt, gcn_operand_t *op)
         return translate_operand_get_sgpr(ctxt, op);
     case GCN_KIND_VGPR:
         return translate_operand_get_vgpr(ctxt, op);
+    case GCN_KIND_ATTR:
+        return translate_operand_get_attr(ctxt, op);
     case GCN_KIND_IMM:
         return translate_operand_get_imm(ctxt, op);
     default:
@@ -678,6 +702,24 @@ static void translate_encoding_vop3a(gcn_translator_t *ctxt,
     translate_operand_set_vgpr(ctxt, &insn->dst, dst);
 }
 
+static void translate_encoding_vintrp(gcn_translator_t *ctxt,
+    gcn_instruction_t *insn)
+{
+    spv::Id dst;
+
+    switch (insn->vintrp.op) {
+    // NOTE: Due to implicit attribute interpolation on host: ignore P1, copy after P2.
+    case V_INTERP_P1_F32:
+        break;
+    case V_INTERP_P2_F32:
+        dst = translate_operand_get_attr(ctxt, &insn->src1);
+        translate_operand_set_vgpr(ctxt, &insn->dst, dst);
+        break;
+    default:
+        return;
+    }
+}
+
 static void translate_encoding_smrd(gcn_translator_t *ctxt,
     gcn_instruction_t *insn)
 {
@@ -746,6 +788,9 @@ static void translate_insn(gcn_translator_t *ctxt,
     case GCN_ENCODING_SOPP:
         translate_encoding_sopp(ctxt, insn);
         break;
+    case GCN_ENCODING_SMRD:
+        translate_encoding_smrd(ctxt, insn);
+        break;
     case GCN_ENCODING_VOP2:
         translate_encoding_vop2(ctxt, insn);
         break;
@@ -755,8 +800,8 @@ static void translate_insn(gcn_translator_t *ctxt,
     case GCN_ENCODING_VOP3A:
         translate_encoding_vop3a(ctxt, insn);
         break;
-    case GCN_ENCODING_SMRD:
-        translate_encoding_smrd(ctxt, insn);
+    case GCN_ENCODING_VINTRP:
+        translate_encoding_vintrp(ctxt, insn);
         break;
     case GCN_ENCODING_EXP:
         translate_encoding_exp(ctxt, insn);
@@ -776,9 +821,6 @@ static void translate_insn(gcn_translator_t *ctxt,
         break;
     case GCN_ENCODING_VOPC:
         translate_encoding_vopc(ctxt, insn);
-        break;
-    case GCN_ENCODING_VINTRP:
-        translate_encoding_vintrp(ctxt, insn);
         break;
     case GCN_ENCODING_MIMG:
         translate_encoding_mimg(ctxt, insn);
