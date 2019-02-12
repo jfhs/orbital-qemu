@@ -171,7 +171,6 @@ static void analyze_resource_vh(gcn_analyzer_t *ctxt, gcn_resource_t *res)
     ctxt->res_vh[index] = res;
 }
 
-#if 0
 static void analyze_resource_th(gcn_analyzer_t *ctxt, gcn_resource_t *res)
 {
     uint32_t index;
@@ -191,7 +190,6 @@ static void analyze_resource_sh(gcn_analyzer_t *ctxt, gcn_resource_t *res)
     assert(index < ARRAYCOUNT(ctxt->res_sh));
     ctxt->res_sh[index] = res;
 }
-#endif
 
 /* helpers */
 
@@ -212,6 +210,23 @@ static void analyze_operand_sgpr(gcn_analyzer_t *ctxt, gcn_operand_t *op)
     }
 }
 
+static void analyze_operand_vgpr(gcn_analyzer_t *ctxt, gcn_operand_t *op)
+{
+    uint32_t index, lanes;
+
+    index = op->id;
+    if (op->flags & GCN_FLAGS_OP_MULTI) {
+        lanes = op->lanes;
+        assert(index + op->lanes <= ARRAYCOUNT(ctxt->used_vgpr));
+        while (lanes--) {
+            ctxt->used_vgpr[index++] = 1;
+        }
+    } else {
+        assert(index < ARRAYCOUNT(ctxt->used_vgpr));
+        ctxt->used_vgpr[index] = 1;
+    }
+}
+
 static void analyze_operand(gcn_analyzer_t *ctxt, gcn_operand_t *op)
 {
     if (!(op->flags & GCN_FLAGS_OP_USED)) {
@@ -223,8 +238,7 @@ static void analyze_operand(gcn_analyzer_t *ctxt, gcn_operand_t *op)
         analyze_operand_sgpr(ctxt, op);
         break;
     case GCN_KIND_VGPR:
-        assert(op->id < ARRAYCOUNT(ctxt->used_vgpr));
-        ctxt->used_vgpr[op->id] = 1;
+        analyze_operand_vgpr(ctxt, op);
         break;
     case GCN_KIND_ATTR:
         assert(op->id < ARRAYCOUNT(ctxt->used_attr));
@@ -274,6 +288,26 @@ static void analyze_encoding_smrd(gcn_analyzer_t *ctxt,
     }
 }
 
+static void analyze_encoding_mimg(gcn_analyzer_t *ctxt,
+    gcn_instruction_t *insn)
+{
+    gcn_dependency_t *dep;
+    gcn_resource_t *res;
+
+    switch (insn->mimg.op) {
+    case IMAGE_SAMPLE:
+        dep = analyze_dependency_sgpr(ctxt, insn->mimg.srsrc);
+        res = gcn_resource_create(GCN_RESOURCE_TYPE_TH, dep);
+        analyze_resource_th(ctxt, res);
+        dep = analyze_dependency_sgpr(ctxt, insn->mimg.ssamp);
+        res = gcn_resource_create(GCN_RESOURCE_TYPE_SH, dep);
+        analyze_resource_sh(ctxt, res);
+        break;
+    default:
+        break;
+    }
+}
+
 /* callbacks */
 
 #define ANALYZER_CALLBACK(name) \
@@ -296,6 +330,9 @@ static void analyze_insn(gcn_analyzer_t *ctxt,
     switch (insn->encoding) {
     case GCN_ENCODING_SMRD:
         analyze_encoding_smrd(ctxt, insn);
+        break;
+    case GCN_ENCODING_MIMG:
+        analyze_encoding_mimg(ctxt, insn);
         break;
     default:
         break;

@@ -205,7 +205,10 @@ static void disasm_operand(gcn_disasm_t *ctxt,
         strcat(buf, tmp);
         break;
     case GCN_KIND_VGPR:
-        snprintf(tmp, sizeof(tmp), "v%d", op->id);
+        if (op->flags & GCN_FLAGS_OP_MULTI)
+            snprintf(tmp, sizeof(tmp), "v[%d:%d]", op->id, op->id + op->lanes - 1);
+        else
+            snprintf(tmp, sizeof(tmp), "v%d", op->id);
         strcat(buf, tmp);
         break;
     case GCN_KIND_ATTR:
@@ -369,7 +372,7 @@ static void disasm_encoding_smrd(gcn_disasm_t *ctxt,
     char tmp[64];
     char name_suffixed[64];
 
-    strncpy(name_suffixed, name, sizeof(tmp));
+    strncpy(name_suffixed, name, sizeof(name_suffixed));
     if (insn->dst.lanes > 1) {
         snprintf(tmp, sizeof(tmp), "x%d", insn->dst.lanes);
         strcat(name_suffixed, tmp);
@@ -385,8 +388,41 @@ static void disasm_encoding_smrd(gcn_disasm_t *ctxt,
 static void disasm_encoding_mimg(gcn_disasm_t *ctxt,
     gcn_instruction_t *insn, char *buf, const char *name)
 {
-    UNUSED(insn);
+    char name_suffixed[64];
+
+    // Suffixes
+    strncpy(name_suffixed, name, sizeof(name_suffixed)); 
+    if (insn->flags & GCN_FLAGS_OP_MIMG_MIP)
+        strcat(name_suffixed, "_mip");
+    if (insn->flags & GCN_FLAGS_OP_MIMG_PCK)
+        strcat(name_suffixed, "_pck");
+    if (insn->flags & GCN_FLAGS_OP_MIMG_SGN)
+        strcat(name_suffixed, "_sgn");
+    if (insn->flags & GCN_FLAGS_OP_MIMG_C)
+        strcat(name_suffixed, "_c");
+    if (insn->flags & GCN_FLAGS_OP_MIMG_B)
+        strcat(name_suffixed, "_b");
+    if (insn->flags & GCN_FLAGS_OP_MIMG_D)
+        strcat(name_suffixed, "_d");
+    if (insn->flags & GCN_FLAGS_OP_MIMG_CD)
+        strcat(name_suffixed, "_cd");
+    if (insn->flags & GCN_FLAGS_OP_MIMG_CL)
+        strcat(name_suffixed, "_cl");
+    if (insn->flags & GCN_FLAGS_OP_MIMG_L)
+        strcat(name_suffixed, "_l");
+    if (insn->flags & GCN_FLAGS_OP_MIMG_LZ)
+        strcat(name_suffixed, "_lz");
+    if (insn->flags & GCN_FLAGS_OP_MIMG_O)
+        strcat(name_suffixed, "_o");
+
     disasm_opcode(ctxt, buf, name);
+    disasm_operand(ctxt, buf, &insn->dst);
+    strcat(buf, ", ");
+    disasm_operand(ctxt, buf, &insn->src0);
+    strcat(buf, ", ");
+    disasm_operand(ctxt, buf, &insn->src1);
+    strcat(buf, ", ");
+    disasm_operand(ctxt, buf, &insn->src2);
 }
 
 static void disasm_encoding_exp(gcn_disasm_t *ctxt,

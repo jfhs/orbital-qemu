@@ -288,12 +288,12 @@ static void gcn_translator_init(gcn_translator_t *ctxt,
         b.addDecoration(ctxt->res_vh[i], spv::Decoration::DecorationBinding,
             binding++);
     }
-#if 0
     for (i = 0; i < analyzer->res_th_count; i++) {
         res = analyzer->res_th[i];
         snprintf(name, sizeof(name), "th%zd", i);
         ctxt->res_th[i] = b.createVariable(spv::StorageClass::StorageClassUniformConstant,
-            ..., name);
+            b.makeImageType(b.makeFloatType(32), spv::Dim::Dim2D, false, false, false, 1,
+                spv::ImageFormat::ImageFormatUnknown) /* TODO */, name);
         b.addDecoration(ctxt->res_th[i], spv::Decoration::DecorationDescriptorSet,
             DESCRIPTOR_SET_GUEST);
         b.addDecoration(ctxt->res_th[i], spv::Decoration::DecorationBinding,
@@ -303,13 +303,12 @@ static void gcn_translator_init(gcn_translator_t *ctxt,
         res = analyzer->res_sh[i];
         snprintf(name, sizeof(name), "sh%zd", i);
         ctxt->res_sh[i] = b.createVariable(spv::StorageClass::StorageClassUniformConstant,
-            ..., name);
+            b.makeSamplerType(), name);
         b.addDecoration(ctxt->res_sh[i], spv::Decoration::DecorationDescriptorSet,
             DESCRIPTOR_SET_GUEST);
         b.addDecoration(ctxt->res_sh[i], spv::Decoration::DecorationBinding,
             binding++);
     }
-#endif
 
     // Create main function
     ctxt->func_main = b.makeFunctionEntry(spv::NoPrecision,

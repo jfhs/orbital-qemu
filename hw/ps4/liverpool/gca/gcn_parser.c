@@ -1008,9 +1008,25 @@ static gcn_parser_error_t handle_mimg(gcn_parser_t *ctxt)
 {
     gcn_instruction_t *insn = &ctxt->insn;
     gcn_parser_callbacks_t *cbacks = ctxt->callbacks_funcs;
+    gcn_parser_error_t err;
 
     insn->encoding = GCN_ENCODING_MIMG;
     insn->words[1] = gcn_parser_read32(ctxt);
+    if ((err = handle_operand_vdst(ctxt, &insn->dst, insn->mimg.vdata)))
+        return err;
+    if ((err = handle_operand_vsrc(ctxt, &insn->src0, insn->mimg.vaddr)))
+        return err;
+    if ((err = handle_operand_ssrc(ctxt, &insn->src1, insn->mimg.srsrc)))
+        return err;
+    if ((err = handle_operand_ssrc(ctxt, &insn->src2, insn->mimg.ssamp)))
+        return err;
+    
+    insn->src0.flags |= GCN_FLAGS_OP_MULTI;
+    insn->src1.flags |= GCN_FLAGS_OP_MULTI;
+    insn->src2.flags |= GCN_FLAGS_OP_MULTI;
+    insn->src0.lanes = 4;
+    insn->src1.lanes = insn->mimg.r128 ? 4 : 8;
+    insn->src2.lanes = 4;
 
     switch (insn->mimg.op) {
     case IMAGE_GET_LOD:
