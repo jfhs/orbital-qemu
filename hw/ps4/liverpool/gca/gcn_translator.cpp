@@ -282,7 +282,7 @@ static void gcn_translator_init(gcn_translator_t *ctxt,
         res = analyzer->res_vh[i];
         snprintf(name, sizeof(name), "vh%zd", i);
         ctxt->res_vh[i] = b.createVariable(spv::StorageClass::StorageClassUniform,
-            b.makePointer(spv::StorageClass::StorageClassUniform, ctxt->type_u32_xN), name);
+            ctxt->type_u32_xN, name);
         b.addDecoration(ctxt->res_vh[i], spv::Decoration::DecorationDescriptorSet,
             DESCRIPTOR_SET_GUEST);
         b.addDecoration(ctxt->res_vh[i], spv::Decoration::DecorationBinding,
@@ -737,7 +737,7 @@ static void translate_encoding_smrd(gcn_translator_t *ctxt,
         for (i = 0; i < insn->dst.lanes; i++) {
             dst = b.createAccessChain(spv::StorageClass::StorageClassUniform, res, { off });
             off = b.createBinOp(spv::Op::OpIAdd, ctxt->type_u32, off, b.makeUintConstant(4));
-            translate_operand_set_sgpr(ctxt, insn->dst.id + i, dst);
+            translate_operand_set_sgpr(ctxt, insn->dst.id + i, b.createLoad(dst));
         }
         break;
     default:
@@ -749,7 +749,7 @@ static void translate_encoding_exp(gcn_translator_t *ctxt,
     gcn_instruction_t *insn)
 {
     spv::Builder& b = *ctxt->builder;
-    spv::Id dst, src0, src1, src2, src3, tmp;
+    spv::Id dst, src0, src1, src2, src3;
 
     src0 = translate_operand_get(ctxt, &insn->src0);
     src1 = translate_operand_get(ctxt, &insn->src1);
