@@ -3849,11 +3849,11 @@ if test "$vulkan" != "no" ; then
 
     vulkan=no
     if test "$mingw32" = "yes" ; then
-        vulkan_libs="-L/mingw64/bin/ -lvulkan-1"
+        vulkan_libs="-L/mingw64/bin/ -lvulkan-1 -lSPIRV"
         vulkan=yes
     fi
     if test "$linux" = "yes" ; then
-        vulkan_libs="-lvulkan"
+        vulkan_libs="-lvulkan -lSPIRV"
         vulkan=yes
     fi
 
@@ -3864,7 +3864,7 @@ if test "$vulkan" != "no" ; then
     fi
   else
     if test "$vulkan" = "yes" ; then
-      feature_not_found "vulkan" "Please install vulkan (mesa) devel pkgs: $vulkan_pkgs"
+      feature_not_found "vulkan" "Please install glslang and vulkan (mesa) devel pkgs: $vulkan_pkgs"
     fi
     vulkan_cflags=""
     vulkan_libs=""

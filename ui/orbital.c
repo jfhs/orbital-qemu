@@ -84,6 +84,11 @@ bool orbital_display_active(void)
     return ui.active;
 }
 
+VulkanState* orbital_get_vkstate(void)
+{
+    return &ui.vk_state;
+}
+
 void orbital_log_uart(int index, char ch)
 {
     (void)index; // Unused

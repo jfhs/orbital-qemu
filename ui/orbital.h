@@ -28,6 +28,9 @@
 #include "qemu/osdep.h"
 #include "qemu-common.h"
 
+// Forward declarations
+typedef struct VulkanState VulkanState;
+
 enum ui_device_t {
     UI_DEVICE_UNKNOWN = 0,
     // Aeolia
@@ -60,6 +63,8 @@ enum {
 };
 
 bool orbital_display_active(void);
+
+VulkanState* orbital_get_vkstate(void);
 
 void orbital_log_uart(int index, char ch);
 

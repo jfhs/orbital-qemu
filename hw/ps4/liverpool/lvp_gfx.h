@@ -23,6 +23,7 @@
 #include "qemu/osdep.h"
 #include "qemu/thread.h"
 #include "exec/hwaddr.h"
+#include "ui/vk-helpers.h"
 
 #include "lvp_gfx_shader.h"
 #include "gca/gfx_7_2_enum.h"
@@ -47,6 +48,7 @@ typedef struct vmid_state_t {
 /* GFX State */
 typedef struct gfx_state_t {
     QemuThread cp_thread;
+    VulkanState *vk;
     ih_state_t *ih;
     gart_state_t *gart;
     vmid_state_t vmid[16];

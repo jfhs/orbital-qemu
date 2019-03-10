@@ -18,6 +18,7 @@
  */
 
 #include "lvp_gfx.h"
+#include "lvp_gfx_pipeline.h"
 #include "lvp_gart.h"
 #include "lvp_ih.h"
 #include "hw/ps4/liverpool/pm4.h"

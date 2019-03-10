@@ -681,6 +681,8 @@ static void liverpool_gc_realize(PCIDevice *dev, Error **errp)
     s->gfx.ih = &s->ih;
     s->gfx.gart = &s->gart;
     s->gfx.mmio = &s->mmio[0];
+    if (orbital_display_active())
+        s->gfx.vk = orbital_get_vkstate();
 
     // Debugger
     if (orbital_display_active())

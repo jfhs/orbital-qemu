@@ -19,18 +19,22 @@
 
 #include "lvp_gfx_shader.h"
 #include "lvp_gfx.h"
+#include "lvp_gart.h"
 #include "gca/gcn.h"
 #include "gca/gcn_analyzer.h"
 #include "gca/gcn_parser.h"
 #include "gca/gcn_translator.h"
 #include "gca/gfx_7_2_d.h"
+#include "ui/vk-helpers.h"
 
 #include "qemu-common.h"
+#include "exec/memory.h"
 
 #include <vulkan/vulkan.h>
 
 static void gfx_shader_translate_common(
-    gfx_shader_t *shader, gcn_analyzer_t *analyzer, gcn_translator_t *translator, uint8_t *pgm)
+    gfx_shader_t *shader, gcn_analyzer_t *analyzer, gcn_translator_t *translator,
+    gfx_state_t *gfx, uint8_t *pgm)
 {
     gcn_parser_t parser;
     uint32_t spirv_size;
@@ -52,7 +56,7 @@ static void gfx_shader_translate_common(
     createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
     createInfo.codeSize = spirv_size;
     createInfo.pCode = (uint32_t*)spirv_data;
-    res = vkCreateShaderModule(device, &createInfo, NULL, &shader->module);
+    res = vkCreateShaderModule(gfx->vk->device, &createInfo, NULL, &shader->module);
     if (res != VK_SUCCESS) {
         fprintf(stderr, "%s: Translation failed!\n", __FUNCTION__);
     }
@@ -66,7 +70,7 @@ static void gfx_shader_translate_ps(
     
     printf("%s: Translating shader...\n", __FUNCTION__);
     translator = gcn_translator_create(&analyzer, GCN_STAGE_PS);
-    gfx_shader_translate_common(shader, &analyzer, translator, pgm);
+    gfx_shader_translate_common(shader, &analyzer, translator, gfx, pgm);
 }
 
 static void gfx_shader_translate_vs(
@@ -77,14 +81,13 @@ static void gfx_shader_translate_vs(
     
     printf("%s: Translating shader...\n", __FUNCTION__);
     translator = gcn_translator_create(&analyzer, GCN_STAGE_VS);
-    gfx_shader_translate_common(shader, &analyzer, translator, pgm);
+    gfx_shader_translate_common(shader, &analyzer, translator, gfx, pgm);
 }
 
 void gfx_shader_translate(gfx_shader_t *shader, uint32_t vmid, gfx_state_t *gfx, int type)
 {
     gart_state_t *gart = gfx->gart;
     uint64_t pgm_addr, pgm_size;
-    uint32_t pgm_offs;
     uint8_t *pgm_data;
     hwaddr mapped_size;
 
@@ -117,8 +120,6 @@ void gfx_shader_translate(gfx_shader_t *shader, uint32_t vmid, gfx_state_t *gfx,
     pgm_addr <<= 8;
 
     // Map shader bytecode into host userspace
-    pgm_offs = pgm_addr & 0xFFF;
-    pgm_addr = pgm_addr & ~0xFFF;
     pgm_size = 0x1000; // TODO
     mapped_size = pgm_size;
     pgm_data = address_space_map(gart->as[vmid], pgm_addr, &mapped_size, false);

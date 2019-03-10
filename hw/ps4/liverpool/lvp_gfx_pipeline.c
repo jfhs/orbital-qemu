@@ -19,6 +19,8 @@
 
 #include "lvp_gfx_pipeline.h"
 #include "lvp_gfx_shader.h"
+#include "lvp_gfx.h"
+#include "ui/vk-helpers.h"
 
 #include "qemu-common.h"
 
@@ -49,7 +51,7 @@ typedef struct gfx_pipeline_t {
     gfx_shader_t shader_ps;
 } gfx_pipeline_t;
 
-static void gfx_pipeline_translate_layout(gfx_pipeline_t *pipeline)
+static void gfx_pipeline_translate_layout(gfx_pipeline_t *pipeline, gfx_state_t *gfx)
 {
     VkResult res;
 
@@ -58,19 +60,19 @@ static void gfx_pipeline_translate_layout(gfx_pipeline_t *pipeline)
     pipelineLayoutInfo.setLayoutCount = 0;
     pipelineLayoutInfo.pushConstantRangeCount = 0;
 
-    res = vkCreatePipelineLayout(device, &pipelineLayoutInfo, NULL, &pipeline->vkpl);
+    res = vkCreatePipelineLayout(gfx->vk->device, &pipelineLayoutInfo, NULL, &pipeline->vkpl);
     if (res != VK_SUCCESS) {
         fprintf(stderr, "%s: Failed to create pipeline layout!", __FUNCTION__);
         assert(0);
     }
 }
 
-static void gfx_pipeline_translate_renderpass(gfx_pipeline_t *pipeline)
+static void gfx_pipeline_translate_renderpass(gfx_pipeline_t *pipeline, gfx_state_t *gfx)
 {
     VkResult res;
 
     VkAttachmentDescription colorAttachment = {};
-    colorAttachment.format = swapChainImageFormat;
+    colorAttachment.format = VK_FORMAT_R8G8B8A8_UNORM; // TODO
     colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
     colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
     colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -105,7 +107,7 @@ static void gfx_pipeline_translate_renderpass(gfx_pipeline_t *pipeline)
     renderPassInfo.dependencyCount = 1;
     renderPassInfo.pDependencies = &dependency;
 
-    res = vkCreateRenderPass(device, &renderPassInfo, NULL, &pipeline->vkrp);
+    res = vkCreateRenderPass(gfx->vk->device, &renderPassInfo, NULL, &pipeline->vkrp);
     if (res != VK_SUCCESS) {
         fprintf(stderr, "%s: Failed to create render pass!", __FUNCTION__);
         assert(0);
@@ -212,8 +214,8 @@ gfx_pipeline_t* gfx_pipeline_translate(gfx_state_t *gfx, uint32_t vmid)
     multisampling.sampleShadingEnable = VK_FALSE;
     multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
 
-    gfx_pipeline_translate_layout(pipeline);
-    gfx_pipeline_translate_renderpass(pipeline);
+    gfx_pipeline_translate_layout(pipeline, gfx);
+    gfx_pipeline_translate_renderpass(pipeline, gfx);
 
     VkGraphicsPipelineCreateInfo pipelineInfo = {};
     pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
@@ -230,9 +232,10 @@ gfx_pipeline_t* gfx_pipeline_translate(gfx_state_t *gfx, uint32_t vmid)
     pipelineInfo.subpass = 0;
     pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
 
-    res = vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, NULL, &pipeline);
+    res = vkCreateGraphicsPipelines(gfx->vk->device, VK_NULL_HANDLE, 1, &pipelineInfo, NULL, &pipeline->vkp);
     if (res != VK_SUCCESS) {
         fprintf(stderr, "%s: Failed to create graphics pipeline!", __FUNCTION__);
         return NULL;
     }
+    return pipeline;
 }
