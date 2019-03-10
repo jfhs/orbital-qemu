@@ -1,2 +1,5 @@
+obj-y += gcn_analyzer.o
 obj-y += gcn_disasm.o
 obj-y += gcn_parser.o
+obj-y += gcn_resource.o
+obj-y += gcn_translator.o

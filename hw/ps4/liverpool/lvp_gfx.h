@@ -42,8 +42,6 @@ typedef struct gfx_ring_t {
 } gfx_ring_t;
 
 typedef struct vmid_state_t {
-    gfx_shader_t shader_vs;
-    gfx_shader_t shader_ps;
 } vmid_state_t;
 
 /* GFX State */

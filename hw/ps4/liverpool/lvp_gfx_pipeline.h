@@ -17,34 +17,16 @@
  * License along with this library; if not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef HW_PS4_LIVERPOOL_GC_GFX_SHADER_H
-#define HW_PS4_LIVERPOOL_GC_GFX_SHADER_H
+#ifndef HW_PS4_LIVERPOOL_GFX_PIPELINE_H
+#define HW_PS4_LIVERPOOL_GFX_PIPELINE_H
 
 #include "qemu/osdep.h"
-#include "qemu/thread.h"
-#include "exec/hwaddr.h"
-
-#include <vulkan/vulkan.h>
 
 /* forward declarations */
-typedef struct gart_state_t gart_state_t;
+typedef struct gfx_pipeline_t gfx_pipeline_t;
 typedef struct gfx_state_t gfx_state_t;
 
-enum {
-    GFX_SHADER_PS = 1,
-    GFX_SHADER_VS = 2,
-    GFX_SHADER_GS = 3,
-    GFX_SHADER_ES = 4,
-    GFX_SHADER_HS = 5,
-    GFX_SHADER_LS = 6,
-};
+/* gfx-pipeline */
+gfx_pipeline_t* gfx_pipeline_translate(gfx_state_t *gfx, uint32_t vmid);
 
-/* GFX Shader State */
-typedef struct gfx_shader_t {
-    VkShaderModule module;
-} gfx_shader_t;
-
-/* gfx-shader */
-void gfx_shader_translate(gfx_shader_t *shader, uint32_t vmid, gfx_state_t *gfx, int type);
-
-#endif /* HW_PS4_LIVERPOOL_GC_GFX_SHADER_H */
+#endif /* HW_PS4_LIVERPOOL_GFX_PIPELINE_H */

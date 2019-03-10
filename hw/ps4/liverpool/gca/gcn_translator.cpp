@@ -20,8 +20,8 @@
 #include "gcn_translator.h"
 #include "gcn_analyzer.h"
 
-#include <SPIRV/SpvBuilder.h>
-#include <SPIRV/GLSL.std.450.h>
+#include "spirv/SpvBuilder.h"
+#include "spirv/GLSL.std.450.h"
 
 #define EXT_GLSL(x) GLSLstd450::GLSLstd450##x
 
