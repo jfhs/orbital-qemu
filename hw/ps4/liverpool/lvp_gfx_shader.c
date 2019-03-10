@@ -33,21 +33,23 @@
 #include <vulkan/vulkan.h>
 
 static void gfx_shader_translate_common(
-    gfx_shader_t *shader, gcn_analyzer_t *analyzer, gcn_translator_t *translator,
-    gfx_state_t *gfx, uint8_t *pgm)
+    gfx_shader_t *shader, gfx_state_t *gfx, uint8_t *pgm, int type)
 {
     gcn_parser_t parser;
+    gcn_analyzer_t analyzer;
+    gcn_translator_t *translator;
     uint32_t spirv_size;
     uint8_t *spirv_data;
     VkResult res;
 
     // Pass #1: Analyze the bytecode
     gcn_parser_init(&parser);
-    gcn_analyzer_init(analyzer);
-    gcn_parser_parse(&parser, pgm, &gcn_analyzer_callbacks, analyzer);
+    gcn_analyzer_init(&analyzer);
+    gcn_parser_parse(&parser, pgm, &gcn_analyzer_callbacks, &analyzer);
 
     // Pass #2: Translate the bytecode
     gcn_parser_init(&parser);
+    translator = gcn_translator_create(&analyzer, type);
     gcn_parser_parse(&parser, pgm, &gcn_translator_callbacks, translator);
     spirv_data = gcn_translator_dump(translator, &spirv_size);
 
@@ -65,23 +67,15 @@ static void gfx_shader_translate_common(
 static void gfx_shader_translate_ps(
     gfx_shader_t *shader, gfx_state_t *gfx, uint8_t *pgm)
 {
-    gcn_analyzer_t analyzer;
-    gcn_translator_t *translator;
-    
     printf("%s: Translating shader...\n", __FUNCTION__);
-    translator = gcn_translator_create(&analyzer, GCN_STAGE_PS);
-    gfx_shader_translate_common(shader, &analyzer, translator, gfx, pgm);
+    gfx_shader_translate_common(shader, gfx, pgm, GCN_STAGE_PS);
 }
 
 static void gfx_shader_translate_vs(
     gfx_shader_t *shader, gfx_state_t *gfx, uint8_t *pgm)
 {
-    gcn_analyzer_t analyzer;
-    gcn_translator_t *translator;
-    
     printf("%s: Translating shader...\n", __FUNCTION__);
-    translator = gcn_translator_create(&analyzer, GCN_STAGE_VS);
-    gfx_shader_translate_common(shader, &analyzer, translator, gfx, pgm);
+    gfx_shader_translate_common(shader, gfx, pgm, GCN_STAGE_VS);
 }
 
 void gfx_shader_translate(gfx_shader_t *shader, uint32_t vmid, gfx_state_t *gfx, int type)
