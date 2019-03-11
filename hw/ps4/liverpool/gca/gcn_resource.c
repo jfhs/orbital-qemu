@@ -20,7 +20,9 @@
 #include "gcn_resource.h"
 
 #include <assert.h>
+#include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #define UNUSED(arg) (void)(arg)
 
@@ -69,16 +71,48 @@ void gcn_dependency_delete(gcn_dependency_t *dep)
 {
 }
 
-gcn_resource_t* gcn_resource_create(gcn_resource_type_t type, gcn_dependency_t *dep)
+gcn_resource_t* gcn_resource_create(gcn_resource_type_t type,
+    gcn_resource_flags_t flags, gcn_dependency_t *dep)
 {
     gcn_resource_t *res;
 
     res = malloc(sizeof(gcn_resource_t));
-    res->flags = 0;
-    res->type = type;
-    res->dep = dep;
+    assert(res);
 
+    memset(res, 0, sizeof(gcn_resource_t));
+    res->type = type;
+    res->flags = flags;
+    res->dep = dep;
     return res;
+}
+
+bool gcn_resource_update(gcn_resource_t *res, gcn_dependency_context_t *context)
+{
+    gcn_dependency_t *dep;
+    uint32_t index;
+
+    dep = res->dep;
+    switch (dep->type) {
+    case GCN_DEPENDENCY_TYPE_SGPR:
+        index = dep->value.sgpr.index;
+        res->dword[0] = context->user_sgpr[index + 0];
+        res->dword[1] = context->user_sgpr[index + 1];
+        res->dword[2] = context->user_sgpr[index + 2];
+        res->dword[3] = context->user_sgpr[index + 3];
+        if ((res->type == GCN_RESOURCE_TYPE_TH) && (res->flags & GCN_RESOURCE_FLAGS_R256)) {
+            res->dword[4] = context->user_sgpr[index + 4];
+            res->dword[5] = context->user_sgpr[index + 5];
+            res->dword[6] = context->user_sgpr[index + 6];
+            res->dword[7] = context->user_sgpr[index + 7];
+        }
+        break;
+    default:
+        fprintf(stderr, "%s: Unsupported dependency type!\n", __FUNCTION__);
+        assert(0);
+    }
+
+    // TODO: This will trigger a resource update every single time
+    return true;
 }
 
 #ifdef __cplusplus

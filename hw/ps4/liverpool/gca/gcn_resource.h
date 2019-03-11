@@ -63,6 +63,7 @@ typedef struct gcn_dependency_t {
 
 typedef enum gcn_resource_flags_t {
     GCN_RESOURCE_FLAGS_LOADED = (1 << 0),  // Resource was loaded at least once
+    GCN_RESOURCE_FLAGS_R256   = (1 << 1),  // Resource descriptor is 256-bit
 } gcn_resource_flags_t;
 
 typedef enum gcn_resource_type_t {
@@ -80,6 +81,7 @@ typedef struct gcn_resource_t {
         struct gcn_resource_vh_t vh;
         struct gcn_resource_th_t th;
         struct gcn_resource_sh_t sh;
+        uint32_t dword[8];
     };
 } gcn_resource_t;
 
@@ -97,6 +99,7 @@ void gcn_dependency_delete(gcn_dependency_t *dep);
 
 gcn_resource_t* gcn_resource_create(
     gcn_resource_type_t type,
+    gcn_resource_flags_t flags,
     gcn_dependency_t *dep);
 
 bool gcn_resource_update(

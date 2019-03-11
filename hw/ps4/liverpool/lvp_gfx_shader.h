@@ -20,6 +20,8 @@
 #ifndef HW_PS4_LIVERPOOL_GC_GFX_SHADER_H
 #define HW_PS4_LIVERPOOL_GC_GFX_SHADER_H
 
+#include "gca/gcn_analyzer.h"
+
 #include "qemu/osdep.h"
 #include "qemu/thread.h"
 #include "exec/hwaddr.h"
@@ -42,9 +44,19 @@ enum {
 /* GFX Shader State */
 typedef struct gfx_shader_t {
     VkShaderModule module;
+
+    // Analyzer contains metadata required to update resources
+    gcn_analyzer_t analyzer;
+    VkBuffer buf_vh[16];
+    VkDeviceMemory mem_vh[16];
 } gfx_shader_t;
 
 /* gfx-shader */
 void gfx_shader_translate(gfx_shader_t *shader, uint32_t vmid, gfx_state_t *gfx, int type);
+
+/**
+ * Updates the resources of a shader.
+ */
+void gfx_shader_update(gfx_shader_t *shader, uint32_t vmid, gfx_state_t *gfx);
 
 #endif /* HW_PS4_LIVERPOOL_GC_GFX_SHADER_H */

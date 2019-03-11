@@ -63,6 +63,7 @@ void gcn_analyzer_print_res(gcn_analyzer_t *ctxt, FILE *stream)
         res = ctxt->res_sh[i];
         fprintf(stream, "  + res_sh[%zu]\n", i);
     }
+    UNUSED(res); // TODO
 }
 
 void gcn_analyzer_print_usage(gcn_analyzer_t *ctxt, FILE *stream)
@@ -280,7 +281,7 @@ static void analyze_encoding_smrd(gcn_analyzer_t *ctxt,
     case S_BUFFER_LOAD_DWORDX8:
     case S_BUFFER_LOAD_DWORDX16:
         dep = analyze_dependency_sgpr(ctxt, insn->smrd.sbase);
-        res = gcn_resource_create(GCN_RESOURCE_TYPE_VH, dep);
+        res = gcn_resource_create(GCN_RESOURCE_TYPE_VH, 0, dep);
         analyze_resource_vh(ctxt, res);
         break;
     default:
@@ -293,14 +294,20 @@ static void analyze_encoding_mimg(gcn_analyzer_t *ctxt,
 {
     gcn_dependency_t *dep;
     gcn_resource_t *res;
+    gcn_resource_flags_t flags;
+
+    flags = 0;
+    if (!insn->mimg.r128) {
+        flags |= GCN_RESOURCE_FLAGS_R256;
+    }
 
     switch (insn->mimg.op) {
     case IMAGE_SAMPLE:
         dep = analyze_dependency_sgpr(ctxt, insn->mimg.srsrc);
-        res = gcn_resource_create(GCN_RESOURCE_TYPE_TH, dep);
+        res = gcn_resource_create(GCN_RESOURCE_TYPE_TH, flags, dep);
         analyze_resource_th(ctxt, res);
         dep = analyze_dependency_sgpr(ctxt, insn->mimg.ssamp);
-        res = gcn_resource_create(GCN_RESOURCE_TYPE_SH, dep);
+        res = gcn_resource_create(GCN_RESOURCE_TYPE_SH, 0, dep);
         analyze_resource_sh(ctxt, res);
         break;
     default:

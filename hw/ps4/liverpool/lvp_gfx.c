@@ -65,6 +65,7 @@ static void gfx_draw_common(
     gfx_pipeline_t *pipeline;
     
     pipeline = gfx_pipeline_translate(s, vmid);
+    gfx_pipeline_update(pipeline, s, vmid);
 }
 
 static void gfx_draw_index_auto(

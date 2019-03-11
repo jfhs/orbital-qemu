@@ -124,6 +124,7 @@ void vk_init_device(VulkanState* s)
 
     vkGetPhysicalDeviceFeatures(s->gpu, &s->gpu_features);
     vkGetPhysicalDeviceProperties(s->gpu, &s->gpu_props);
+    vkGetPhysicalDeviceMemoryProperties(s->gpu, &s->mem_props);
 
     /* queue */
     vkGetPhysicalDeviceQueueFamilyProperties(s->gpu, &s->queue_count, NULL);

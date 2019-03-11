@@ -239,3 +239,11 @@ gfx_pipeline_t* gfx_pipeline_translate(gfx_state_t *gfx, uint32_t vmid)
     }
     return pipeline;
 }
+
+void gfx_pipeline_update(gfx_pipeline_t *pipeline, gfx_state_t *gfx, uint32_t vmid)
+{
+    if (pipeline->shader_vs.module != VK_NULL_HANDLE)
+        gfx_shader_update(&pipeline->shader_vs, vmid, gfx);
+    if (pipeline->shader_ps.module != VK_NULL_HANDLE)
+        gfx_shader_update(&pipeline->shader_ps, vmid, gfx);
+}
