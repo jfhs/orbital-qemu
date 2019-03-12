@@ -20,6 +20,7 @@
 #include "lvp_gfx_pipeline.h"
 #include "lvp_gfx_shader.h"
 #include "lvp_gfx.h"
+#include "gca/gcn_translator.h"
 #include "ui/vk-helpers.h"
 
 #include "qemu-common.h"
@@ -47,6 +48,7 @@ typedef struct gfx_pipeline_t {
     VkPipeline vkp;
     VkPipelineLayout vkpl;
     VkRenderPass vkrp;
+    VkDescriptorSet vkds[GCN_DESCRIPTOR_SET_COUNT];
     gfx_shader_t shader_vs;
     gfx_shader_t shader_ps;
 } gfx_pipeline_t;
@@ -114,6 +116,47 @@ static void gfx_pipeline_translate_renderpass(gfx_pipeline_t *pipeline, gfx_stat
     }
 }
 
+static void gfx_pipeline_translate_descriptors(gfx_pipeline_t *pipeline, gfx_state_t *gfx)
+{
+    VkDevice dev = gfx->vk->device;
+    VkResult res;
+    size_t i;
+
+    // Create void layout
+    VkDescriptorSetLayout voidLayout;
+    VkDescriptorSetLayoutCreateInfo voidLayoutInfo = {};
+    voidLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    voidLayoutInfo.bindingCount = 0;
+    voidLayoutInfo.pBindings = NULL;
+
+    res = vkCreateDescriptorSetLayout(dev, &voidLayoutInfo, NULL, &voidLayout);
+    if (res != VK_SUCCESS) {
+        fprintf(stderr, "%s: vkCreateDescriptorSetLayout failed!", __FUNCTION__);
+        assert(0);
+    }
+
+    // Prepare layout array
+    VkDescriptorSetLayout layouts[GCN_DESCRIPTOR_SET_COUNT];
+    for (i = 0; i < GCN_DESCRIPTOR_SET_COUNT; i++) {
+        layouts[i] = voidLayout;
+    }
+    gfx_shader_translate_descriptors(&pipeline->shader_ps, gfx, &layouts[GCN_DESCRIPTOR_SET_PS]);
+    gfx_shader_translate_descriptors(&pipeline->shader_vs, gfx, &layouts[GCN_DESCRIPTOR_SET_VS]);
+
+    VkDescriptorSetAllocateInfo allocInfo = {};
+    allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+    allocInfo.descriptorPool = gfx->vkdpool;
+    allocInfo.descriptorSetCount = GCN_DESCRIPTOR_SET_COUNT;
+    allocInfo.pSetLayouts = layouts;
+
+    // Create descriptor sets
+    res = vkAllocateDescriptorSets(gfx->vk->device, &allocInfo, pipeline->vkds);
+    if (res != VK_SUCCESS) {
+        fprintf(stderr, "%s: Failed to create pipeline layout!", __FUNCTION__);
+        assert(0);
+    }
+}
+
 gfx_pipeline_t* gfx_pipeline_translate(gfx_state_t *gfx, uint32_t vmid)
 {
     gfx_pipeline_t* pipeline;
@@ -126,8 +169,8 @@ gfx_pipeline_t* gfx_pipeline_translate(gfx_state_t *gfx, uint32_t vmid)
     memset(pipeline, 0, sizeof(gfx_pipeline_t));
 
     // Shaders
-    gfx_shader_translate(&pipeline->shader_vs, vmid, gfx, GFX_SHADER_VS);
-    gfx_shader_translate(&pipeline->shader_ps, vmid, gfx, GFX_SHADER_PS);
+    gfx_shader_translate(&pipeline->shader_vs, vmid, gfx, GCN_STAGE_VS);
+    gfx_shader_translate(&pipeline->shader_ps, vmid, gfx, GCN_STAGE_PS);
 
     VkPipelineShaderStageCreateInfo vsStageInfo = {};
     vsStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -216,6 +259,7 @@ gfx_pipeline_t* gfx_pipeline_translate(gfx_state_t *gfx, uint32_t vmid)
 
     gfx_pipeline_translate_layout(pipeline, gfx);
     gfx_pipeline_translate_renderpass(pipeline, gfx);
+    gfx_pipeline_translate_descriptors(pipeline, gfx);
 
     VkGraphicsPipelineCreateInfo pipelineInfo = {};
     pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
@@ -246,4 +290,12 @@ void gfx_pipeline_update(gfx_pipeline_t *pipeline, gfx_state_t *gfx, uint32_t vm
         gfx_shader_update(&pipeline->shader_vs, vmid, gfx);
     if (pipeline->shader_ps.module != VK_NULL_HANDLE)
         gfx_shader_update(&pipeline->shader_ps, vmid, gfx);
+}
+
+
+void gfx_pipeline_bind(gfx_pipeline_t *pipeline, gfx_state_t *gfx, uint32_t vmid)
+{
+    VkCommandBuffer cmdbuf = gfx->vkcmdbuf;
+
+    vkCmdBindPipeline(cmdbuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->vkp);
 }

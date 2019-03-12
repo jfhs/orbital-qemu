@@ -32,14 +32,17 @@
 
 #include <vulkan/vulkan.h>
 
+#include <string.h>
+
 static void gfx_shader_translate_common(
-    gfx_shader_t *shader, gfx_state_t *gfx, uint8_t *pgm, int type)
+    gfx_shader_t *shader, gfx_state_t *gfx, uint8_t *pgm, gcn_stage_t stage)
 {
     gcn_parser_t parser;
     gcn_analyzer_t *analyzer;
     gcn_translator_t *translator;
     uint32_t spirv_size;
     uint8_t *spirv_data;
+    VkDevice dev = gfx->vk->device;
     VkResult res;
 
     // Pass #1: Analyze the bytecode
@@ -50,7 +53,7 @@ static void gfx_shader_translate_common(
 
     // Pass #2: Translate the bytecode
     gcn_parser_init(&parser);
-    translator = gcn_translator_create(analyzer, type);
+    translator = gcn_translator_create(analyzer, stage);
     gcn_parser_parse(&parser, pgm, &gcn_translator_callbacks, translator);
     spirv_data = gcn_translator_dump(translator, &spirv_size);
 
@@ -59,9 +62,9 @@ static void gfx_shader_translate_common(
     createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
     createInfo.codeSize = spirv_size;
     createInfo.pCode = (uint32_t*)spirv_data;
-    res = vkCreateShaderModule(gfx->vk->device, &createInfo, NULL, &shader->module);
+    res = vkCreateShaderModule(dev, &createInfo, NULL, &shader->module);
     if (res != VK_SUCCESS) {
-        fprintf(stderr, "%s: Translation failed!\n", __FUNCTION__);
+        fprintf(stderr, "%s: vkCreateShaderModule failed!\n", __FUNCTION__);
     }
 }
 
@@ -79,38 +82,44 @@ static void gfx_shader_translate_vs(
     gfx_shader_translate_common(shader, gfx, pgm, GCN_STAGE_VS);
 }
 
-void gfx_shader_translate(gfx_shader_t *shader, uint32_t vmid, gfx_state_t *gfx, int type)
+void gfx_shader_translate(gfx_shader_t *shader, uint32_t vmid, gfx_state_t *gfx, gcn_stage_t stage)
 {
     gart_state_t *gart = gfx->gart;
     uint64_t pgm_addr, pgm_size;
     uint8_t *pgm_data;
     hwaddr mapped_size;
 
-    switch (type) {
-    case GFX_SHADER_PS:
+    memset(shader, 0, sizeof(gfx_shader_t));
+    shader->stage = stage;
+
+    switch (stage) {
+    case GCN_STAGE_PS:
         pgm_addr = gfx->mmio[mmSPI_SHADER_PGM_HI_PS];
         pgm_addr = gfx->mmio[mmSPI_SHADER_PGM_LO_PS] | (pgm_addr << 32);
         break;
-    case GFX_SHADER_VS:
+    case GCN_STAGE_VS:
         pgm_addr = gfx->mmio[mmSPI_SHADER_PGM_HI_VS];
         pgm_addr = gfx->mmio[mmSPI_SHADER_PGM_LO_VS] | (pgm_addr << 32);
         break;
-    case GFX_SHADER_GS:
+    case GCN_STAGE_GS:
         pgm_addr = gfx->mmio[mmSPI_SHADER_PGM_HI_GS];
         pgm_addr = gfx->mmio[mmSPI_SHADER_PGM_LO_GS] | (pgm_addr << 32);
         break;
-    case GFX_SHADER_ES:
+    case GCN_STAGE_ES:
         pgm_addr = gfx->mmio[mmSPI_SHADER_PGM_HI_ES];
         pgm_addr = gfx->mmio[mmSPI_SHADER_PGM_LO_ES] | (pgm_addr << 32);
         break;
-    case GFX_SHADER_HS:
+    case GCN_STAGE_HS:
         pgm_addr = gfx->mmio[mmSPI_SHADER_PGM_HI_HS];
         pgm_addr = gfx->mmio[mmSPI_SHADER_PGM_LO_HS] | (pgm_addr << 32);
         break;
-    case GFX_SHADER_LS:
+    case GCN_STAGE_LS:
         pgm_addr = gfx->mmio[mmSPI_SHADER_PGM_HI_LS];
         pgm_addr = gfx->mmio[mmSPI_SHADER_PGM_LO_LS] | (pgm_addr << 32);
         break;
+    default:
+        fprintf(stderr, "%s: Unsupported shader stage (%d)!\n", __FUNCTION__, stage);
+        assert(0);
     }
     pgm_addr <<= 8;
 
@@ -118,23 +127,88 @@ void gfx_shader_translate(gfx_shader_t *shader, uint32_t vmid, gfx_state_t *gfx,
     pgm_size = 0x1000; // TODO
     mapped_size = pgm_size;
     pgm_data = address_space_map(gart->as[vmid], pgm_addr, &mapped_size, false);
-    switch (type) {
-    case GFX_SHADER_PS:
+    switch (stage) {
+    case GCN_STAGE_PS:
         gfx_shader_translate_ps(shader, gfx, pgm_data);
         break;
-    case GFX_SHADER_VS:
+    case GCN_STAGE_VS:
         gfx_shader_translate_vs(shader, gfx, pgm_data);
         break;
-    case GFX_SHADER_GS:
-    case GFX_SHADER_ES:
-    case GFX_SHADER_HS:
-    case GFX_SHADER_LS:
+    case GCN_STAGE_GS:
+    case GCN_STAGE_ES:
+    case GCN_STAGE_HS:
+    case GCN_STAGE_LS:
     default:
-        fprintf(stderr, "%s: Unsupported shader type (%d)!\n", __FUNCTION__, type);
+        fprintf(stderr, "%s: Unsupported shader stage (%d)!\n", __FUNCTION__, stage);
         assert(0);
         break;
     }
     address_space_unmap(gart->as[vmid], pgm_data, pgm_addr, mapped_size, false);
+}
+
+void gfx_shader_translate_descriptors(
+    gfx_shader_t *shader, gfx_state_t *gfx, VkDescriptorSetLayout *descSetLayout)
+{
+    gcn_analyzer_t *analyzer;
+    VkDescriptorSetLayoutBinding *layoutBinding;
+    VkDescriptorSetLayoutBinding layoutBindings[48];
+    VkShaderStageFlags flags;
+    VkDevice dev = gfx->vk->device;
+    VkResult res;
+    size_t binding = 0;
+    size_t i;
+
+    analyzer = &shader->analyzer;
+    flags = 0;
+    switch (shader->stage) {
+    case GCN_STAGE_PS:
+        flags |= VK_SHADER_STAGE_FRAGMENT_BIT;
+        break;
+    case GCN_STAGE_VS:
+        flags |= VK_SHADER_STAGE_VERTEX_BIT;
+        break;
+    default:
+        fprintf(stderr, "%s: Unsupported shader stage (%d)!\n", __FUNCTION__, shader->stage);
+        assert(0);
+    }
+
+    for (i = 0; i < analyzer->res_vh_count; i++) {
+        layoutBinding = &layoutBindings[binding];
+        layoutBinding->binding = binding;
+        layoutBinding->descriptorCount = 1;
+        layoutBinding->descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        layoutBinding->pImmutableSamplers = NULL;
+        layoutBinding->stageFlags = flags;
+        binding += 1;
+    }
+    for (i = 0; i < analyzer->res_th_count; i++) {
+        layoutBinding = &layoutBindings[binding];
+        layoutBinding->binding = binding;
+        layoutBinding->descriptorCount = 1;
+        layoutBinding->descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+        layoutBinding->pImmutableSamplers = NULL;
+        layoutBinding->stageFlags = flags;
+        binding += 1;
+    }
+    for (i = 0; i < analyzer->res_sh_count; i++) {
+        layoutBinding = &layoutBindings[binding];
+        layoutBinding->binding = binding;
+        layoutBinding->descriptorCount = 1;
+        layoutBinding->descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER;
+        layoutBinding->pImmutableSamplers = NULL;
+        layoutBinding->stageFlags = flags;
+        binding += 1;
+    }
+
+    VkDescriptorSetLayoutCreateInfo layoutInfo = {};
+    layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    layoutInfo.bindingCount = binding;
+    layoutInfo.pBindings = layoutBindings;
+
+    res = vkCreateDescriptorSetLayout(dev, &layoutInfo, NULL, descSetLayout);
+    if (res != VK_SUCCESS) {
+        fprintf(stderr, "%s: vkCreateDescriptorSetLayout failed!\n", __FUNCTION__);
+    }
 }
 
 void gfx_shader_update(gfx_shader_t *shader, uint32_t vmid, gfx_state_t *gfx)

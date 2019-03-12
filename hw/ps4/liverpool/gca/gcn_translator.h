@@ -35,6 +35,17 @@ typedef struct gcn_translator_t gcn_translator_t;
 extern "C" {
 #endif
 
+// TODO: Document
+#define GCN_DESCRIPTOR_SET_HOST  0
+#define GCN_DESCRIPTOR_SET_PS    1
+#define GCN_DESCRIPTOR_SET_VS    2
+#define GCN_DESCRIPTOR_SET_GS    3
+#define GCN_DESCRIPTOR_SET_ES    4
+#define GCN_DESCRIPTOR_SET_HS    5
+#define GCN_DESCRIPTOR_SET_LS    6
+#define GCN_DESCRIPTOR_SET_CS    7
+#define GCN_DESCRIPTOR_SET_COUNT 8
+
 /* callbacks */
 
 extern gcn_parser_callbacks_t gcn_translator_callbacks;

@@ -49,6 +49,8 @@ typedef struct vmid_state_t {
 typedef struct gfx_state_t {
     QemuThread cp_thread;
     VulkanState *vk;
+    VkDescriptorPool vkdpool;
+    VkCommandBuffer vkcmdbuf;
     ih_state_t *ih;
     gart_state_t *gart;
     vmid_state_t vmid[16];

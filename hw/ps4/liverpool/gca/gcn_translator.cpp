@@ -23,14 +23,13 @@
 #include <SPIRV/SpvBuilder.h>
 #include <SPIRV/GLSL.std.450.h>
 
+#include <stdio.h>
+
 #define EXT_GLSL(x) GLSLstd450::GLSLstd450##x
 
 #define UNUSED(x) (void)(x)
 
 #define ARRAYCOUNT(x) ((sizeof(x)/sizeof(0[x])) / ((size_t)(!(sizeof(x) % sizeof(0[x])))))
-
-#define DESCRIPTOR_SET_GUEST  0
-#define DESCRIPTOR_SET_HOST   1
 
 typedef struct gcn_translator_t {
     gcn_analyzer_t *analyzer;
@@ -218,6 +217,7 @@ static void gcn_translator_init(gcn_translator_t *ctxt,
 {
     gcn_resource_t *res;
     size_t i, binding;
+    int descriptor_set_guest;
     char name[16];
 
     memset(ctxt, 0, sizeof(gcn_translator_t));
@@ -279,6 +279,24 @@ static void gcn_translator_init(gcn_translator_t *ctxt,
             ctxt->type_u32_xN = b.makeRuntimeArray(ctxt->type_u32);
     }
 
+    // Create main function
+    ctxt->func_main = b.makeFunctionEntry(spv::NoPrecision,
+        ctxt->type_void, "main", {}, {}, &ctxt->block_main);
+
+    switch (stage) {
+    case GCN_STAGE_PS:
+        descriptor_set_guest = GCN_DESCRIPTOR_SET_PS;
+        gcn_translator_init_ps(ctxt);
+        break;
+    case GCN_STAGE_VS:
+        descriptor_set_guest = GCN_DESCRIPTOR_SET_VS;
+        gcn_translator_init_vs(ctxt);
+        break;
+    default:
+        fprintf(stderr, "%s: Unimplemented stage!\n", __FUNCTION__);
+        return;
+    }
+
     // Create resources
     binding = 0;
     for (i = 0; i < analyzer->res_vh_count; i++) {
@@ -287,7 +305,7 @@ static void gcn_translator_init(gcn_translator_t *ctxt,
         ctxt->res_vh[i] = b.createVariable(spv::StorageClass::StorageClassUniform,
             ctxt->type_u32_xN, name);
         b.addDecoration(ctxt->res_vh[i], spv::Decoration::DecorationDescriptorSet,
-            DESCRIPTOR_SET_GUEST);
+            descriptor_set_guest);
         b.addDecoration(ctxt->res_vh[i], spv::Decoration::DecorationBinding,
             binding++);
     }
@@ -298,7 +316,7 @@ static void gcn_translator_init(gcn_translator_t *ctxt,
             b.makeImageType(b.makeFloatType(32), spv::Dim::Dim2D, false, false, false, 1,
                 spv::ImageFormat::ImageFormatUnknown) /* TODO */, name);
         b.addDecoration(ctxt->res_th[i], spv::Decoration::DecorationDescriptorSet,
-            DESCRIPTOR_SET_GUEST);
+            descriptor_set_guest);
         b.addDecoration(ctxt->res_th[i], spv::Decoration::DecorationBinding,
             binding++);
     }
@@ -308,24 +326,9 @@ static void gcn_translator_init(gcn_translator_t *ctxt,
         ctxt->res_sh[i] = b.createVariable(spv::StorageClass::StorageClassUniformConstant,
             b.makeSamplerType(), name);
         b.addDecoration(ctxt->res_sh[i], spv::Decoration::DecorationDescriptorSet,
-            DESCRIPTOR_SET_GUEST);
+            descriptor_set_guest);
         b.addDecoration(ctxt->res_sh[i], spv::Decoration::DecorationBinding,
             binding++);
-    }
-
-    // Create main function
-    ctxt->func_main = b.makeFunctionEntry(spv::NoPrecision,
-        ctxt->type_void, "main", {}, {}, &ctxt->block_main);
-
-    switch (stage) {
-    case GCN_STAGE_PS:
-        gcn_translator_init_ps(ctxt);
-        break;
-    case GCN_STAGE_VS:
-        gcn_translator_init_vs(ctxt);
-        break;
-    default:
-        break;
     }
 }
 

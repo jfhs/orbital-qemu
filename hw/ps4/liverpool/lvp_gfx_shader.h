@@ -32,17 +32,9 @@
 typedef struct gart_state_t gart_state_t;
 typedef struct gfx_state_t gfx_state_t;
 
-enum {
-    GFX_SHADER_PS = 1,
-    GFX_SHADER_VS = 2,
-    GFX_SHADER_GS = 3,
-    GFX_SHADER_ES = 4,
-    GFX_SHADER_HS = 5,
-    GFX_SHADER_LS = 6,
-};
-
 /* GFX Shader State */
 typedef struct gfx_shader_t {
+    gcn_stage_t stage;
     VkShaderModule module;
 
     // Analyzer contains metadata required to update resources
@@ -52,7 +44,11 @@ typedef struct gfx_shader_t {
 } gfx_shader_t;
 
 /* gfx-shader */
-void gfx_shader_translate(gfx_shader_t *shader, uint32_t vmid, gfx_state_t *gfx, int type);
+void gfx_shader_translate(gfx_shader_t *shader, uint32_t vmid,
+    gfx_state_t *gfx, gcn_stage_t stage);
+
+void gfx_shader_translate_descriptors(gfx_shader_t *shader,
+    gfx_state_t *gfx, VkDescriptorSetLayout *descSetLayout);
 
 /**
  * Updates the resources of a shader.

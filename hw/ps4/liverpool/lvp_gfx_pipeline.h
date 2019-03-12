@@ -31,4 +31,6 @@ gfx_pipeline_t* gfx_pipeline_translate(gfx_state_t *gfx, uint32_t vmid);
 
 void gfx_pipeline_update(gfx_pipeline_t*, gfx_state_t *gfx, uint32_t vmid);
 
+void gfx_pipeline_bind(gfx_pipeline_t*, gfx_state_t *gfx, uint32_t vmid);
+
 #endif /* HW_PS4_LIVERPOOL_GFX_PIPELINE_H */

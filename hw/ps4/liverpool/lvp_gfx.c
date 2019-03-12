@@ -66,6 +66,7 @@ static void gfx_draw_common(
     
     pipeline = gfx_pipeline_translate(s, vmid);
     gfx_pipeline_update(pipeline, s, vmid);
+    gfx_pipeline_bind(pipeline, s, vmid);
 }
 
 static void gfx_draw_index_auto(
@@ -77,6 +78,8 @@ static void gfx_draw_index_auto(
     num_indices = s->mmio[mmVGT_NUM_INDICES];
     num_instances = s->mmio[mmVGT_NUM_INSTANCES];
     gfx_draw_common(s, vmid);
+
+    vkCmdDraw(s->vkcmdbuf, num_indices, num_instances, 0, 0);
 }
 
 /* cp packet operations */
