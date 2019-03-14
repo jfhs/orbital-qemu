@@ -5,6 +5,7 @@ obj-y += lvp_dce_d.o
 obj-y += lvp_gart.o
 obj-y += lvp_gfx.o
 obj-y += lvp_gfx_d.o
+obj-y += lvp_gfx_framebuffer.o
 obj-y += lvp_gfx_pipeline.o
 obj-y += lvp_gfx_shader.o
 obj-y += lvp_ih.o

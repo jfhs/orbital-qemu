@@ -59,14 +59,41 @@ void liverpool_gc_gfx_cp_set_ring_location(gfx_state_t *s,
 }
 
 /* draw operations */
-static void gfx_draw_common(
+static void gfx_draw_common_begin(
     gfx_state_t *s, uint32_t vmid)
 {
     gfx_pipeline_t *pipeline;
+    VkResult res;
     
     pipeline = gfx_pipeline_translate(s, vmid);
     gfx_pipeline_update(pipeline, s, vmid);
+    s->pipeline = pipeline;
+
+    VkCommandBufferBeginInfo cmdBufInfo = {};
+    cmdBufInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    res = vkBeginCommandBuffer(s->vkcmdbuf, &cmdBufInfo);
+    if (res != VK_SUCCESS) {
+        fprintf(stderr, "%s: vkBeginCommandBuffer failed!\n", __FUNCTION__);
+    }
+
+    VkClearValue clearValue = {}; // TODO
+    VkRenderPassBeginInfo renderPassBeginInfo = {};
+    renderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+    renderPassBeginInfo.renderPass =  pipeline->vkrp;
+    renderPassBeginInfo.framebuffer = pipeline->framebuffer.vkfb;
+    renderPassBeginInfo.renderArea.extent.width = 1920; // TODO
+    renderPassBeginInfo.renderArea.extent.height = 1080; // TODO
+    renderPassBeginInfo.clearValueCount = 1; // TODO
+    renderPassBeginInfo.pClearValues = &clearValue; // TODO
+    vkCmdBeginRenderPass(s->vkcmdbuf, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+
     gfx_pipeline_bind(pipeline, s, vmid);
+}
+
+static void gfx_draw_common_end(
+    gfx_state_t *s, uint32_t vmid)
+{
+    vkCmdEndRenderPass(s->vkcmdbuf);
 }
 
 static void gfx_draw_index_auto(
@@ -77,9 +104,10 @@ static void gfx_draw_index_auto(
 
     num_indices = s->mmio[mmVGT_NUM_INDICES];
     num_instances = s->mmio[mmVGT_NUM_INSTANCES];
-    gfx_draw_common(s, vmid);
 
+    gfx_draw_common_begin(s, vmid);
     vkCmdDraw(s->vkcmdbuf, num_indices, num_instances, 0, 0);
+    gfx_draw_common_end(s, vmid);
 }
 
 /* cp packet operations */

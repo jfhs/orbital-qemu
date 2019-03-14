@@ -17,12 +17,8 @@
  * License along with this library; if not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef HW_PS4_LIVERPOOL_GFX_PIPELINE_H
-#define HW_PS4_LIVERPOOL_GFX_PIPELINE_H
-
-#include "lvp_gfx_framebuffer.h"
-#include "lvp_gfx_shader.h"
-#include "gca/gcn_translator.h"
+#ifndef HW_PS4_LIVERPOOL_GC_GFX_FRAMEBUFFER_H
+#define HW_PS4_LIVERPOOL_GC_GFX_FRAMEBUFFER_H
 
 #include "qemu/osdep.h"
 
@@ -30,23 +26,24 @@
 
 /* forward declarations */
 typedef struct gfx_state_t gfx_state_t;
+typedef struct gfx_pipeline_t gfx_pipeline_t;
 
-/* GFX Pipeline State */
-typedef struct gfx_pipeline_t {
-    VkPipeline vkp;
-    VkPipelineLayout vkpl;
-    VkRenderPass vkrp;
-    VkDescriptorSet vkds[GCN_DESCRIPTOR_SET_COUNT];
-    gfx_framebuffer_t framebuffer;
-    gfx_shader_t shader_vs;
-    gfx_shader_t shader_ps;
-} gfx_pipeline_t;
+/* GFX Framebuffer State */
+typedef struct vk_attachment_t {
+    uint64_t base;
+    VkImage image;
+    VkDeviceMemory mem;
+    VkImageView view;
+    VkFormat format;
+} vk_attachment_t;
 
-/* gfx-pipeline */
-gfx_pipeline_t* gfx_pipeline_translate(gfx_state_t *gfx, uint32_t vmid);
+typedef struct gfx_framebuffer_t {
+    vk_attachment_t mrt[8];
+    vk_attachment_t mrtz;
+    VkFramebuffer vkfb;
+} gfx_framebuffer_t;
 
-void gfx_pipeline_update(gfx_pipeline_t*, gfx_state_t *gfx, uint32_t vmid);
+/* gfx-framebuffer */
+void gfx_framebuffer_init(gfx_framebuffer_t *fb, gfx_state_t *gfx, gfx_pipeline_t *pipeline);
 
-void gfx_pipeline_bind(gfx_pipeline_t*, gfx_state_t *gfx, uint32_t vmid);
-
-#endif /* HW_PS4_LIVERPOOL_GFX_PIPELINE_H */
+#endif /* HW_PS4_LIVERPOOL_GC_GFX_FRAMEBUFFER_H */

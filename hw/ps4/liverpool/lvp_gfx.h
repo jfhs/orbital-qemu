@@ -25,6 +25,8 @@
 #include "exec/hwaddr.h"
 #include "ui/vk-helpers.h"
 
+#include "lvp_gfx_framebuffer.h"
+#include "lvp_gfx_pipeline.h"
 #include "lvp_gfx_shader.h"
 #include "gca/gfx_7_2_enum.h"
 
@@ -48,13 +50,17 @@ typedef struct vmid_state_t {
 /* GFX State */
 typedef struct gfx_state_t {
     QemuThread cp_thread;
-    VulkanState *vk;
-    VkDescriptorPool vkdpool;
-    VkCommandBuffer vkcmdbuf;
     ih_state_t *ih;
     gart_state_t *gart;
     vmid_state_t vmid[16];
     uint32_t *mmio;
+
+    VulkanState *vk;
+    VkDescriptorPool vkdpool;
+    VkCommandBuffer vkcmdbuf;
+    vk_attachment_t *att_cache[16];
+    size_t att_cache_size;
+    gfx_pipeline_t *pipeline;
 
     /* cp */
     gfx_ring_t cp_rb[2];
