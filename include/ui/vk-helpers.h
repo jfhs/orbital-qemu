@@ -46,6 +46,7 @@ typedef struct VulkanState {
     uint32_t graphics_queue_node_index;
     VkQueue queue;
     VkDescriptorPool descriptor_pool;
+    VkDebugUtilsMessengerEXT debug_messenger;
 
     uint32_t enabled_extension_count;
     uint32_t enabled_layer_count;

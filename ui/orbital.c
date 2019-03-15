@@ -354,11 +354,12 @@ static void* orbital_display_main(void* arg)
         error_report("SDL_Vulkan_GetInstanceExtensions failed");
     }
 
-    const char **extensionNames = (const char **)malloc((count + 1) * sizeof(char*));
-    extensionNames[0] = VK_KHR_SURFACE_EXTENSION_NAME;
-    SDL_Vulkan_GetInstanceExtensions(ui.sdl_window, &count, &extensionNames[1]);
+    const char **extensionNames = (const char **)malloc((count + 2) * sizeof(char*));
+    extensionNames[count + 0] = VK_KHR_SURFACE_EXTENSION_NAME;
+    extensionNames[count + 1] = VK_EXT_DEBUG_UTILS_EXTENSION_NAME;
+    SDL_Vulkan_GetInstanceExtensions(ui.sdl_window, &count, &extensionNames[0]);
 
-    vk_init_instance(vks, count+1, extensionNames);
+    vk_init_instance(vks, count+2, extensionNames);
     if (!SDL_Vulkan_CreateSurface(ui.sdl_window, vks->instance, &vks->surface)) {
         printf("SDL_Vulkan_CreateSurface failed: %s\n", SDL_GetError());
         return NULL;

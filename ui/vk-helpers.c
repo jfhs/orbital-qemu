@@ -26,9 +26,89 @@
 #include "qemu/osdep.h"
 #include "qemu/error-report.h"
 
+// Enables or disables validation layers
+#define VK_DEBUG 1
+
 #define countof(x) (sizeof(x) / sizeof((x)[0]))
 
+/* callbacks */
+static 
+VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
+        VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
+        VkDebugUtilsMessageTypeFlagsEXT messageType,
+        const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData, void* pUserData)
+{
+    fprintf(stderr, "Validation Layer: %s\n", pCallbackData->pMessage);
+    return VK_FALSE;
+}
+
+/* extensions */
+static
+VkResult CreateDebugUtilsMessengerEXT(
+        VkInstance instance,
+        const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo,
+        const VkAllocationCallbacks* pAllocator,
+        VkDebugUtilsMessengerEXT* pDebugMessenger)
+{
+    PFN_vkCreateDebugUtilsMessengerEXT func = (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT");
+    if (func != NULL) {
+        return func(instance, pCreateInfo, pAllocator, pDebugMessenger);
+    } else {
+        return VK_ERROR_EXTENSION_NOT_PRESENT;
+    }
+}
+
 /* helpers */
+static
+bool check_validation_layers(uint32_t reqLayerCount, const char **reqLayersStr)
+{
+    bool layerFound;
+    uint32_t availableLayerCount = 0;
+    uint32_t i, j;
+
+    vkEnumerateInstanceLayerProperties(&availableLayerCount, NULL);
+    VkLayerProperties *availableLayers = malloc(availableLayerCount * sizeof(VkLayerProperties));
+    vkEnumerateInstanceLayerProperties(&availableLayerCount, availableLayers);
+
+    for (i = 0; i < reqLayerCount; i++) {
+        layerFound = false;
+        for (j = 0; j < availableLayerCount; j++) {
+            if (!strcmp(reqLayersStr[i], availableLayers[j].layerName)) {
+                layerFound = true;
+                break;
+            }
+        }
+        if (!layerFound) {
+            return false;
+        }
+    }
+    return true;
+}
+
+static
+void setup_debug_messages(VulkanState* s)
+{
+    VkDebugUtilsMessengerCreateInfoEXT createInfo = {};
+    VkResult res;
+
+    createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+    createInfo.messageSeverity =
+        VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
+        VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
+        VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+    createInfo.messageType =
+        VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
+        VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
+        VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+    createInfo.pfnUserCallback = debugCallback;
+
+    res = CreateDebugUtilsMessengerEXT(s->instance, &createInfo, NULL, &s->debug_messenger);
+    if (res != VK_SUCCESS) {
+        error_report("setup_debug_messages: Failed to setup debug messenger\n");
+        return;
+    }
+}
+
 static
 void vk_find_graphics_queue(VulkanState* s)
 {
@@ -76,7 +156,9 @@ void vk_init_instance(VulkanState* s, uint32_t extCount, const char **extNames)
 {
     VkApplicationInfo applicationInfo = {};
     VkInstanceCreateInfo instanceInfo = {};
-    VkResult vkr;
+    uint32_t enabledLayerCount;
+    uint32_t enabledExtensionCount;
+    VkResult res;
 
     // Set Vulkan instance layers and extensions
     const char* instanceLayerNames[] = {
@@ -91,34 +173,50 @@ void vk_init_instance(VulkanState* s, uint32_t extCount, const char **extNames)
     applicationInfo.engineVersion = 1;
     applicationInfo.apiVersion = VK_API_VERSION_1_0;
 
+    // Determine the actual number of layers/extensions
+    if (VK_DEBUG) {
+        enabledLayerCount = countof(instanceLayerNames);
+        enabledExtensionCount = extCount;
+    } else {
+        enabledLayerCount = 0;
+        enabledExtensionCount = extCount - 1; // HACK: Last extension is debug-related
+    }
+    assert(check_validation_layers(enabledLayerCount, instanceLayerNames));
+
     instanceInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
     instanceInfo.pNext = NULL;
     instanceInfo.flags = 0;
     instanceInfo.pApplicationInfo = &applicationInfo;
-    instanceInfo.enabledLayerCount = countof(instanceLayerNames);
+    instanceInfo.enabledLayerCount = enabledLayerCount;
     instanceInfo.ppEnabledLayerNames = instanceLayerNames;
-    instanceInfo.enabledExtensionCount = extCount;
+    instanceInfo.enabledExtensionCount = enabledExtensionCount; 
     instanceInfo.ppEnabledExtensionNames = extNames;
-    vkr = vkCreateInstance(&instanceInfo, NULL, &s->instance);
-    if (vkr != VK_SUCCESS) {
-        error_report("vkCreateInstance failed with code %d", vkr);
+    
+    res = vkCreateInstance(&instanceInfo, NULL, &s->instance);
+    if (res != VK_SUCCESS) {
+        error_report("vkCreateInstance failed with code %d", res);
         return;
+    }
+
+    // Setup debugging
+    if (VK_DEBUG) {
+        setup_debug_messages(s);
     }
 }
 
 void vk_init_device(VulkanState* s)
 {
-    VkResult vkr;
+    VkResult res;
 
     uint32_t gpu_count;
-    vkr = vkEnumeratePhysicalDevices(s->instance, &gpu_count, NULL);
-    if (vkr != VK_SUCCESS) {
-        error_report("vkEnumeratePhysicalDevices failed with code %d", vkr);
+    res = vkEnumeratePhysicalDevices(s->instance, &gpu_count, NULL);
+    if (res != VK_SUCCESS) {
+        error_report("vkEnumeratePhysicalDevices failed with code %d", res);
         return;
     }
     assert(gpu_count >= 1);
     VkPhysicalDevice *physical_devices = malloc(sizeof(VkPhysicalDevice) * gpu_count);
-    vkr = vkEnumeratePhysicalDevices(s->instance, &gpu_count, physical_devices);
+    res = vkEnumeratePhysicalDevices(s->instance, &gpu_count, physical_devices);
     s->gpu = physical_devices[0];
     free(physical_devices);
 
@@ -155,9 +253,9 @@ void vk_init_device(VulkanState* s)
     deviceInfo.ppEnabledExtensionNames = deviceExtensionNames;
     deviceInfo.pEnabledFeatures = NULL;
     deviceInfo.ppEnabledLayerNames = NULL;
-    vkr = vkCreateDevice(s->gpu, &deviceInfo, NULL, &s->device);
-    if (vkr != VK_SUCCESS) {
-        error_report("vkCreateInstance failed with code %d", vkr);
+    res = vkCreateDevice(s->gpu, &deviceInfo, NULL, &s->device);
+    if (res != VK_SUCCESS) {
+        error_report("vkCreateInstance failed with code %d", res);
         return;
     }
     vkGetDeviceQueue(s->device, s->graphics_queue_node_index, 0, &s->queue);
@@ -185,9 +283,9 @@ void vk_init_device(VulkanState* s)
         pool_info.maxSets = 1000 * ARRAYSIZE(pool_sizes);
         pool_info.poolSizeCount = (uint32_t)ARRAYSIZE(pool_sizes);
         pool_info.pPoolSizes = pool_sizes;
-        vkr = vkCreateDescriptorPool(s->device, &pool_info, NULL, &s->descriptor_pool);
-        if (vkr != VK_SUCCESS) {
-            error_report("vkCreateDescriptorPool failed with code %d", vkr);
+        res = vkCreateDescriptorPool(s->device, &pool_info, NULL, &s->descriptor_pool);
+        if (res != VK_SUCCESS) {
+            error_report("vkCreateDescriptorPool failed with code %d", res);
             return;
         }
     }
