@@ -24,6 +24,7 @@
 #include "hw/ps4/liverpool/pm4.h"
 #include "hw/ps4/macros.h"
 #include "gca/gfx_7_2_d.h"
+#include "ui/orbital.h"
 
 #include "exec/address-spaces.h"
 
@@ -71,6 +72,7 @@ static void gfx_draw_common_begin(
 
     VkCommandBufferBeginInfo cmdBufInfo = {};
     cmdBufInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    cmdBufInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
     res = vkBeginCommandBuffer(s->vkcmdbuf, &cmdBufInfo);
     if (res != VK_SUCCESS) {
         fprintf(stderr, "%s: vkBeginCommandBuffer failed!\n", __FUNCTION__);
@@ -93,7 +95,15 @@ static void gfx_draw_common_begin(
 static void gfx_draw_common_end(
     gfx_state_t *s, uint32_t vmid)
 {
+    VkResult res;
+
     vkCmdEndRenderPass(s->vkcmdbuf);
+
+    res = vkEndCommandBuffer(s->vkcmdbuf);
+    if (res != VK_SUCCESS) {
+        fprintf(stderr, "%s: vkEndCommandBuffer failed!", __FUNCTION__);
+        assert(0);
+    }
 }
 
 static void gfx_draw_index_auto(
@@ -508,6 +518,33 @@ void *liverpool_gc_gfx_cp_thread(void *arg)
     gfx_state_t *s = arg;
     gfx_ring_t* rb0 = &s->cp_rb[0];
     gfx_ring_t* rb1 = &s->cp_rb[1];
+    VkDevice dev = s->vk->device;
+    VkResult res;
+
+    // Create command pool
+    VkCommandPoolCreateInfo commandPoolInfo = {};
+    commandPoolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+    commandPoolInfo.queueFamilyIndex = s->vk->graphics_queue_node_index;
+    commandPoolInfo.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
+
+    res = vkCreateCommandPool(dev, &commandPoolInfo, NULL, &s->vkcmdpool);
+    if (res != VK_SUCCESS) {
+        fprintf(stderr, "%s: vkCreateCommandPool failed!", __FUNCTION__);
+        assert(0);
+    }
+
+    // Create command buffer
+    VkCommandBufferAllocateInfo commandBufferInfo = {};
+    commandBufferInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    commandBufferInfo.commandPool = s->vkcmdpool;
+    commandBufferInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    commandBufferInfo.commandBufferCount = 1;
+
+    res = vkAllocateCommandBuffers(dev, &commandBufferInfo, &s->vkcmdbuf);
+    if (res != VK_SUCCESS) {
+        fprintf(stderr, "%s: vkAllocateCommandBuffers failed!", __FUNCTION__);
+        assert(0);
+    }
 
     while (true) {
         if (rb0->rptr < rb0->wptr) {

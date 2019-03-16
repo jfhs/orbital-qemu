@@ -56,7 +56,7 @@ typedef struct gfx_state_t {
     uint32_t *mmio;
 
     VulkanState *vk;
-    VkDescriptorPool vkdpool;
+    VkCommandPool vkcmdpool;
     VkCommandBuffer vkcmdbuf;
     vk_attachment_t *att_cache[16];
     size_t att_cache_size;

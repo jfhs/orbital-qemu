@@ -153,9 +153,10 @@ static gcn_dependency_t* analyze_dependency_sgpr(gcn_analyzer_t *ctxt, uint32_t 
 
     // Create dependency, if required
     dep = ctxt->deps_sgpr[index];
-    if (dep && index < 16) {
+    if (!dep && index < 16) {
         value.sgpr.index = index;
         dep = gcn_dependency_create(GCN_DEPENDENCY_TYPE_SGPR, value);
+        ctxt->deps_sgpr[index] = dep;
     }
     return dep;
 }

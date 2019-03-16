@@ -27,7 +27,7 @@
 /* dependencies */
 
 typedef struct gcn_dependency_context_t {
-    uint32_t user_sgpr[16];
+    uint32_t *user_sgpr;
 
     void *handler_ctxt;
     uint32_t(*handle_read_mem)(uint64_t addr, uint64_t size, void *ctxt);
