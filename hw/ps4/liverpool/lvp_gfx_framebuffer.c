@@ -53,7 +53,7 @@ static bool is_db_active(gfx_state_t *gfx)
 }
 #endif
 
-static vk_attachment_t* get_attachment(gfx_state_t *gfx, uint64_t base)
+static vk_attachment_t* get_attachment(gfx_state_t *gfx, hwaddr base)
 {
     size_t i;
 
@@ -66,15 +66,19 @@ static vk_attachment_t* get_attachment(gfx_state_t *gfx, uint64_t base)
 }
 
 static vk_attachment_t* create_cb_attachment(gfx_state_t *gfx,
-    const gfx_cb_state_t *cb)
+    const gfx_cb_state_t *cb, uint32_t vmid)
 {
+    gart_state_t *gart = gfx->gart;
     vk_attachment_t *att;
-    uint64_t base;
+    hwaddr gart_base;
+    hwaddr phys_base;
+    hwaddr phys_len;
     VkDevice dev = gfx->vk->device;
     VkResult res;
 
-    base = (uint64_t)cb->base << 8;
-    att = get_attachment(gfx, base);
+    gart_base = (hwaddr)cb->base << 8;
+    address_space_translate(gart->as[vmid], gart_base, &phys_base, &phys_len, true);
+    att = get_attachment(gfx, phys_base);
     if (att)
         return att;
 
@@ -83,7 +87,7 @@ static vk_attachment_t* create_cb_attachment(gfx_state_t *gfx,
         return NULL;
 
     memset(att, 0, sizeof(vk_attachment_t));
-    att->base = base;
+    att->base = phys_base;
 
     // Create render target image
     VkImageCreateInfo imgInfo = {};
@@ -151,7 +155,7 @@ static vk_attachment_t* create_cb_attachment(gfx_state_t *gfx,
     return att;
 }
 
-void gfx_framebuffer_init(gfx_framebuffer_t *fb, gfx_state_t *gfx, gfx_pipeline_t *pipeline)
+void gfx_framebuffer_init(gfx_framebuffer_t *fb, gfx_state_t *gfx, gfx_pipeline_t *pipeline, uint32_t vmid)
 {
     const gfx_cb_state_t *cb;
     vk_attachment_t *att;
@@ -167,8 +171,9 @@ void gfx_framebuffer_init(gfx_framebuffer_t *fb, gfx_state_t *gfx, gfx_pipeline_
         if (!is_cb_active(gfx, i))
             continue;
         
-        att = create_cb_attachment(gfx, &cb[i]);
+        att = create_cb_attachment(gfx, &cb[i], vmid);
         attViews[i] = att->view;
+        fb->mrt[i] = att;
     }
 
     VkFramebufferCreateInfo fbInfo = {};

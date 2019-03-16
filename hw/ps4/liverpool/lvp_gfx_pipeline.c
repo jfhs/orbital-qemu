@@ -323,7 +323,7 @@ gfx_pipeline_t* gfx_pipeline_translate(gfx_state_t *gfx, uint32_t vmid)
     gfx_pipeline_translate_layout(pipeline, gfx);
     gfx_pipeline_translate_renderpass(pipeline, gfx);
     gfx_pipeline_translate_descriptors(pipeline, gfx);
-    gfx_framebuffer_init(&pipeline->framebuffer, gfx, pipeline);
+    gfx_framebuffer_init(&pipeline->framebuffer, gfx, pipeline, vmid);
 
     VkGraphicsPipelineCreateInfo pipelineInfo = {};
     pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;

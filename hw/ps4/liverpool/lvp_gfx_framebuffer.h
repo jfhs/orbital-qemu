@@ -21,6 +21,7 @@
 #define HW_PS4_LIVERPOOL_GC_GFX_FRAMEBUFFER_H
 
 #include "qemu/osdep.h"
+#include "exec/hwaddr.h"
 
 #include <vulkan/vulkan.h>
 
@@ -30,7 +31,7 @@ typedef struct gfx_pipeline_t gfx_pipeline_t;
 
 /* GFX Framebuffer State */
 typedef struct vk_attachment_t {
-    uint64_t base;
+    hwaddr base;
     VkImage image;
     VkDeviceMemory mem;
     VkImageView view;
@@ -38,12 +39,12 @@ typedef struct vk_attachment_t {
 } vk_attachment_t;
 
 typedef struct gfx_framebuffer_t {
-    vk_attachment_t mrt[8];
-    vk_attachment_t mrtz;
+    vk_attachment_t *mrt[8];
+    vk_attachment_t *mrtz;
     VkFramebuffer vkfb;
 } gfx_framebuffer_t;
 
 /* gfx-framebuffer */
-void gfx_framebuffer_init(gfx_framebuffer_t *fb, gfx_state_t *gfx, gfx_pipeline_t *pipeline);
+void gfx_framebuffer_init(gfx_framebuffer_t *fb, gfx_state_t *gfx, gfx_pipeline_t *pipeline, uint32_t vmid);
 
 #endif /* HW_PS4_LIVERPOOL_GC_GFX_FRAMEBUFFER_H */
