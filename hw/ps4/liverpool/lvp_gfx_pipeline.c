@@ -164,6 +164,27 @@ static void gfx_pipeline_translate_descriptors(gfx_pipeline_t *pipeline, gfx_sta
     VkResult res;
     size_t i;
 
+    // Create descriptor pool
+    VkDescriptorPoolSize poolSizes[3];
+    poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    poolSizes[0].descriptorCount = 16;
+    poolSizes[1].type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+    poolSizes[1].descriptorCount = 16;
+    poolSizes[2].type = VK_DESCRIPTOR_TYPE_SAMPLER;
+    poolSizes[2].descriptorCount = 16;
+
+    VkDescriptorPoolCreateInfo descriptorPoolInfo = {};
+    descriptorPoolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    descriptorPoolInfo.poolSizeCount = 3;
+    descriptorPoolInfo.pPoolSizes = poolSizes;
+    descriptorPoolInfo.maxSets = GCN_DESCRIPTOR_SET_COUNT;
+
+    res = vkCreateDescriptorPool(dev, &descriptorPoolInfo, NULL, &pipeline->vkdp);
+    if (res != VK_SUCCESS) {
+        fprintf(stderr, "%s: vkCreateDescriptorPool failed!", __FUNCTION__);
+        assert(0);
+    }
+
     // Create void layout
     VkDescriptorSetLayout voidLayout;
     VkDescriptorSetLayoutCreateInfo voidLayoutInfo = {};
@@ -187,7 +208,7 @@ static void gfx_pipeline_translate_descriptors(gfx_pipeline_t *pipeline, gfx_sta
 
     VkDescriptorSetAllocateInfo allocInfo = {};
     allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-    allocInfo.descriptorPool = gfx->vkdpool;
+    allocInfo.descriptorPool = pipeline->vkdp;
     allocInfo.descriptorSetCount = GCN_DESCRIPTOR_SET_COUNT;
     allocInfo.pSetLayouts = layouts;
 

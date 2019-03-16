@@ -36,6 +36,7 @@ typedef struct gfx_pipeline_t {
     VkPipeline vkp;
     VkPipelineLayout vkpl;
     VkRenderPass vkrp;
+    VkDescriptorPool vkdp;
     VkDescriptorSet vkds[GCN_DESCRIPTOR_SET_COUNT];
     gfx_framebuffer_t framebuffer;
     gfx_shader_t shader_vs;
