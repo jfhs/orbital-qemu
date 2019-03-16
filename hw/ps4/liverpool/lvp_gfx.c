@@ -95,6 +95,7 @@ static void gfx_draw_common_begin(
 static void gfx_draw_common_end(
     gfx_state_t *s, uint32_t vmid)
 {
+    VkDevice dev = s->vk->device;
     VkResult res;
 
     vkCmdEndRenderPass(s->vkcmdbuf);
@@ -104,6 +105,23 @@ static void gfx_draw_common_end(
         fprintf(stderr, "%s: vkEndCommandBuffer failed!", __FUNCTION__);
         assert(0);
     }
+
+    VkSubmitInfo submitInfo = {};
+    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submitInfo.commandBufferCount = 1;
+    submitInfo.pCommandBuffers = &s->vkcmdbuf;
+    qemu_mutex_lock(&s->vk->queue_mutex);
+    res = vkQueueSubmit(s->vk->queue, 1, &submitInfo, s->vkcmdfence);
+    if (res != VK_SUCCESS) {
+        fprintf(stderr, "%s: vkQueueSubmit failed (%d)!", __FUNCTION__, res);
+        assert(0);
+    }
+    res = vkWaitForFences(dev, 1, &s->vkcmdfence, false, UINT64_MAX);
+    if (res != VK_SUCCESS) {
+        fprintf(stderr, "%s: vkWaitForFences failed (%d)!", __FUNCTION__, res);
+        assert(0);
+    }
+    qemu_mutex_unlock(&s->vk->queue_mutex);
 }
 
 static void gfx_draw_index_auto(
@@ -543,6 +561,15 @@ void *liverpool_gc_gfx_cp_thread(void *arg)
     res = vkAllocateCommandBuffers(dev, &commandBufferInfo, &s->vkcmdbuf);
     if (res != VK_SUCCESS) {
         fprintf(stderr, "%s: vkAllocateCommandBuffers failed!", __FUNCTION__);
+        assert(0);
+    }
+
+    // Create command fence
+    VkFenceCreateInfo fenceInfo = {};
+    fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+    res = vkCreateFence(dev, &fenceInfo, NULL, &s->vkcmdfence);
+    if (res != VK_SUCCESS) {
+        fprintf(stderr, "%s: vkCreateFence failed!", __FUNCTION__);
         assert(0);
     }
 

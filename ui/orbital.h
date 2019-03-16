@@ -72,6 +72,8 @@ void orbital_log_event(int device, int component, int event);
 
 void orbital_debug_gpu_mmio(uint32_t *mmio);
 
+void orbital_update_main(void *vkImage);
+
 void orbital_update_cpu_procs(int cpuid, uint64_t gs, uint64_t thread_ptr, uint64_t proc_ptr, uint64_t pid, const char* name);
 
 #endif // UI_ORBITAL_H_

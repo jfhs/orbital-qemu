@@ -152,6 +152,7 @@ static vk_attachment_t* create_cb_attachment(gfx_state_t *gfx,
     size_t index = gfx->att_cache_size;
     assert(index < 16);
     gfx->att_cache[index] = att;
+    gfx->att_cache_size++;
     return att;
 }
 

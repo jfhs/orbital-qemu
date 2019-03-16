@@ -74,6 +74,9 @@ typedef struct OrbitalUI {
     bool show_mem_gva;
     bool show_mem_gart;
     bool show_mem_iommu;
+    /* emulator */
+    bool has_emu_image;
+    VkImage emu_image;
 } OrbitalUI;
 
 // Global state
@@ -103,6 +106,17 @@ void orbital_log_event(int device, int component, int event)
 void orbital_debug_gpu_mmio(uint32_t *mmio)
 {
     orbital_debug_gpu_set_mmio(ui.gpu_debugger, mmio);
+}
+
+void orbital_update_main(void *vkImage)
+{
+    if (vkImage) {
+        ui.emu_image = vkImage;
+        ui.has_emu_image = true;
+    } else {
+        ui.emu_image = NULL;
+        ui.has_emu_image = false;
+    }
 }
 
 void orbital_update_cpu_procs(int cpuid, uint64_t gs, uint64_t thread_ptr, uint64_t proc_ptr, uint64_t pid, const char* name)
@@ -208,6 +222,21 @@ static void FrameRender(ImGui_ImplVulkanH_WindowData* wd, VulkanState* vks)
         info.clearValueCount = 1;
         info.pClearValues = &wd->ClearValue;
         vkCmdBeginRenderPass(fd->CommandBuffer, &info, VK_SUBPASS_CONTENTS_INLINE);
+    }
+
+    if (ui.has_emu_image) {
+        const VkImageBlit blit =
+        {
+            .srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+            .srcSubresource.layerCount = 1,
+            .dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+            .dstSubresource.layerCount = 1,
+            .srcOffsets = {{0, 0, 0}, {1920, 1080, 1}},
+            .dstOffsets = {{0, 0, 0}, {wd->Width, wd->Height, 1}}
+        };
+        vkCmdBlitImage(fd->CommandBuffer, ui.emu_image, VK_IMAGE_LAYOUT_GENERAL,
+            wd->BackBuffer[wd->FrameIndex], VK_IMAGE_LAYOUT_GENERAL,
+            1, &blit, VK_FILTER_NEAREST);
     }
 
     // Record Imgui Draw Data and draw funcs into command buffer
@@ -449,6 +478,7 @@ static void* orbital_display_main(void* arg)
     assert(ui.logs_uart);
     assert(ui.stats);
     assert(ui.procs);
+    ui.has_emu_image = false;
     ui.active = true;
 
     quit = false;

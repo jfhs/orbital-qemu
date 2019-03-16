@@ -58,6 +58,7 @@ typedef struct gfx_state_t {
     VulkanState *vk;
     VkCommandPool vkcmdpool;
     VkCommandBuffer vkcmdbuf;
+    VkFence vkcmdfence;
     vk_attachment_t *att_cache[16];
     size_t att_cache_size;
     gfx_pipeline_t *pipeline;
