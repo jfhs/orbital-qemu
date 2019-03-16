@@ -214,17 +214,43 @@ void gfx_shader_translate_descriptors(
 void gfx_shader_update(gfx_shader_t *shader, uint32_t vmid, gfx_state_t *gfx)
 {
     gart_state_t *gart = gfx->gart;
+    gcn_dependency_context_t dep_ctxt = {};
     gcn_analyzer_t *analyzer;
     gcn_resource_t *res;
     VkDevice device = gfx->vk->device;
     VkBuffer buf;
     size_t i;
 
+    // Prepare dependency context
+    switch (shader->stage) {
+    case GCN_STAGE_PS:
+        dep_ctxt.user_sgpr = &gfx->mmio[mmSPI_SHADER_USER_DATA_PS_0];
+        break;
+    case GCN_STAGE_VS:
+        dep_ctxt.user_sgpr = &gfx->mmio[mmSPI_SHADER_USER_DATA_VS_0];
+        break;
+    case GCN_STAGE_GS:
+        dep_ctxt.user_sgpr = &gfx->mmio[mmSPI_SHADER_USER_DATA_GS_0];
+        break;
+    case GCN_STAGE_ES:
+        dep_ctxt.user_sgpr = &gfx->mmio[mmSPI_SHADER_USER_DATA_ES_0];
+        break;
+    case GCN_STAGE_HS:
+        dep_ctxt.user_sgpr = &gfx->mmio[mmSPI_SHADER_USER_DATA_HS_0];
+        break;
+    case GCN_STAGE_LS:
+        dep_ctxt.user_sgpr = &gfx->mmio[mmSPI_SHADER_USER_DATA_LS_0];
+        break;
+    default:
+        fprintf(stderr, "%s: Unsupported shader stage (%d)!\n", __FUNCTION__, shader->stage);
+        assert(0);
+    }
+
     // Create buffers for V#
     analyzer = &shader->analyzer;
     for (i = 0; i < analyzer->res_vh_count; i++) {
         res = analyzer->res_vh[i];
-        if (!gcn_resource_update(res, NULL))
+        if (!gcn_resource_update(res, &dep_ctxt))
             continue;
         
         // Create buffer, destroying previous one (if any)
