@@ -22,7 +22,6 @@
 #include "lvp_gfx_shader.h"
 #include "lvp_gfx.h"
 #include "gca/gcn_translator.h"
-#include "gca/gfx_7_2_enum.h"
 #include "ui/vk-helpers.h"
 
 #include "qemu-common.h"
@@ -44,56 +43,6 @@ static inline uint64_t fnv_64a_buf(void *buf, size_t len, uint64_t hval)
     }
     return hval;
 }
-
-#if 0
-static VkFormat convertColorFormat(ColorFormat format)
-{
-    switch (format) {
-    case COLOR_8:
-        return VK_FORMAT_R8_UNORM;
-    case COLOR_16:
-        return VK_FORMAT_R16_UNORM;
-    case COLOR_8_8:
-        return VK_FORMAT_R8G8_UNORM;
-    case COLOR_32:
-        return VK_FORMAT_R32_UINT;
-    case COLOR_16_16:
-        return VK_FORMAT_R16G16_UNORM;
-    case COLOR_10_11_11:
-        return VK_FORMAT_B10G11R11_UFLOAT_PACK32;
-    case COLOR_11_11_10:
-        return VK_FORMAT_B10G11R11_UFLOAT_PACK32;
-    case COLOR_10_10_10_2:
-        return VK_FORMAT_A2R10G10B10_UNORM_PACK32;
-    case COLOR_2_10_10_10:
-        return VK_FORMAT_A2R10G10B10_UNORM_PACK32;
-    case COLOR_8_8_8_8:
-        return VK_FORMAT_R8G8B8A8_UNORM;
-    case COLOR_32_32:
-        return VK_FORMAT_R32G32_UINT;
-    case COLOR_16_16_16_16:
-        return VK_FORMAT_R16G16B16A16_UNORM;
-    case COLOR_32_32_32_32:
-        return VK_FORMAT_R32G32B32A32_UINT;
-    case COLOR_5_6_5:
-        return VK_FORMAT_R5G6B5_UNORM_PACK16;
-    case COLOR_1_5_5_5:
-        return VK_FORMAT_A1R5G5B5_UNORM_PACK16;
-    case COLOR_5_5_5_1:
-        return VK_FORMAT_R5G5B5A1_UNORM_PACK16;
-    case COLOR_4_4_4_4:
-        return VK_FORMAT_R4G4B4A4_UNORM_PACK16;
-    case COLOR_8_24:
-        return VK_FORMAT_X8_D24_UNORM_PACK32;
-    case COLOR_24_8:
-        return VK_FORMAT_D24_UNORM_S8_UINT;
-    case COLOR_X24_8_32_FLOAT:
-        return VK_FORMAT_D24_UNORM_S8_UINT;
-    default:
-        return VK_FORMAT_UNDEFINED;
-    }
-}
-#endif
 
 static void gfx_pipeline_translate_layout(gfx_pipeline_t *pipeline, gfx_state_t *gfx)
 {
