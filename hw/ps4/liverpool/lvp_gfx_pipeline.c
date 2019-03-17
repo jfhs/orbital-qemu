@@ -44,22 +44,6 @@ static inline uint64_t fnv_64a_buf(void *buf, size_t len, uint64_t hval)
     return hval;
 }
 
-static void gfx_pipeline_translate_layout(gfx_pipeline_t *pipeline, gfx_state_t *gfx)
-{
-    VkResult res;
-
-    VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
-    pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    pipelineLayoutInfo.setLayoutCount = 0;
-    pipelineLayoutInfo.pushConstantRangeCount = 0;
-
-    res = vkCreatePipelineLayout(gfx->vk->device, &pipelineLayoutInfo, NULL, &pipeline->vkpl);
-    if (res != VK_SUCCESS) {
-        fprintf(stderr, "%s: Failed to create pipeline layout!", __FUNCTION__);
-        assert(0);
-    }
-}
-
 static void gfx_pipeline_translate_renderpass(gfx_pipeline_t *pipeline, gfx_state_t *gfx)
 {
     VkResult res;
@@ -162,7 +146,19 @@ static void gfx_pipeline_translate_descriptors(gfx_pipeline_t *pipeline, gfx_sta
     allocInfo.pSetLayouts = layouts;
 
     // Create descriptor sets
-    res = vkAllocateDescriptorSets(gfx->vk->device, &allocInfo, pipeline->vkds);
+    res = vkAllocateDescriptorSets(dev, &allocInfo, pipeline->vkds);
+    if (res != VK_SUCCESS) {
+        fprintf(stderr, "%s: Failed to create pipeline layout!", __FUNCTION__);
+        assert(0);
+    }
+
+    // Create pipeline layout
+    VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
+    pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    pipelineLayoutInfo.setLayoutCount = GCN_DESCRIPTOR_SET_COUNT;
+    pipelineLayoutInfo.pSetLayouts = layouts;
+
+    res = vkCreatePipelineLayout(dev, &pipelineLayoutInfo, NULL, &pipeline->vkpl);
     if (res != VK_SUCCESS) {
         fprintf(stderr, "%s: Failed to create pipeline layout!", __FUNCTION__);
         assert(0);
@@ -269,7 +265,6 @@ gfx_pipeline_t* gfx_pipeline_translate(gfx_state_t *gfx, uint32_t vmid)
     multisampling.sampleShadingEnable = VK_FALSE;
     multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
 
-    gfx_pipeline_translate_layout(pipeline, gfx);
     gfx_pipeline_translate_renderpass(pipeline, gfx);
     gfx_pipeline_translate_descriptors(pipeline, gfx);
     gfx_framebuffer_init(&pipeline->framebuffer, gfx, pipeline, vmid);
