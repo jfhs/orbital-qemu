@@ -18,6 +18,7 @@
  */
 
 #include "lvp_gfx_shader.h"
+#include "lvp_gfx_format.h"
 #include "lvp_gfx.h"
 #include "lvp_gart.h"
 #include "gca/gcn.h"
@@ -211,14 +212,186 @@ void gfx_shader_translate_descriptors(
     }
 }
 
-void gfx_shader_update(gfx_shader_t *shader, uint32_t vmid, gfx_state_t *gfx)
+static void gfx_shader_update_vh(gfx_shader_t *shader, uint32_t vmid, gfx_state_t *gfx,
+    struct gcn_resource_vh_t *vh, vk_resource_vh_t *vkres)
 {
     gart_state_t *gart = gfx->gart;
+    VkDevice dev = gfx->vk->device;
+    VkBuffer buf;
+
+    // Create buffer, destroying previous one (if any)
+    buf = vkres->buf;
+    if (buf != VK_NULL_HANDLE) {
+        vkDestroyBuffer(dev, buf, NULL);
+        vkFreeMemory(dev, vkres->mem, NULL);
+    }
+    VkBufferCreateInfo bufInfo = {
+        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+        .usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+        .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+        .size = (vh->stride ? vh->stride : 1) * vh->num_records,
+    };
+    if (vkCreateBuffer(dev, &bufInfo, NULL, &vkres->buf) != VK_SUCCESS) {
+        fprintf(stderr, "%s: vkCreateBuffer failed!\n", __FUNCTION__);
+        return;
+    }
+
+    // Allocate memory for buffer
+    buf = vkres->buf;
+    VkMemoryRequirements memReqs;
+    vkGetBufferMemoryRequirements(dev, buf, &memReqs);
+
+    VkMemoryAllocateInfo allocInfo = {};
+    allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    allocInfo.allocationSize = memReqs.size;
+    allocInfo.memoryTypeIndex = vk_find_memory_type(gfx->vk, memReqs.memoryTypeBits,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+        VK_MEMORY_PROPERTY_HOST_COHERENT_BIT); 
+    if (vkAllocateMemory(dev, &allocInfo, NULL, &vkres->mem) != VK_SUCCESS) {
+        fprintf(stderr, "%s: vkAllocateMemory failed!\n", __FUNCTION__);
+        return;
+    }
+
+    // Copy memory for buffer
+    void *data_dst;
+    void *data_src;
+    uint64_t addr_src;
+    hwaddr size_src = bufInfo.size;
+    vkMapMemory(dev, vkres->mem, 0, bufInfo.size, 0, &data_dst);
+    addr_src = vh->base << 8;
+    data_src = address_space_map(gart->as[vmid], addr_src, &size_src, false);
+    memcpy(data_dst, data_src, (size_t)bufInfo.size);
+    address_space_unmap(gart->as[vmid], data_src, addr_src, size_src, false);
+    vkUnmapMemory(dev, vkres->mem);
+}
+
+static void gfx_shader_update_th(gfx_shader_t *shader, uint32_t vmid, gfx_state_t *gfx,
+    struct gcn_resource_th_t *th, vk_resource_th_t *vkres)
+{
+    gart_state_t *gart = gfx->gart;
+    VkDevice dev = gfx->vk->device;
+    VkResult res;
+
+    if (vkres->image != VK_NULL_HANDLE) {
+        vkDestroyImage(dev, vkres->image, NULL);
+        vkFreeMemory(dev, vkres->mem, NULL);
+    }
+
+    // Create render target image
+    VkImageCreateInfo imgInfo = {};
+    imgInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    imgInfo.imageType = VK_IMAGE_TYPE_2D;
+    imgInfo.format = getVkFormat_byImgDataNumFormat(th->dfmt, th->nfmt);
+    imgInfo.extent.width = th->width;
+    imgInfo.extent.height = th->height;
+    imgInfo.extent.depth = 1; // TODO
+    imgInfo.mipLevels = 1; // TODO
+    imgInfo.arrayLayers = 1; // TODO
+    imgInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+    imgInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+    imgInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT;
+
+    res = vkCreateImage(dev, &imgInfo, NULL, &vkres->image);
+    if (res != VK_SUCCESS) {
+        fprintf(stderr, "%s: vkCreateImage failed!\n", __FUNCTION__);
+        return;
+    }
+
+    // Allocate memory for image and bind it
+    VkMemoryRequirements memReqs;
+    vkGetImageMemoryRequirements(dev, vkres->image, &memReqs);
+
+    VkMemoryAllocateInfo memInfo = {};
+    memInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    memInfo.allocationSize = memReqs.size;
+    memInfo.memoryTypeIndex = vk_find_memory_type(gfx->vk, memReqs.memoryTypeBits,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+    res = vkAllocateMemory(dev, &memInfo, NULL, &vkres->mem);
+    if (res != VK_SUCCESS) {
+        fprintf(stderr, "%s: vkAllocateMemory failed!\n", __FUNCTION__);
+        return;
+    }
+    res = vkBindImageMemory(dev, vkres->image, vkres->mem, 0);
+    if (res != VK_SUCCESS) {
+        fprintf(stderr, "%s: vkBindImageMemory failed!\n", __FUNCTION__);
+        return;
+    }
+
+    // Create image view
+    VkImageViewCreateInfo imgView = {};
+    imgView.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    imgView.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    imgView.format = getVkFormat_byImgDataNumFormat(th->dfmt, th->nfmt);
+    imgView.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    imgView.subresourceRange.baseMipLevel = 0;
+    imgView.subresourceRange.levelCount = 1;
+    imgView.subresourceRange.baseArrayLayer = 0;
+    imgView.subresourceRange.layerCount = 1;
+    imgView.image = vkres->image;
+
+    res = vkCreateImageView(dev, &imgView, NULL, &vkres->view);
+    if (res != VK_SUCCESS) {
+        fprintf(stderr, "%s: vkBindImageMemory failed!\n", __FUNCTION__);
+        return;
+    }
+
+    // Copy memory for image
+    void *data_dst;
+    void *data_src;
+    uint64_t addr_src;
+    hwaddr size_src = memReqs.size; // TODO: Avoid memReqs.size
+    vkMapMemory(dev, vkres->mem, 0, memReqs.size, 0, &data_dst); // TODO: Avoid memReqs.size
+    addr_src = th->base << 8;
+    data_src = address_space_map(gart->as[vmid], addr_src, &size_src, false);
+    memcpy(data_dst, data_src, (size_t)memReqs.size); // TODO: Avoid memReqs.size
+    address_space_unmap(gart->as[vmid], data_src, addr_src, size_src, false);
+    vkUnmapMemory(dev, vkres->mem);
+}
+
+static void gfx_shader_update_sh(gfx_shader_t *shader, uint32_t vmid, gfx_state_t *gfx,
+    struct gcn_resource_sh_t *sh, vk_resource_sh_t *vkres)
+{
+    VkDevice dev = gfx->vk->device;
+    VkResult res;
+
+    if (vkres->sampler != VK_NULL_HANDLE) {
+        vkDestroySampler(dev, vkres->sampler, NULL);
+    }
+
+    VkSamplerCreateInfo samplerInfo = {};
+    samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    samplerInfo.magFilter = VK_FILTER_LINEAR;
+    samplerInfo.minFilter = VK_FILTER_LINEAR;
+    samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    samplerInfo.anisotropyEnable = VK_TRUE;
+    samplerInfo.maxAnisotropy = 16;
+    samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+    samplerInfo.unnormalizedCoordinates = VK_FALSE;
+    samplerInfo.compareEnable = VK_FALSE;
+    samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
+    samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+    samplerInfo.mipLodBias = 0.0f;
+    samplerInfo.minLod = 0.0f;
+    samplerInfo.maxLod = 0.0f;
+
+    res = vkCreateSampler(dev, &samplerInfo, NULL, &vkres->sampler);
+    if (res != VK_SUCCESS) {
+        fprintf(stderr, "%s: vkCreateSampler failed!\n", __FUNCTION__);
+        return;
+    }
+}
+
+void gfx_shader_update(gfx_shader_t *shader, uint32_t vmid, gfx_state_t *gfx,
+    VkDescriptorSet descSet)
+{
     gcn_dependency_context_t dep_ctxt = {};
     gcn_analyzer_t *analyzer;
     gcn_resource_t *res;
-    VkDevice device = gfx->vk->device;
-    VkBuffer buf;
+    VkDevice dev = gfx->vk->device;
+    int binding;
     size_t i;
 
     // Prepare dependency context
@@ -246,55 +419,78 @@ void gfx_shader_update(gfx_shader_t *shader, uint32_t vmid, gfx_state_t *gfx)
         assert(0);
     }
 
-    // Create buffers for V#
+    // Update resources
     analyzer = &shader->analyzer;
     for (i = 0; i < analyzer->res_vh_count; i++) {
         res = analyzer->res_vh[i];
         if (!gcn_resource_update(res, &dep_ctxt))
             continue;
-        
-        // Create buffer, destroying previous one (if any)
-        buf = shader->buf_vh[i];
-        if (buf != VK_NULL_HANDLE) {
-            vkDestroyBuffer(device, buf, NULL);
-            vkFreeMemory(device, shader->mem_vh[i], NULL);
-        }
-        VkBufferCreateInfo bufInfo = {
-            .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-            .usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-            .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
-            .size = (res->vh.stride ? res->vh.stride : 1) * res->vh.num_records,
-        };
-        if (vkCreateBuffer(device, &bufInfo, NULL, &shader->buf_vh[i]) != VK_SUCCESS) {
-            fprintf(stderr, "%s: vkCreateBuffer failed!\n", __FUNCTION__);
-            return;
-        }
+        gfx_shader_update_vh(shader, vmid, gfx, &res->vh, &shader->vk_res_vh[i]);
+    }
+    for (i = 0; i < analyzer->res_th_count; i++) {
+        res = analyzer->res_th[i];
+        if (!gcn_resource_update(res, &dep_ctxt))
+            continue;
+        gfx_shader_update_th(shader, vmid, gfx, &res->th, &shader->vk_res_th[i]);
+    }
+    for (i = 0; i < analyzer->res_sh_count; i++) {
+        res = analyzer->res_sh[i];
+        if (!gcn_resource_update(res, &dep_ctxt))
+            continue;
+        gfx_shader_update_sh(shader, vmid, gfx, &res->sh, &shader->vk_res_sh[i]);
+    }
 
-        // Allocate memory for buffer
-        buf = shader->buf_vh[i];
-        VkMemoryRequirements memReqs;
-        vkGetBufferMemoryRequirements(device, buf, &memReqs);
+    // Update descriptors
+    binding = 0;
+    for (i = 0; i < analyzer->res_vh_count; i++) {
+        VkDescriptorBufferInfo bufferInfo = {};
+        bufferInfo.buffer = shader->vk_res_vh[i].buf;
+        bufferInfo.offset = 0;
+        bufferInfo.range = VK_WHOLE_SIZE;
 
-        VkMemoryAllocateInfo allocInfo = {};
-        allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-        allocInfo.allocationSize = memReqs.size;
-        allocInfo.memoryTypeIndex = vk_find_memory_type(gfx->vk, memReqs.memoryTypeBits,
-            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-            VK_MEMORY_PROPERTY_HOST_COHERENT_BIT); 
-        if (vkAllocateMemory(device, &allocInfo, NULL, &shader->mem_vh[i]) != VK_SUCCESS) {
-            fprintf(stderr, "%s: vkAllocateMemory failed!\n", __FUNCTION__);
-        }
+        VkWriteDescriptorSet descriptorWrite = {};
+        descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        descriptorWrite.dstSet = descSet;
+        descriptorWrite.dstBinding = binding;
+        descriptorWrite.dstArrayElement = 0;
+        descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        descriptorWrite.descriptorCount = 1;
+        descriptorWrite.pBufferInfo = &bufferInfo;
 
-        // Copy memory for buffer
-        void *data_dst;
-        void *data_src;
-        uint64_t addr_src;
-        hwaddr size_src = bufInfo.size;
-        vkMapMemory(device, shader->mem_vh[i], 0, bufInfo.size, 0, &data_dst);
-        addr_src = res->vh.base << 8;
-        data_src = address_space_map(gart->as[vmid], addr_src, &size_src, false);
-        memcpy(data_dst, data_src, (size_t)bufInfo.size);
-        address_space_unmap(gart->as[vmid], data_src, addr_src, size_src, false);
-        vkUnmapMemory(device, shader->mem_vh[i]);
+        vkUpdateDescriptorSets(dev, 1, &descriptorWrite, 0, NULL);
+        binding += 1;
+    }
+    for (i = 0; i < analyzer->res_th_count; i++) {
+        VkDescriptorImageInfo imageInfo = {};
+        imageInfo.imageView = shader->vk_res_th[i].view;
+        imageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+
+        VkWriteDescriptorSet descriptorWrite = {};
+        descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        descriptorWrite.dstSet = descSet;
+        descriptorWrite.dstBinding = binding;
+        descriptorWrite.dstArrayElement = 0;
+        descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+        descriptorWrite.descriptorCount = 1;
+        descriptorWrite.pImageInfo = &imageInfo;
+
+        vkUpdateDescriptorSets(dev, 1, &descriptorWrite, 0, NULL);
+        binding += 1;
+    }
+    for (i = 0; i < analyzer->res_th_count; i++) {
+        VkDescriptorImageInfo samplerInfo = {};
+        samplerInfo.sampler = shader->vk_res_sh[i].sampler;
+
+        VkWriteDescriptorSet descriptorWrite = {};
+        descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        descriptorWrite.dstSet = descSet;
+        descriptorWrite.dstBinding = binding;
+        descriptorWrite.dstArrayElement = 0;
+        descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER;
+        descriptorWrite.descriptorCount = 1;
+        descriptorWrite.pImageInfo = &samplerInfo;
+
+        vkUpdateDescriptorSets(dev, 1, &descriptorWrite, 0, NULL);
+        binding += 1;
     }
 }
