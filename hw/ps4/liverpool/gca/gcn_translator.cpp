@@ -57,7 +57,7 @@ typedef struct gcn_translator_t {
     spv::Id type_f32_x4;
     spv::Id type_u32_x4;
     spv::Id type_u32_xN;
-    spv::Id type_u32_xN_s;
+    spv::Id type_vh;
 
     /* registers */
     spv::Id var_sgpr[103];
@@ -278,8 +278,12 @@ static void gcn_translator_init(gcn_translator_t *ctxt,
             ctxt->type_u32 = b.makeUintType(32);
         if (ctxt->type_u32_xN == 0)
             ctxt->type_u32_xN = b.makeRuntimeArray(ctxt->type_u32);
-        if (ctxt->type_u32_xN_s == 0)
-            ctxt->type_u32_xN_s = b.makeStructType({ ctxt->type_u32_xN }, "type_u32_xN_s");
+        if (ctxt->type_vh == 0) {
+            ctxt->type_vh = b.makeStructType({ ctxt->type_u32_xN }, "type_vh");
+            b.addDecoration(ctxt->type_vh, spv::Decoration::DecorationBufferBlock);
+            b.addMemberName(ctxt->type_vh, 0, "data");
+            b.addMemberDecoration(ctxt->type_vh, 0, spv::Decoration::DecorationOffset, 0);
+        }
     }
 
     // Create main function
@@ -306,7 +310,7 @@ static void gcn_translator_init(gcn_translator_t *ctxt,
         res = analyzer->res_vh[i];
         snprintf(name, sizeof(name), "vh%zd", i);
         ctxt->res_vh[i] = b.createVariable(spv::StorageClass::StorageClassUniform,
-            ctxt->type_u32_xN_s, name);
+            ctxt->type_vh, name);
         b.addDecoration(ctxt->res_vh[i], spv::Decoration::DecorationDescriptorSet,
             descriptor_set_guest);
         b.addDecoration(ctxt->res_vh[i], spv::Decoration::DecorationBinding,
