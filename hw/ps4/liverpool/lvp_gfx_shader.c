@@ -217,12 +217,11 @@ static void gfx_shader_update_vh(gfx_shader_t *shader, uint32_t vmid, gfx_state_
 {
     gart_state_t *gart = gfx->gart;
     VkDevice dev = gfx->vk->device;
-    VkBuffer buf;
+    VkResult res;
 
     // Create buffer, destroying previous one (if any)
-    buf = vkres->buf;
-    if (buf != VK_NULL_HANDLE) {
-        vkDestroyBuffer(dev, buf, NULL);
+    if (vkres->buf != VK_NULL_HANDLE) {
+        vkDestroyBuffer(dev, vkres->buf, NULL);
         vkFreeMemory(dev, vkres->mem, NULL);
     }
     VkBufferCreateInfo bufInfo = {
@@ -237,18 +236,23 @@ static void gfx_shader_update_vh(gfx_shader_t *shader, uint32_t vmid, gfx_state_
     }
 
     // Allocate memory for buffer
-    buf = vkres->buf;
     VkMemoryRequirements memReqs;
-    vkGetBufferMemoryRequirements(dev, buf, &memReqs);
+    vkGetBufferMemoryRequirements(dev, vkres->buf, &memReqs);
 
     VkMemoryAllocateInfo allocInfo = {};
     allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
     allocInfo.allocationSize = memReqs.size;
     allocInfo.memoryTypeIndex = vk_find_memory_type(gfx->vk, memReqs.memoryTypeBits,
         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-        VK_MEMORY_PROPERTY_HOST_COHERENT_BIT); 
-    if (vkAllocateMemory(dev, &allocInfo, NULL, &vkres->mem) != VK_SUCCESS) {
+        VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+    res = vkAllocateMemory(dev, &allocInfo, NULL, &vkres->mem);
+    if (res != VK_SUCCESS) {
         fprintf(stderr, "%s: vkAllocateMemory failed!\n", __FUNCTION__);
+        return;
+    }
+    res = vkBindBufferMemory(dev, vkres->buf, vkres->mem, 0);
+    if (res != VK_SUCCESS) {
+        fprintf(stderr, "%s: vkBindBufferMemory failed!\n", __FUNCTION__);
         return;
     }
 
