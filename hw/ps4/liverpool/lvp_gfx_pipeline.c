@@ -245,7 +245,7 @@ gfx_pipeline_t* gfx_pipeline_translate(gfx_state_t *gfx, uint32_t vmid)
 
     VkPipelineInputAssemblyStateCreateInfo inputAssembly = {};
     inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-    inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP; // TODO
     inputAssembly.primitiveRestartEnable = VK_FALSE;
 
     // Rasterizer
