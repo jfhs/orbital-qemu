@@ -214,18 +214,59 @@ static void FrameRender(ImGui_ImplVulkanH_WindowData* wd, VulkanState* vks)
     }
 
     if (ui.has_emu_image) {
-        const VkImageBlit blit =
         {
-            .srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-            .srcSubresource.layerCount = 1,
-            .dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-            .dstSubresource.layerCount = 1,
-            .srcOffsets = {{0, 0, 0}, {1920, 1080, 1}},
-            .dstOffsets = {{0, 0, 0}, {wd->Width, wd->Height, 1}}
-        };
-        vkCmdBlitImage(fd->CommandBuffer, ui.emu_image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-            wd->BackBuffer[wd->FrameIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-            1, &blit, VK_FILTER_NEAREST);
+            VkImageMemoryBarrier barrier = {
+                .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                .srcAccessMask = VK_ACCESS_MEMORY_READ_BIT,
+                .dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
+                .oldLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+                .newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                .subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                .subresourceRange.baseMipLevel = 0,
+                .subresourceRange.levelCount = 1,
+                .subresourceRange.baseArrayLayer = 0,
+                .subresourceRange.layerCount = 1,
+                .image = wd->BackBuffer[wd->FrameIndex],
+            };
+            vkCmdPipelineBarrier(fd->CommandBuffer,
+                VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
+                0, NULL, 0, NULL, 1, &barrier);
+        }
+        {
+            const VkImageBlit blit = {
+                .srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                .srcSubresource.layerCount = 1,
+                .dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                .dstSubresource.layerCount = 1,
+                .srcOffsets = {{0, 0, 0}, {1920, 1080, 1}},
+                .dstOffsets = {{0, 0, 0}, {wd->Width, wd->Height, 1}}
+            };
+            vkCmdBlitImage(fd->CommandBuffer, ui.emu_image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                wd->BackBuffer[wd->FrameIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                1, &blit, VK_FILTER_NEAREST);
+        }
+        {
+            VkImageMemoryBarrier barrier = {
+                .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                .srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
+                .dstAccessMask = VK_ACCESS_MEMORY_READ_BIT,
+                .oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                .newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+                .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                .subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                .subresourceRange.baseMipLevel = 0,
+                .subresourceRange.levelCount = 1,
+                .subresourceRange.baseArrayLayer = 0,
+                .subresourceRange.layerCount = 1,
+                .image = wd->BackBuffer[wd->FrameIndex],
+            };
+            vkCmdPipelineBarrier(fd->CommandBuffer,
+                VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
+                0, NULL, 0, NULL, 1, &barrier);
+        }
     }
 
     {
