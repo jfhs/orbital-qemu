@@ -286,8 +286,8 @@ static void gfx_shader_update_th(gfx_shader_t *shader, uint32_t vmid, gfx_state_
     imgInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
     imgInfo.imageType = VK_IMAGE_TYPE_2D;
     imgInfo.format = getVkFormat_byImgDataNumFormat(th->dfmt, th->nfmt);
-    imgInfo.extent.width = th->width;
-    imgInfo.extent.height = th->height;
+    imgInfo.extent.width = th->width + 1;
+    imgInfo.extent.height = th->height + 1;
     imgInfo.extent.depth = 1; // TODO
     imgInfo.mipLevels = 1; // TODO
     imgInfo.arrayLayers = 1; // TODO
@@ -454,6 +454,9 @@ static void gfx_shader_update_th(gfx_shader_t *shader, uint32_t vmid, gfx_state_
             VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0,
             0, NULL, 0, NULL, 1, &barrier);
     }
+
+    // Finish command buffer
+    assert(VK_SUCCESS == vkEndCommandBuffer(copyCmdBuf));
 
     // Synchronously submit commands
     VkFence fence;
