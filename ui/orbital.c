@@ -212,7 +212,7 @@ static void FrameRender(ImGui_ImplVulkanH_WindowData* wd, VulkanState* vks)
         err = vkBeginCommandBuffer(fd->CommandBuffer, &info);
         check_vk_result(err);
     }
-    
+
     if (ui.has_emu_image) {
         const VkImageBlit blit =
         {
@@ -224,7 +224,7 @@ static void FrameRender(ImGui_ImplVulkanH_WindowData* wd, VulkanState* vks)
             .dstOffsets = {{0, 0, 0}, {wd->Width, wd->Height, 1}}
         };
         vkCmdBlitImage(fd->CommandBuffer, ui.emu_image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-            wd->BackBuffer[wd->FrameIndex], VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+            wd->BackBuffer[wd->FrameIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
             1, &blit, VK_FILTER_NEAREST);
     }
 

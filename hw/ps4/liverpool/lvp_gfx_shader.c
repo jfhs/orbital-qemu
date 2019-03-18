@@ -226,7 +226,7 @@ static void gfx_shader_update_vh(gfx_shader_t *shader, uint32_t vmid, gfx_state_
     }
     VkBufferCreateInfo bufInfo = {
         .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-        .usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+        .usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
         .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
         .size = (vh->stride ? vh->stride : 1) * vh->num_records,
     };
