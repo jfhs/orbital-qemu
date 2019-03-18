@@ -207,10 +207,12 @@ static void gcn_translator_init_vs(gcn_translator_t *ctxt)
     }
 
     // Define inputs
-    auto vertex_index = b.createVariable(spv::StorageClass::StorageClassInput,
+    auto v_index = b.createVariable(spv::StorageClass::StorageClassInput,
         ctxt->type_u32, "gl_VertexIndex");
-    b.addDecoration(vertex_index, spv::Decoration::DecorationBuiltIn,
+    b.addDecoration(v_index, spv::Decoration::DecorationBuiltIn,
         spv::BuiltIn::BuiltInVertexIndex);
+    ctxt->entry_main->addIdOperand(v_index);
+    b.createStore(b.createLoad(v_index), ctxt->var_vgpr[0]);
 }
 
 static void gcn_translator_init(gcn_translator_t *ctxt,
