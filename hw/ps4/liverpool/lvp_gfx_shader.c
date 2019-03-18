@@ -262,7 +262,7 @@ static void gfx_shader_update_vh(gfx_shader_t *shader, uint32_t vmid, gfx_state_
     uint64_t addr_src;
     hwaddr size_src = bufInfo.size;
     vkMapMemory(dev, vkres->mem, 0, bufInfo.size, 0, &data_dst);
-    addr_src = vh->base << 8;
+    addr_src = vh->base;
     data_src = address_space_map(gart->as[vmid], addr_src, &size_src, false);
     memcpy(data_dst, data_src, (size_t)bufInfo.size);
     address_space_unmap(gart->as[vmid], data_src, addr_src, size_src, false);
@@ -380,7 +380,7 @@ static void gfx_shader_update_th(gfx_shader_t *shader, uint32_t vmid, gfx_state_
     uint64_t addr_src;
     hwaddr size_src = stagingBufInfo.size;
     vkMapMemory(dev, vkres->stagingMem, 0, stagingBufInfo.size, 0, &data_dst);
-    addr_src = th->base << 8;
+    addr_src = th->base256 << 8;
     data_src = address_space_map(gart->as[vmid], addr_src, &size_src, false);
     memcpy(data_dst, data_src, (size_t)stagingBufInfo.size);
     address_space_unmap(gart->as[vmid], data_src, addr_src, size_src, false);

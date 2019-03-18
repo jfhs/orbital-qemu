@@ -700,7 +700,7 @@ struct gcn_resource_vh_t {
 // T# Buffer Resource Constant (128-bit or 256-bit)
 struct gcn_resource_th_t {
     struct {
-        uint64_t base                : 38;  // Byte address (256-byte aligned).
+        uint64_t base256             : 38;  // Byte address (256-byte aligned).
         uint64_t mtype_l2            : 2;   // Mtype for L2.
         uint64_t min_lod             : 12;  // Minimum LOD as u:4:8 (0.0 to 16.0).
         uint64_t dfmt                : 6;   // Texture data format.

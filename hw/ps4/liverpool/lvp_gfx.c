@@ -78,15 +78,12 @@ static void gfx_draw_common_begin(
         fprintf(stderr, "%s: vkBeginCommandBuffer failed!\n", __FUNCTION__);
     }
 
-    VkClearValue clearValue = {}; // TODO
     VkRenderPassBeginInfo renderPassBeginInfo = {};
     renderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
     renderPassBeginInfo.renderPass =  pipeline->vkrp;
     renderPassBeginInfo.framebuffer = pipeline->framebuffer.vkfb;
     renderPassBeginInfo.renderArea.extent.width = 1920; // TODO
     renderPassBeginInfo.renderArea.extent.height = 1080; // TODO
-    renderPassBeginInfo.clearValueCount = 1; // TODO
-    renderPassBeginInfo.pClearValues = &clearValue; // TODO
     vkCmdBeginRenderPass(s->vkcmdbuf, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 
     gfx_pipeline_bind(pipeline, s, vmid);
