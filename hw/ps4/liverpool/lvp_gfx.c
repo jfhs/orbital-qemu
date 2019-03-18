@@ -135,6 +135,7 @@ static void gfx_draw_index_auto(
 
     num_indices = s->mmio[mmVGT_NUM_INDICES];
     num_instances = s->mmio[mmVGT_NUM_INSTANCES];
+    num_indices = 4; // HACK: Some draws specify 3 indices, but 4 should be used.
 
     gfx_draw_common_begin(s, vmid);
     vkCmdDraw(s->vkcmdbuf, num_indices, num_instances, 0, 0);
