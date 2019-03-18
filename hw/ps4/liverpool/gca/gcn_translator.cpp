@@ -752,7 +752,7 @@ static void translate_encoding_smrd(gcn_translator_t *ctxt,
         off = translate_operand_get(ctxt, &insn->src1);
         for (i = 0; i < insn->dst.lanes; i++) {
             dst = b.createAccessChain(spv::StorageClass::StorageClassUniform, res, { b.makeUintConstant(0), off });
-            off = b.createBinOp(spv::Op::OpIAdd, ctxt->type_u32, off, b.makeUintConstant(4));
+            off = b.createBinOp(spv::Op::OpIAdd, ctxt->type_u32, off, b.makeUintConstant(1));
             translate_operand_set_sgpr(ctxt, insn->dst.id + i, b.createLoad(dst));
         }
         break;
