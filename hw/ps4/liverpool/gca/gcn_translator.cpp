@@ -315,6 +315,7 @@ static void gcn_translator_init(gcn_translator_t *ctxt,
             descriptor_set_guest);
         b.addDecoration(ctxt->res_vh[i], spv::Decoration::DecorationBinding,
             binding++);
+        b.addDecoration(ctxt->res_vh[i], spv::Decoration::DecorationNonWritable); // TODO: This might not be true
     }
     for (i = 0; i < analyzer->res_th_count; i++) {
         res = analyzer->res_th[i];
