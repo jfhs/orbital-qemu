@@ -40,6 +40,8 @@ typedef struct vk_resource_vh_t {
 
 typedef struct vk_resource_th_t {
     hwaddr base;
+    VkBuffer stagingBuf;
+    VkDeviceMemory stagingMem;
     VkImage image;
     VkDeviceMemory mem;
     VkImageView view;
