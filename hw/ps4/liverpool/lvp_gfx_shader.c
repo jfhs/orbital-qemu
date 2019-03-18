@@ -177,7 +177,7 @@ void gfx_shader_translate_descriptors(
         layoutBinding = &layoutBindings[binding];
         layoutBinding->binding = binding;
         layoutBinding->descriptorCount = 1;
-        layoutBinding->descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        layoutBinding->descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
         layoutBinding->pImmutableSamplers = NULL;
         layoutBinding->stageFlags = flags;
         binding += 1;
@@ -226,7 +226,7 @@ static void gfx_shader_update_vh(gfx_shader_t *shader, uint32_t vmid, gfx_state_
     }
     VkBufferCreateInfo bufInfo = {
         .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-        .usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+        .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
         .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
         .size = (vh->stride ? vh->stride : 1) * vh->num_records,
     };
@@ -458,7 +458,7 @@ void gfx_shader_update(gfx_shader_t *shader, uint32_t vmid, gfx_state_t *gfx,
         descriptorWrite.dstSet = descSet;
         descriptorWrite.dstBinding = binding;
         descriptorWrite.dstArrayElement = 0;
-        descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
         descriptorWrite.descriptorCount = 1;
         descriptorWrite.pBufferInfo = &bufferInfo;
 

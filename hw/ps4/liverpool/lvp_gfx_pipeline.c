@@ -99,7 +99,7 @@ static void gfx_pipeline_translate_descriptors(gfx_pipeline_t *pipeline, gfx_sta
 
     // Create descriptor pool
     VkDescriptorPoolSize poolSizes[3];
-    poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    poolSizes[0].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
     poolSizes[0].descriptorCount = 16;
     poolSizes[1].type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
     poolSizes[1].descriptorCount = 16;
