@@ -468,8 +468,10 @@ static void gfx_shader_update_th(gfx_shader_t *shader, uint32_t vmid, gfx_state_
     submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
     submitInfo.commandBufferCount = 1;
     submitInfo.pCommandBuffers = &copyCmdBuf;
+    qemu_mutex_lock(&gfx->vk->queue_mutex);
     assert(VK_SUCCESS == vkQueueSubmit(gfx->vk->queue, 1, &submitInfo, fence));
     assert(VK_SUCCESS == vkWaitForFences(dev, 1, &fence, VK_TRUE, UINT64_MAX));
+    qemu_mutex_unlock(&gfx->vk->queue_mutex);
 
     // Free resources
     vkDestroyFence(dev, fence, NULL);

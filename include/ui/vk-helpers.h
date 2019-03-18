@@ -32,6 +32,9 @@
 #endif
 #include <vulkan/vulkan.h>
 
+#include "qemu/osdep.h"
+#include "qemu/thread.h"
+
 typedef struct VulkanState {
     VkInstance instance;
     VkSurfaceKHR surface;
@@ -45,6 +48,7 @@ typedef struct VulkanState {
     uint32_t queue_count;
     uint32_t graphics_queue_node_index;
     VkQueue queue;
+    QemuMutex queue_mutex;
     VkDescriptorPool descriptor_pool;
     VkDebugUtilsMessengerEXT debug_messenger;
 

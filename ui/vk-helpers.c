@@ -259,7 +259,7 @@ void vk_init_device(VulkanState* s)
         return;
     }
     vkGetDeviceQueue(s->device, s->graphics_queue_node_index, 0, &s->queue);
-
+    qemu_mutex_init(&s->queue_mutex);
 
     // Create Descriptor Pool
     {
