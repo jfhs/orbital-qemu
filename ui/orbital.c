@@ -212,18 +212,7 @@ static void FrameRender(ImGui_ImplVulkanH_WindowData* wd, VulkanState* vks)
         err = vkBeginCommandBuffer(fd->CommandBuffer, &info);
         check_vk_result(err);
     }
-    {
-        VkRenderPassBeginInfo info = {};
-        info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-        info.renderPass = wd->RenderPass;
-        info.framebuffer = wd->Framebuffer[wd->FrameIndex];
-        info.renderArea.extent.width = wd->Width;
-        info.renderArea.extent.height = wd->Height;
-        info.clearValueCount = 1;
-        info.pClearValues = &wd->ClearValue;
-        vkCmdBeginRenderPass(fd->CommandBuffer, &info, VK_SUBPASS_CONTENTS_INLINE);
-    }
-
+    
     if (ui.has_emu_image) {
         const VkImageBlit blit =
         {
@@ -234,9 +223,21 @@ static void FrameRender(ImGui_ImplVulkanH_WindowData* wd, VulkanState* vks)
             .srcOffsets = {{0, 0, 0}, {1920, 1080, 1}},
             .dstOffsets = {{0, 0, 0}, {wd->Width, wd->Height, 1}}
         };
-        vkCmdBlitImage(fd->CommandBuffer, ui.emu_image, VK_IMAGE_LAYOUT_GENERAL,
-            wd->BackBuffer[wd->FrameIndex], VK_IMAGE_LAYOUT_GENERAL,
+        vkCmdBlitImage(fd->CommandBuffer, ui.emu_image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            wd->BackBuffer[wd->FrameIndex], VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
             1, &blit, VK_FILTER_NEAREST);
+    }
+
+    {
+        VkRenderPassBeginInfo info = {};
+        info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+        info.renderPass = wd->RenderPass;
+        info.framebuffer = wd->Framebuffer[wd->FrameIndex];
+        info.renderArea.extent.width = wd->Width;
+        info.renderArea.extent.height = wd->Height;
+        info.clearValueCount = 1;
+        info.pClearValues = &wd->ClearValue;
+        vkCmdBeginRenderPass(fd->CommandBuffer, &info, VK_SUBPASS_CONTENTS_INLINE);
     }
 
     // Record Imgui Draw Data and draw funcs into command buffer

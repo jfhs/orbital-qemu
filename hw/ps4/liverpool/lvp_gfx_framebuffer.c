@@ -101,7 +101,10 @@ static vk_attachment_t* create_cb_attachment(gfx_state_t *gfx,
     imgInfo.arrayLayers = 1;
     imgInfo.samples = VK_SAMPLE_COUNT_1_BIT;
     imgInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
-    imgInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+    imgInfo.usage =
+        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | 
+        VK_IMAGE_USAGE_SAMPLED_BIT |
+        VK_IMAGE_USAGE_TRANSFER_SRC_BIT;  // NOTE: UI-thread might read image into framebuffer
 
     res = vkCreateImage(dev, &imgInfo, NULL, &att->image);
     if (res != VK_SUCCESS) {
