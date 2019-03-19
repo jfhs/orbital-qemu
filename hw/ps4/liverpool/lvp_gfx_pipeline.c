@@ -202,7 +202,13 @@ gfx_pipeline_t* gfx_pipeline_translate(gfx_state_t *gfx, uint32_t vmid)
     colorBlendAttachment.colorWriteMask |= VK_COLOR_COMPONENT_G_BIT;
     colorBlendAttachment.colorWriteMask |= VK_COLOR_COMPONENT_B_BIT;
     colorBlendAttachment.colorWriteMask |= VK_COLOR_COMPONENT_A_BIT;
-    colorBlendAttachment.blendEnable = VK_FALSE;
+    colorBlendAttachment.blendEnable = VK_TRUE; // TODO
+    colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA; // TODO
+    colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA; // TODO
+    colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD; // TODO
+    colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE; // TODO
+    colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO; // TODO
+    colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD; // TODO
 
     VkPipelineColorBlendStateCreateInfo colorBlending = {};
     colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
