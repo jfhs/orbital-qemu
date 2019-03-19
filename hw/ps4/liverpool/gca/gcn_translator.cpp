@@ -833,6 +833,13 @@ static void translate_encoding_exp(gcn_translator_t *ctxt,
         src0 = b.createUnaryOp(spv::Op::OpBitcast, ctxt->type_u32, src0);
     }
 
+    // Position exports in Vulkan have the Y-coordinate inverted
+    if (insn->dst.kind == GCN_KIND_EXP_POS) {
+        src1 = b.createUnaryOp(spv::Op::OpBitcast, ctxt->type_u32,
+               b.createUnaryOp(spv::Op::OpFNegate, ctxt->type_f32,
+               b.createUnaryOp(spv::Op::OpBitcast, ctxt->type_f32, src1)));
+    }
+
     dst = b.createCompositeConstruct(ctxt->type_u32_x4, { src0, src1, src2, src3 });
 
     translate_operand_set(ctxt, &insn->dst, dst);
