@@ -761,6 +761,51 @@ static void translate_encoding_smrd(gcn_translator_t *ctxt,
     }
 }
 
+static void translate_encoding_mimg(gcn_translator_t *ctxt,
+    gcn_instruction_t *insn)
+{
+    spv::Builder& b = *ctxt->builder;
+    spv::Id coords, cx, cy;//, cz, cw;
+    spv::Id dst, sampler;
+    spv::Id res_th;
+    spv::Id res_sh;
+    size_t index = 0;
+
+    switch (insn->mimg.op) {
+    case IMAGE_SAMPLE:
+        // Handle arguments
+        cx = b.createUnaryOp(spv::Op::OpBitcast, ctxt->type_f32, b.createLoad(ctxt->var_vgpr[insn->mimg.vaddr + 0]));
+        cy = b.createUnaryOp(spv::Op::OpBitcast, ctxt->type_f32, b.createLoad(ctxt->var_vgpr[insn->mimg.vaddr + 1]));
+        coords = b.createCompositeConstruct(b.makeVectorType(ctxt->type_f32, 2), { cx, cy });
+        res_th = b.createLoad(ctxt->res_th[ctxt->res_th_index++]);
+        res_sh = b.createLoad(ctxt->res_sh[ctxt->res_sh_index++]);
+        sampler = b.createOp(spv::Op::OpSampledImage, b.makeSampledImageType(
+            b.makeImageType(ctxt->type_f32, spv::Dim::Dim2D, false, false, false, 1, spv::ImageFormat::ImageFormatUnknown) /* TODO */),
+            { res_th, res_sh });
+        // Sample and store results in vdata[]
+        dst = b.createOp(spv::Op::OpImageSampleImplicitLod, ctxt->type_f32_x4, { sampler, coords });
+        if ((insn->mimg.dmask >> 0) & 1) {
+            b.createStore(b.createUnaryOp(spv::Op::OpBitcast, ctxt->type_u32,
+                b.createCompositeExtract(dst, ctxt->type_f32, 3)), ctxt->var_vgpr[insn->mimg.vdata + index++]);
+        }
+        if ((insn->mimg.dmask >> 1) & 1) {
+            b.createStore(b.createUnaryOp(spv::Op::OpBitcast, ctxt->type_u32,
+                b.createCompositeExtract(dst, ctxt->type_f32, 2)), ctxt->var_vgpr[insn->mimg.vdata + index++]);
+        }
+        if ((insn->mimg.dmask >> 2) & 1) {
+            b.createStore(b.createUnaryOp(spv::Op::OpBitcast, ctxt->type_u32,
+                b.createCompositeExtract(dst, ctxt->type_f32, 1)), ctxt->var_vgpr[insn->mimg.vdata + index++]);
+        }
+        if ((insn->mimg.dmask >> 3) & 1) {
+            b.createStore(b.createUnaryOp(spv::Op::OpBitcast, ctxt->type_u32,
+                b.createCompositeExtract(dst, ctxt->type_f32, 0)), ctxt->var_vgpr[insn->mimg.vdata + index++]);
+        }
+        break;
+    default:
+        break;
+    }
+}
+
 static void translate_encoding_exp(gcn_translator_t *ctxt,
     gcn_instruction_t *insn)
 {
@@ -822,6 +867,9 @@ static void translate_insn(gcn_translator_t *ctxt,
     case GCN_ENCODING_VINTRP:
         translate_encoding_vintrp(ctxt, insn);
         break;
+    case GCN_ENCODING_MIMG:
+        translate_encoding_mimg(ctxt, insn);
+        break;
     case GCN_ENCODING_EXP:
         translate_encoding_exp(ctxt, insn);
         break;
@@ -840,9 +888,6 @@ static void translate_insn(gcn_translator_t *ctxt,
         break;
     case GCN_ENCODING_VOPC:
         translate_encoding_vopc(ctxt, insn);
-        break;
-    case GCN_ENCODING_MIMG:
-        translate_encoding_mimg(ctxt, insn);
         break;
 #endif
     default:
