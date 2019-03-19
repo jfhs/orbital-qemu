@@ -281,7 +281,7 @@ static void analyze_encoding_smrd(gcn_analyzer_t *ctxt,
     case S_BUFFER_LOAD_DWORDX4:
     case S_BUFFER_LOAD_DWORDX8:
     case S_BUFFER_LOAD_DWORDX16:
-        dep = analyze_dependency_sgpr(ctxt, insn->smrd.sbase);
+        dep = analyze_dependency_sgpr(ctxt, insn->src0.id);
         res = gcn_resource_create(GCN_RESOURCE_TYPE_VH, 0, dep);
         analyze_resource_vh(ctxt, res);
         break;

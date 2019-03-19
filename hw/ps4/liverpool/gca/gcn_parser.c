@@ -962,7 +962,7 @@ static gcn_parser_error_t handle_smrd(gcn_parser_t *ctxt)
     insn->encoding = GCN_ENCODING_SMRD;
     if ((err = handle_operand_sdst(ctxt, &insn->dst, insn->smrd.sdst)))
         return err;
-    if ((err = handle_operand_ssrc(ctxt, &insn->src0, insn->smrd.sdst)))
+    if ((err = handle_operand_ssrc(ctxt, &insn->src0, insn->smrd.sbase << 1)))
         return err;
     if (insn->smrd.imm) {
         if ((err = handle_operand_imm(ctxt, &insn->src1, insn->smrd.offset)))
