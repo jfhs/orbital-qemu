@@ -20,29 +20,61 @@
 #ifndef HW_PS4_LIVERPOOL_GC_GFX_SHADER_H
 #define HW_PS4_LIVERPOOL_GC_GFX_SHADER_H
 
+#include "gca/gcn_analyzer.h"
+
 #include "qemu/osdep.h"
 #include "qemu/thread.h"
 #include "exec/hwaddr.h"
 
-#include "gca/gfx_7_2_enum.h"
+#include <vulkan/vulkan.h>
 
 /* forward declarations */
 typedef struct gart_state_t gart_state_t;
+typedef struct gfx_state_t gfx_state_t;
 
-enum {
-    GFX_SHADER_PS = 1,
-    GFX_SHADER_VS = 2,
-    GFX_SHADER_GS = 3,
-    GFX_SHADER_ES = 4,
-    GFX_SHADER_HS = 5,
-    GFX_SHADER_LS = 6,
-};
+/* resources */
+typedef struct vk_resource_vh_t {
+    VkBuffer buf;
+    VkDeviceMemory mem;
+} vk_resource_vh_t;
+
+typedef struct vk_resource_th_t {
+    hwaddr base;
+    VkBuffer stagingBuf;
+    VkDeviceMemory stagingMem;
+    VkImage image;
+    VkDeviceMemory mem;
+    VkImageView view;
+    VkFormat format;
+} vk_resource_th_t;
+
+typedef struct vk_resource_sh_t {
+    VkSampler sampler;
+} vk_resource_sh_t;
 
 /* GFX Shader State */
 typedef struct gfx_shader_t {
+    gcn_stage_t stage;
+    VkShaderModule module;
+
+    // Analyzer contains metadata required to update resources
+    gcn_analyzer_t analyzer;
+    vk_resource_vh_t vk_res_vh[16];
+    vk_resource_th_t vk_res_th[16];
+    vk_resource_sh_t vk_res_sh[16];
 } gfx_shader_t;
 
 /* gfx-shader */
-void gfx_shader_translate(gfx_shader_t *shader, void *shader_pgm, int type);
+void gfx_shader_translate(gfx_shader_t *shader, uint32_t vmid,
+    gfx_state_t *gfx, gcn_stage_t stage);
+
+void gfx_shader_translate_descriptors(gfx_shader_t *shader,
+    gfx_state_t *gfx, VkDescriptorSetLayout *descSetLayout);
+
+/**
+ * Updates the resources of a shader.
+ */
+void gfx_shader_update(gfx_shader_t *shader, uint32_t vmid, gfx_state_t *gfx,
+    VkDescriptorSet descSet);
 
 #endif /* HW_PS4_LIVERPOOL_GC_GFX_SHADER_H */

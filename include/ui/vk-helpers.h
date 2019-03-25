@@ -32,6 +32,9 @@
 #endif
 #include <vulkan/vulkan.h>
 
+#include "qemu/osdep.h"
+#include "qemu/thread.h"
+
 typedef struct VulkanState {
     VkInstance instance;
     VkSurfaceKHR surface;
@@ -40,11 +43,14 @@ typedef struct VulkanState {
     VkPhysicalDevice gpu;
     VkPhysicalDeviceProperties gpu_props;
     VkPhysicalDeviceFeatures gpu_features;
+    VkPhysicalDeviceMemoryProperties mem_props;
     VkQueueFamilyProperties *queue_props;
     uint32_t queue_count;
     uint32_t graphics_queue_node_index;
     VkQueue queue;
+    QemuMutex queue_mutex;
     VkDescriptorPool descriptor_pool;
+    VkDebugUtilsMessengerEXT debug_messenger;
 
     uint32_t enabled_extension_count;
     uint32_t enabled_layer_count;
@@ -53,5 +59,15 @@ typedef struct VulkanState {
 
 void vk_init_instance(VulkanState* state, uint32_t extCount, const char **extNames);
 void vk_init_device(VulkanState* state);
+
+static inline uint32_t vk_find_memory_type(VulkanState* s, uint32_t typeFilter, VkMemoryPropertyFlags properties) {
+    uint32_t i;
+    for (i = 0; i < s->mem_props.memoryTypeCount; i++) {
+        if ((typeFilter & (1 << i)) && (s->mem_props.memoryTypes[i].propertyFlags & properties) == properties) {
+            return i;
+        }
+    }
+    return -1; // TODO: Handle this!
+}
 
 #endif /* #define VK_HELPERS_H */

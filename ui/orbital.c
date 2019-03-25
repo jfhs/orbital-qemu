@@ -82,6 +82,10 @@ typedef struct OrbitalUI {
 
     struct timespec last_procs_update;
     float procs_updates_per_second; // Maximum rate, not accurate
+
+    /* emulator */
+    bool has_emu_image;
+    VkImage emu_image;
 } OrbitalUI;
 
 // Global state
@@ -100,6 +104,11 @@ bool orbital_executing_processes_active(void)
 bool orbital_process_list_active(void)
 {
     return ui.show_process_list;
+}
+
+VulkanState* orbital_get_vkstate(void)
+{
+    return &ui.vk_state;
 }
 
 void orbital_log_uart(int index, char ch)
@@ -136,6 +145,17 @@ void orbital_update_cpu_procs_list_add_proc(struct orbital_proc_data *p)
 void orbital_update_cpu_procs_list_add_proc_thread(int owner_pid, struct thread *td)
 {
     orbital_procs_list_add_proc_thread(ui.procs_list, owner_pid, td);
+}
+
+void orbital_update_main(void *vkImage)
+{
+    if (vkImage) {
+        ui.emu_image = vkImage;
+        ui.has_emu_image = true;
+    } else {
+        ui.emu_image = NULL;
+        ui.has_emu_image = false;
+    }
 }
 
 void orbital_update_cpu_procs_list_done()
@@ -250,6 +270,112 @@ static void FrameRender(ImGui_ImplVulkanH_WindowData* wd, VulkanState* vks)
         err = vkBeginCommandBuffer(fd->CommandBuffer, &info);
         check_vk_result(err);
     }
+
+    // Interlocked background drawing
+    {
+        VkImageMemoryBarrier barrier = {
+            .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+            .srcAccessMask = VK_ACCESS_MEMORY_READ_BIT,
+            .dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
+            .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+            .newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+            .subresourceRange.baseMipLevel = 0,
+            .subresourceRange.levelCount = 1,
+            .subresourceRange.baseArrayLayer = 0,
+            .subresourceRange.layerCount = 1,
+            .image = wd->BackBuffer[wd->FrameIndex],
+        };
+        vkCmdPipelineBarrier(fd->CommandBuffer,
+            VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
+            0, NULL, 0, NULL, 1, &barrier);
+    }
+    if (ui.has_emu_image) {
+        {
+            VkImageMemoryBarrier barrier = {
+                .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                .srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT,
+                .dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT,
+                .oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                .newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                .subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                .subresourceRange.baseMipLevel = 0,
+                .subresourceRange.levelCount = 1,
+                .subresourceRange.baseArrayLayer = 0,
+                .subresourceRange.layerCount = 1,
+                .image = ui.emu_image,
+            };
+            vkCmdPipelineBarrier(fd->CommandBuffer,
+                VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
+                0, NULL, 0, NULL, 1, &barrier);
+        }
+        const VkImageBlit blit = {
+            .srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+            .srcSubresource.layerCount = 1,
+            .dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+            .dstSubresource.layerCount = 1,
+            .srcOffsets = {{0, 0, 0}, {1920, 1080, 1}},
+            .dstOffsets = {{0, 0, 0}, {wd->Width, wd->Height, 1}}
+        };
+        vkCmdBlitImage(fd->CommandBuffer, ui.emu_image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            wd->BackBuffer[wd->FrameIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            1, &blit, VK_FILTER_NEAREST);
+        {
+            VkImageMemoryBarrier barrier = {
+                .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                .srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT,
+                .dstAccessMask = VK_ACCESS_MEMORY_WRITE_BIT,
+                .oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                .newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                .subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                .subresourceRange.baseMipLevel = 0,
+                .subresourceRange.levelCount = 1,
+                .subresourceRange.baseArrayLayer = 0,
+                .subresourceRange.layerCount = 1,
+                .image = ui.emu_image,
+            };
+            vkCmdPipelineBarrier(fd->CommandBuffer,
+                VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
+                0, NULL, 0, NULL, 1, &barrier);
+        }
+    } else {
+        VkImageSubresourceRange subresourceRange = {
+            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+            .baseMipLevel = 0,
+            .levelCount = 1,
+            .baseArrayLayer = 0,
+            .layerCount = 1,
+        };
+        vkCmdClearColorImage(fd->CommandBuffer, wd->BackBuffer[wd->FrameIndex],
+            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &wd->ClearValue.color, 1, &subresourceRange);
+    }
+    {
+        VkImageMemoryBarrier barrier = {
+            .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+            .srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
+            .dstAccessMask = VK_ACCESS_MEMORY_READ_BIT,
+            .oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            .newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+            .subresourceRange.baseMipLevel = 0,
+            .subresourceRange.levelCount = 1,
+            .subresourceRange.baseArrayLayer = 0,
+            .subresourceRange.layerCount = 1,
+            .image = wd->BackBuffer[wd->FrameIndex],
+        };
+        vkCmdPipelineBarrier(fd->CommandBuffer,
+            VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
+            0, NULL, 0, NULL, 1, &barrier);
+    }
+
     {
         VkRenderPassBeginInfo info = {};
         info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
@@ -257,8 +383,6 @@ static void FrameRender(ImGui_ImplVulkanH_WindowData* wd, VulkanState* vks)
         info.framebuffer = wd->Framebuffer[wd->FrameIndex];
         info.renderArea.extent.width = wd->Width;
         info.renderArea.extent.height = wd->Height;
-        info.clearValueCount = 1;
-        info.pClearValues = &wd->ClearValue;
         vkCmdBeginRenderPass(fd->CommandBuffer, &info, VK_SUBPASS_CONTENTS_INLINE);
     }
 
@@ -281,7 +405,9 @@ static void FrameRender(ImGui_ImplVulkanH_WindowData* wd, VulkanState* vks)
 
         err = vkEndCommandBuffer(fd->CommandBuffer);
         check_vk_result(err);
+        qemu_mutex_lock(&vks->queue_mutex);
         err = vkQueueSubmit(vks->queue, 1, &info, fd->Fence);
+        qemu_mutex_unlock(&vks->queue_mutex);
         check_vk_result(err);
     }
 }
@@ -410,11 +536,12 @@ static void* orbital_display_main(void* arg)
         error_report("SDL_Vulkan_GetInstanceExtensions failed");
     }
 
-    const char **extensionNames = (const char **)malloc((count + 1) * sizeof(char*));
-    extensionNames[0] = VK_KHR_SURFACE_EXTENSION_NAME;
-    SDL_Vulkan_GetInstanceExtensions(ui.sdl_window, &count, &extensionNames[1]);
+    const char **extensionNames = (const char **)malloc((count + 2) * sizeof(char*));
+    extensionNames[count + 0] = VK_KHR_SURFACE_EXTENSION_NAME;
+    extensionNames[count + 1] = VK_EXT_DEBUG_UTILS_EXTENSION_NAME;
+    SDL_Vulkan_GetInstanceExtensions(ui.sdl_window, &count, &extensionNames[0]);
 
-    vk_init_instance(vks, count+1, extensionNames);
+    vk_init_instance(vks, count+2, extensionNames);
     if (!SDL_Vulkan_CreateSurface(ui.sdl_window, vks->instance, &vks->surface)) {
         printf("SDL_Vulkan_CreateSurface failed: %s\n", SDL_GetError());
         return NULL;
@@ -426,6 +553,7 @@ static void* orbital_display_main(void* arg)
     SDL_GetWindowSize(ui.sdl_window, &w, &h);
     ImGui_ImplVulkanH_WindowData* wd = &ui.imgui_WindowData;
     *wd = ImGui_ImplVulkanH_WindowData_Create();
+    wd->ClearEnable = false;
     SetupVulkanWindowData(wd, vks, w, h);
 
     // Setup Dear ImGui binding
@@ -507,6 +635,7 @@ static void* orbital_display_main(void* arg)
     assert(ui.stats);
     assert(ui.procs);
     assert(ui.procs_list);
+    ui.has_emu_image = false;
     ui.active = true;
     ui.procs_updates_per_second = 2.0;
 

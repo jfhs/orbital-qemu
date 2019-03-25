@@ -23,7 +23,10 @@
 #include "qemu/osdep.h"
 #include "qemu/thread.h"
 #include "exec/hwaddr.h"
+#include "ui/vk-helpers.h"
 
+#include "lvp_gfx_framebuffer.h"
+#include "lvp_gfx_pipeline.h"
 #include "lvp_gfx_shader.h"
 #include "gca/gfx_7_2_enum.h"
 
@@ -42,8 +45,6 @@ typedef struct gfx_ring_t {
 } gfx_ring_t;
 
 typedef struct vmid_state_t {
-    gfx_shader_t shader_vs;
-    gfx_shader_t shader_ps;
 } vmid_state_t;
 
 /* GFX State */
@@ -53,6 +54,14 @@ typedef struct gfx_state_t {
     gart_state_t *gart;
     vmid_state_t vmid[16];
     uint32_t *mmio;
+
+    VulkanState *vk;
+    VkCommandPool vkcmdpool;
+    VkCommandBuffer vkcmdbuf;
+    VkFence vkcmdfence;
+    vk_attachment_t *att_cache[16];
+    size_t att_cache_size;
+    gfx_pipeline_t *pipeline;
 
     /* cp */
     gfx_ring_t cp_rb[2];

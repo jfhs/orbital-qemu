@@ -18,11 +18,13 @@
  */
 
 #include "lvp_gfx.h"
+#include "lvp_gfx_pipeline.h"
 #include "lvp_gart.h"
 #include "lvp_ih.h"
 #include "hw/ps4/liverpool/pm4.h"
 #include "hw/ps4/macros.h"
 #include "gca/gfx_7_2_d.h"
+#include "ui/orbital.h"
 
 #include "exec/address-spaces.h"
 
@@ -58,61 +60,71 @@ void liverpool_gc_gfx_cp_set_ring_location(gfx_state_t *s,
 }
 
 /* draw operations */
-static void gfx_draw_update_shader(
-    gfx_state_t *s, uint32_t vmid, gfx_shader_t *shader, int type)
-{
-    gart_state_t *gart = s->gart;
-    uint64_t pgm_addr, pgm_size;
-    uint32_t pgm_offs;
-    uint8_t *pgm_data;
-    hwaddr mapped_size;
-
-    switch (type) {
-    case GFX_SHADER_PS:
-        pgm_addr = s->mmio[mmSPI_SHADER_PGM_HI_PS];
-        pgm_addr = s->mmio[mmSPI_SHADER_PGM_LO_PS] | (pgm_addr << 32);
-        break;
-    case GFX_SHADER_VS:
-        pgm_addr = s->mmio[mmSPI_SHADER_PGM_HI_VS];
-        pgm_addr = s->mmio[mmSPI_SHADER_PGM_LO_VS] | (pgm_addr << 32);
-        break;
-    case GFX_SHADER_GS:
-        pgm_addr = s->mmio[mmSPI_SHADER_PGM_HI_GS];
-        pgm_addr = s->mmio[mmSPI_SHADER_PGM_LO_GS] | (pgm_addr << 32);
-        break;
-    case GFX_SHADER_ES:
-        pgm_addr = s->mmio[mmSPI_SHADER_PGM_HI_ES];
-        pgm_addr = s->mmio[mmSPI_SHADER_PGM_LO_ES] | (pgm_addr << 32);
-        break;
-    case GFX_SHADER_HS:
-        pgm_addr = s->mmio[mmSPI_SHADER_PGM_HI_HS];
-        pgm_addr = s->mmio[mmSPI_SHADER_PGM_LO_HS] | (pgm_addr << 32);
-        break;
-    case GFX_SHADER_LS:
-        pgm_addr = s->mmio[mmSPI_SHADER_PGM_HI_LS];
-        pgm_addr = s->mmio[mmSPI_SHADER_PGM_LO_LS] | (pgm_addr << 32);
-        break;
-    }
-    pgm_addr <<= 8;
-
-    // Map shader bytecode into host userspace
-    pgm_offs = pgm_addr & 0xFFF;
-    pgm_addr = pgm_addr & ~0xFFF;
-    pgm_size = 0x2000; // TODO
-    mapped_size = pgm_size;
-    pgm_data = address_space_map(gart->as[vmid], pgm_addr, &mapped_size, false);
-    gfx_shader_translate(shader, &pgm_data[pgm_offs], type);
-    address_space_unmap(gart->as[vmid], pgm_data, pgm_addr, mapped_size, false);
-}
-
-static void gfx_draw_common(
+static void gfx_draw_common_begin(
     gfx_state_t *s, uint32_t vmid)
 {
-    gfx_shader_t *shader_vs = &s->vmid[vmid].shader_vs;
-    gfx_shader_t *shader_ps = &s->vmid[vmid].shader_ps;
+    gfx_pipeline_t *pipeline;
+    VkResult res;
+    
+    pipeline = gfx_pipeline_translate(s, vmid);
+    gfx_pipeline_update(pipeline, s, vmid);
+    s->pipeline = pipeline;
 
-    gfx_draw_update_shader(s, vmid, shader_vs, GFX_SHADER_VS);
-    gfx_draw_update_shader(s, vmid, shader_ps, GFX_SHADER_PS);
+    VkCommandBufferBeginInfo cmdBufInfo = {};
+    cmdBufInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    cmdBufInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    res = vkBeginCommandBuffer(s->vkcmdbuf, &cmdBufInfo);
+    if (res != VK_SUCCESS) {
+        fprintf(stderr, "%s: vkBeginCommandBuffer failed!\n", __FUNCTION__);
+    }
+
+    VkRenderPassBeginInfo renderPassBeginInfo = {};
+    renderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+    renderPassBeginInfo.renderPass =  pipeline->vkrp;
+    renderPassBeginInfo.framebuffer = pipeline->framebuffer.vkfb;
+    renderPassBeginInfo.renderArea.extent.width = 1920; // TODO
+    renderPassBeginInfo.renderArea.extent.height = 1080; // TODO
+    vkCmdBeginRenderPass(s->vkcmdbuf, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+    gfx_pipeline_bind(pipeline, s, vmid);
+}
+
+static void gfx_draw_common_end(
+    gfx_state_t *s, uint32_t vmid)
+{
+    VkDevice dev = s->vk->device;
+    VkResult res;
+
+    vkCmdEndRenderPass(s->vkcmdbuf);
+
+    res = vkEndCommandBuffer(s->vkcmdbuf);
+    if (res != VK_SUCCESS) {
+        fprintf(stderr, "%s: vkEndCommandBuffer failed!", __FUNCTION__);
+        assert(0);
+    }
+
+    res = vkResetFences(dev, 1, &s->vkcmdfence);
+    if (res != VK_SUCCESS) {
+        fprintf(stderr, "%s: vkResetFences failed (%d)!", __FUNCTION__, res);
+        assert(0);
+    }
+
+    VkSubmitInfo submitInfo = {};
+    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submitInfo.commandBufferCount = 1;
+    submitInfo.pCommandBuffers = &s->vkcmdbuf;
+    qemu_mutex_lock(&s->vk->queue_mutex);
+    res = vkQueueSubmit(s->vk->queue, 1, &submitInfo, s->vkcmdfence);
+    if (res != VK_SUCCESS) {
+        fprintf(stderr, "%s: vkQueueSubmit failed (%d)!", __FUNCTION__, res);
+        assert(0);
+    }
+    res = vkWaitForFences(dev, 1, &s->vkcmdfence, false, UINT64_MAX);
+    if (res != VK_SUCCESS) {
+        fprintf(stderr, "%s: vkWaitForFences failed (%d)!", __FUNCTION__, res);
+        assert(0);
+    }
+    qemu_mutex_unlock(&s->vk->queue_mutex);
 }
 
 static void gfx_draw_index_auto(
@@ -123,7 +135,11 @@ static void gfx_draw_index_auto(
 
     num_indices = s->mmio[mmVGT_NUM_INDICES];
     num_instances = s->mmio[mmVGT_NUM_INSTANCES];
-    gfx_draw_common(s, vmid);
+    num_indices = 4; // HACK: Some draws specify 3 indices, but 4 should be used.
+
+    gfx_draw_common_begin(s, vmid);
+    vkCmdDraw(s->vkcmdbuf, num_indices, num_instances, 0, 0);
+    gfx_draw_common_end(s, vmid);
 }
 
 /* cp packet operations */
@@ -524,6 +540,44 @@ void *liverpool_gc_gfx_cp_thread(void *arg)
     gfx_state_t *s = arg;
     gfx_ring_t* rb0 = &s->cp_rb[0];
     gfx_ring_t* rb1 = &s->cp_rb[1];
+    VkDevice dev = s->vk->device;
+    VkResult res;
+
+    // Create command pool
+    VkCommandPoolCreateInfo commandPoolInfo = {};
+    commandPoolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+    commandPoolInfo.queueFamilyIndex = s->vk->graphics_queue_node_index;
+    commandPoolInfo.flags =
+        VK_COMMAND_POOL_CREATE_TRANSIENT_BIT |
+        VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+
+    res = vkCreateCommandPool(dev, &commandPoolInfo, NULL, &s->vkcmdpool);
+    if (res != VK_SUCCESS) {
+        fprintf(stderr, "%s: vkCreateCommandPool failed!", __FUNCTION__);
+        assert(0);
+    }
+
+    // Create command buffer
+    VkCommandBufferAllocateInfo commandBufferInfo = {};
+    commandBufferInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    commandBufferInfo.commandPool = s->vkcmdpool;
+    commandBufferInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    commandBufferInfo.commandBufferCount = 1;
+
+    res = vkAllocateCommandBuffers(dev, &commandBufferInfo, &s->vkcmdbuf);
+    if (res != VK_SUCCESS) {
+        fprintf(stderr, "%s: vkAllocateCommandBuffers failed!", __FUNCTION__);
+        assert(0);
+    }
+
+    // Create command fence
+    VkFenceCreateInfo fenceInfo = {};
+    fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+    res = vkCreateFence(dev, &fenceInfo, NULL, &s->vkcmdfence);
+    if (res != VK_SUCCESS) {
+        fprintf(stderr, "%s: vkCreateFence failed!", __FUNCTION__);
+        assert(0);
+    }
 
     while (true) {
         if (rb0->rptr < rb0->wptr) {

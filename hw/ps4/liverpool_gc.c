@@ -493,6 +493,17 @@ static void liverpool_gc_mmio_write(
         liverpool_gc_dce_page_flip(&s->dce, 0);
         break;
     case mmDCP1_GRPH_PRIMARY_SURFACE_ADDRESS:
+        // Update surface
+        if (value & 0x1) {
+            size_t i;
+            value &= ~0x1;
+            for (i = 0; i < s->gfx.att_cache_size; i++) {
+                if (s->gfx.att_cache[i]->base == value) {
+                    orbital_update_main(s->gfx.att_cache[i]->image);
+                    break;
+                }
+            }
+        }
         liverpool_gc_dce_page_flip(&s->dce, 1);
         break;
     /* gfx */
@@ -681,6 +692,8 @@ static void liverpool_gc_realize(PCIDevice *dev, Error **errp)
     s->gfx.ih = &s->ih;
     s->gfx.gart = &s->gart;
     s->gfx.mmio = &s->mmio[0];
+    if (orbital_display_active())
+        s->gfx.vk = orbital_get_vkstate();
 
     // Debugger
     if (orbital_display_active())
