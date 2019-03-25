@@ -88,6 +88,5 @@ void orbital_update_cpu_procs_list_add_proc(struct orbital_proc_data *p);
 void orbital_update_cpu_procs_list_add_proc_thread(int owner_pid, struct thread *td);
 bool orbital_should_update_procs(void);
 void orbital_update_main(void *vkImage);
-void orbital_update_cpu_procs(int cpuid, uint64_t gs, uint64_t thread_ptr, uint64_t proc_ptr, uint64_t pid, const char* name);
 
 #endif // UI_ORBITAL_H_

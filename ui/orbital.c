@@ -178,6 +178,10 @@ static void timespec_diff(struct timespec *start, struct timespec *stop,
 }
 
 bool orbital_should_update_procs(void) {
+    // TODO: Heavy performance impact, enable only when needed!
+    //       In the future, enable conditionally.
+    return false;
+
     struct timespec time_now;
     clock_gettime(CLOCK_MONOTONIC, &time_now);
 
