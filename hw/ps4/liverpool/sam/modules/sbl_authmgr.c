@@ -37,11 +37,125 @@ do { \
     } \
 } while (0)
 
+/* internals */
+typedef struct elf64_ehdr_t {
+    uint8_t e_ident[16];
+    uint16_t type;       // File type.
+    uint16_t machine;    // Machine architecture.
+    uint32_t version;    // ELF format version.
+    uint64_t entry;      // Entry point.
+    uint64_t phoff;      // Program header file offset.
+    uint64_t shoff;      // Section header file offset.
+    uint32_t flags;      // Architecture-specific flags.
+    uint16_t ehsize;     // Size of ELF header in bytes.
+    uint16_t phentsize;  // Size of program header entry.
+    uint16_t phnum;      // Number of program header entries.
+    uint16_t shentsize;  // Size of section header entry.
+    uint16_t shnum;      // Number of section header entries.
+    uint16_t shstrndx;   // Section name strings section.
+} elf64_ehdr_t;
+
+typedef struct elf64_phdr_t {
+    uint32_t type;       // Entry type.
+    uint32_t flags;      // Access permission flags.
+    uint64_t offset;     // File offset of contents.
+    uint64_t vaddr;      // Virtual address in memory image.
+    uint64_t paddr;      // Physical address (not used).
+    uint64_t filesz;     // Size of contents in file.
+    uint64_t memsz;      // Size of contents in memory.
+    uint64_t align;      // Alignment in memory and file.
+} elf64_phdr_t;
+
+typedef struct elf64_shdr_t {
+    uint32_t name;       // Section name (index into the section header string table).
+    uint32_t type;       // Section type.
+    uint64_t flags;      // Section flags.
+    uint64_t addr;       // Address in memory image.
+    uint64_t offset;     // Offset in file.
+    uint64_t size;       // Size in bytes.
+    uint32_t link;       // Index of a related section.
+    uint32_t info;       // Depends on section type.
+    uint64_t addralign;  // Alignment in bytes.
+    uint64_t entsize;    // Size of each entry in section.
+} elf64_shdr_t;
+
+typedef struct self_entry_t {
+    uint32_t props;
+    uint32_t reserved;
+    uint64_t offset;
+    uint64_t filesz;
+    uint64_t memsz;
+} self_entry_t;
+
+typedef struct self_header_t {
+    uint32_t magic;
+    uint8_t version;
+    uint8_t mode;
+    uint8_t endian;
+    uint8_t attr;
+    uint32_t key_type;
+    uint16_t header_size;
+    uint16_t meta_size;
+    uint64_t file_size;
+    uint16_t num_entries;
+    uint16_t flags;
+    uint32_t reserved;
+    self_entry_t entries[0];
+} self_header_t;
+
+typedef struct self_header_ex_t {
+    uint64_t unk00;
+    uint64_t auth_id;
+    uint64_t unk10;
+    uint64_t unk18;
+    uint64_t unk20;
+    uint8_t unk28[0x20];
+} self_header_ex_t;
+
+typedef struct authmgr_context_t {
+    uint64_t auth_id;
+} authmgr_context_t;
+
+typedef struct authmgr_state_t {
+    authmgr_context_t context[16]; // TODO: How many simultaneous contexts can there be?
+    size_t context_idx;
+} authmgr_state_t;
+
+/* globals */
+struct authmgr_state_t g_state = {};
+
 /* functions */
 void sbl_authmgr_verify_header(
     const authmgr_verify_header_t *query, authmgr_verify_header_t *reply)
 {
-    DPRINTF("unimplemented");
+    struct authmgr_context_t *ctxt;
+    struct self_header_t *self_header;
+    struct self_header_ex_t *self_header_ex;
+    struct elf64_ehdr_t *ehdr;
+    hwaddr mapped_header_size;
+    size_t off;
+
+    // Get new context and update index
+    reply->context_id = g_state.context_idx;
+    ctxt = &g_state.context[reply->context_id];
+    g_state.context_idx += 1;
+    g_state.context_idx %= 16;
+
+    mapped_header_size = query->header_size;
+    self_header = address_space_map(&address_space_memory,
+        query->header_addr, &mapped_header_size, false);
+
+    // Get pointers to headers
+    off = sizeof(self_header_t) + (self_header->num_entries * sizeof(self_entry_t));
+    ehdr = (elf64_ehdr_t*)((uintptr_t)self_header + off);
+    off = ehdr->phoff + (ehdr->phnum * sizeof(elf64_phdr_t));
+    self_header_ex = (self_header_ex_t*)((uintptr_t)ehdr + off);
+
+    // Store information from header
+    ctxt->auth_id = self_header_ex->auth_id;
+
+    address_space_unmap(&address_space_memory, self_header,
+        query->header_addr, mapped_header_size, false);
 }
 
 void sbl_authmgr_load_self_segment(
@@ -158,18 +272,20 @@ void sbl_authmgr_invoke_check(
 void sbl_authmgr_is_loadable(
     const authmgr_is_loadable_t *query, authmgr_is_loadable_t *reply)
 {
+    struct authmgr_context_t *ctxt;
     self_auth_info_t *auth_info_old;
     self_auth_info_t *auth_info_new;
     hwaddr auth_info_old_mapsize = sizeof(self_auth_info_t);
     hwaddr auth_info_new_mapsize = sizeof(self_auth_info_t);
 
+    ctxt = &g_state.context[query->context_id];
     auth_info_old = address_space_map(&address_space_memory,
         query->auth_info_old_addr, &auth_info_old_mapsize, false);
     auth_info_new = address_space_map(&address_space_memory,
         query->auth_info_new_addr, &auth_info_new_mapsize, true);
 
-    DPRINTF("unimplemented (default action: copy)");
     memcpy(auth_info_new, auth_info_old, sizeof(self_auth_info_t));
+    auth_info_new->auth_id = ctxt->auth_id;
 
     address_space_unmap(&address_space_memory, auth_info_old,
         query->auth_info_old_addr, auth_info_old_mapsize, false);
