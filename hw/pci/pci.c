@@ -1138,15 +1138,21 @@ void pci_register_bar(PCIDevice *pci_dev, int region_num,
     }
 
     addr = pci_bar(pci_dev, region_num);
+
     pci_set_long(pci_dev->config + addr, type);
+    printf("Set PCI device %s (%s), config + addr 0x%x len %d: value=0x%x\n", pcibus_get_dev_path(pci_dev), DEVICE(pci_dev)->id, addr, 4, type);
 
     if (!(r->type & PCI_BASE_ADDRESS_SPACE_IO) &&
         r->type & PCI_BASE_ADDRESS_MEM_TYPE_64) {
         pci_set_quad(pci_dev->wmask + addr, wmask);
+        printf("Set PCI device %s (%s), wmask + addr 0x%x len %d: value=0x%x\n", pcibus_get_dev_path(pci_dev), DEVICE(pci_dev)->id, addr, 8, wmask);
         pci_set_quad(pci_dev->cmask + addr, ~0ULL);
+        printf("Set PCI device %s (%s), cmask + addr 0x%x len %d: value=0x%x\n", pcibus_get_dev_path(pci_dev), DEVICE(pci_dev)->id, addr, 8, ~0ULL);
     } else {
         pci_set_long(pci_dev->wmask + addr, wmask & 0xffffffff);
+        printf("Set PCI device %s (%s), wmask + addr 0x%x len %d: value=0x%x\n", pcibus_get_dev_path(pci_dev), DEVICE(pci_dev)->id, addr, 4, wmask & 0xffffffff);
         pci_set_long(pci_dev->cmask + addr, 0xffffffff);
+        printf("Set PCI device %s (%s), cmask + addr 0x%x len %d: value=0x%x\n", pcibus_get_dev_path(pci_dev), DEVICE(pci_dev)->id, addr, 4, 0xffffffff);
     }
 }
 
@@ -1354,6 +1360,8 @@ uint32_t pci_default_read_config(PCIDevice *d,
     uint32_t val = 0;
 
     memcpy(&val, d->config + address, len);
+
+    printf("Reading from PCI device %s (%s), addr 0x%x len %d: value=0x%x\n", pcibus_get_dev_path(d), DEVICE(d)->id, address, len, val);
     return le32_to_cpu(val);
 }
 

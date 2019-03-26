@@ -22,16 +22,22 @@
 #include "hw/pci/pci.h"
 #include "hw/pci/msi.h"
 #include "ui/orbital.h"
+#include "hw/usb.h"
+#include "hw/usb/hcd-xhci.h"
 
 // Helpers
 #define AEOLIA_XHCI(obj) \
     OBJECT_CHECK(AeoliaXHCIState, (obj), TYPE_AEOLIA_XHCI)
+
+#define QEMU_XHCI(obj) \
+    OBJECT_CHECK(XHCIState, (obj), TYPE_QEMU_XHCI)
 
 typedef struct AeoliaXHCIState {
     /*< private >*/
     PCIDevice parent_obj;
     /*< public >*/
     MemoryRegion iomem[3];
+    XHCIState* xhci[3];
 } AeoliaXHCIState;
 
 static uint64_t aeolia_xhci_bar0_read
@@ -118,7 +124,7 @@ static void aeolia_xhci_realize(PCIDevice *dev, Error **errp)
     dev->config[PCI_INTERRUPT_LINE] = 0xFF;
     dev->config[PCI_INTERRUPT_PIN] = 0x00;
     pci_add_capability(dev, PCI_CAP_ID_MSI, 0, PCI_CAP_SIZEOF, errp);
-
+#if 0
     memory_region_init_io(&s->iomem[0], OBJECT(dev),
         &aeolia_xhci_bar0_ops, s, "aeolia-xhci-0", 0x200000);
     memory_region_init_io(&s->iomem[1], OBJECT(dev),
@@ -129,6 +135,26 @@ static void aeolia_xhci_realize(PCIDevice *dev, Error **errp)
     pci_register_bar(dev, 0, PCI_BASE_ADDRESS_SPACE_MEMORY, &s->iomem[0]);
     pci_register_bar(dev, 2, PCI_BASE_ADDRESS_SPACE_MEMORY, &s->iomem[1]);
     pci_register_bar(dev, 4, PCI_BASE_ADDRESS_SPACE_MEMORY, &s->iomem[2]);
+#else
+    qdev_set_id(dev, "aeolia_xhci_root");
+
+    PCIBus* bus = pci_device_root_bus(dev);
+    for (int i = 0; i < 3; ++i) {
+        //s->xhci[i] = QEMU_XHCI(qdev_create(NULL ,TYPE_QEMU_XHCI));
+        //qdev_init_nofail(DEVICE(s->xhci[i]));
+        DeviceState *xhci = DEVICE(object_new(TYPE_QEMU_XHCI));
+        qdev_set_parent_bus(xhci, bus);
+        gchar* name = g_strdup_printf("aeolia_xhci[%d]", i);
+        qdev_set_id(xhci, name);
+        qdev_init_nofail(xhci);
+
+        s->xhci[i] = QEMU_XHCI(xhci);
+
+        printf("Registering bar %d with mem %llx size %llx\n", i*2, s->xhci[i]->mem.addr, memory_region_size(&s->xhci[i]->mem));
+        pci_register_bar(dev, i*2, PCI_BASE_ADDRESS_SPACE_MEMORY, &s->xhci[i]->mem);
+    }
+#endif
+
     msi_init(dev, 0x50, 1, true, false, errp);
 }
 

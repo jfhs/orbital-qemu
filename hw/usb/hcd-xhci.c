@@ -31,8 +31,8 @@
 
 #include "hcd-xhci.h"
 
-//#define DEBUG_XHCI
-//#define DEBUG_DATA
+#define DEBUG_XHCI
+#define DEBUG_DATA
 
 #ifdef DEBUG_XHCI
 #define DPRINTF(...) fprintf(stderr, __VA_ARGS__)
@@ -812,6 +812,7 @@ static void xhci_er_reset(XHCIState *xhci, int v)
     XHCIInterrupter *intr = &xhci->intr[v];
     XHCIEvRingSeg seg;
     dma_addr_t erstba = xhci_addr64(intr->erstba_low, intr->erstba_high);
+    DPRINTF("xhci: er_reset, erstba=0x%llx, erstsz=%x\n", erstba, intr->erstsz);
 
     if (intr->erstsz == 0 || erstba == 0) {
         /* disabled */
@@ -2690,6 +2691,7 @@ static void xhci_reset(DeviceState *dev)
 
 static uint64_t xhci_cap_read(void *ptr, hwaddr reg, unsigned size)
 {
+    //printf("%s read %d (sz %d)\n", __func__, reg, size);
     XHCIState *xhci = ptr;
     uint32_t ret;
 
@@ -2765,6 +2767,7 @@ static uint64_t xhci_cap_read(void *ptr, hwaddr reg, unsigned size)
 
 static uint64_t xhci_port_read(void *ptr, hwaddr reg, unsigned size)
 {
+    //printf("%s read %d (sz %d)\n", __func__, reg, size);
     XHCIPort *port = ptr;
     uint32_t ret;
 
@@ -2789,6 +2792,7 @@ static uint64_t xhci_port_read(void *ptr, hwaddr reg, unsigned size)
 static void xhci_port_write(void *ptr, hwaddr reg,
                             uint64_t val, unsigned size)
 {
+    //printf("%s write %d (sz %d) val: %d\n", __func__, reg, size, val);
     XHCIPort *port = ptr;
     uint32_t portsc, notify;
 
@@ -2855,6 +2859,7 @@ static void xhci_port_write(void *ptr, hwaddr reg,
 
 static uint64_t xhci_oper_read(void *ptr, hwaddr reg, unsigned size)
 {
+    //printf("%s read %d (sz %d)\n", __func__, reg, size);
     XHCIState *xhci = ptr;
     uint32_t ret;
 
@@ -2898,6 +2903,7 @@ static uint64_t xhci_oper_read(void *ptr, hwaddr reg, unsigned size)
 static void xhci_oper_write(void *ptr, hwaddr reg,
                             uint64_t val, unsigned size)
 {
+    //printf("%s write %d (sz %d) val: %d\n", __func__, reg, size, val);
     XHCIState *xhci = ptr;
     DeviceState *d = DEVICE(ptr);
 
@@ -2968,6 +2974,7 @@ static void xhci_oper_write(void *ptr, hwaddr reg,
 static uint64_t xhci_runtime_read(void *ptr, hwaddr reg,
                                   unsigned size)
 {
+    //printf("%s read %d (sz %d)\n", __func__, reg, size);
     XHCIState *xhci = ptr;
     uint32_t ret = 0;
 
@@ -3015,6 +3022,7 @@ static uint64_t xhci_runtime_read(void *ptr, hwaddr reg,
 static void xhci_runtime_write(void *ptr, hwaddr reg,
                                uint64_t val, unsigned size)
 {
+    //printf("%s write %d (sz %d) val: %d\n", __func__, reg, size, val);
     XHCIState *xhci = ptr;
     int v = (reg - 0x20) / 0x20;
     XHCIInterrupter *intr = &xhci->intr[v];
@@ -3081,6 +3089,7 @@ static void xhci_runtime_write(void *ptr, hwaddr reg,
 static uint64_t xhci_doorbell_read(void *ptr, hwaddr reg,
                                    unsigned size)
 {
+    //printf("%s read %d (sz %d)\n", __func__, reg, size);
     /* doorbells always read as 0 */
     trace_usb_xhci_doorbell_read(reg, 0);
     return 0;
@@ -3089,6 +3098,7 @@ static uint64_t xhci_doorbell_read(void *ptr, hwaddr reg,
 static void xhci_doorbell_write(void *ptr, hwaddr reg,
                                 uint64_t val, unsigned size)
 {
+    //printf("%s write %d (sz %d) val: %d\n", __func__, reg, size, val);
     XHCIState *xhci = ptr;
     unsigned int epid, streamid;
 
@@ -3280,6 +3290,8 @@ static USBBusOps xhci_bus_ops = {
 static void usb_xhci_init(XHCIState *xhci)
 {
     DeviceState *dev = DEVICE(xhci);
+
+    DPRINTF("%s GOT DEVICE\n", __func__);
     XHCIPort *port;
     int i, usbports, speedmask;
 
@@ -3294,6 +3306,7 @@ static void usb_xhci_init(XHCIState *xhci)
     usbports = MAX(xhci->numports_2, xhci->numports_3);
     xhci->numports = xhci->numports_2 + xhci->numports_3;
 
+    DPRINTF("%s SMTH\n", __func__);
     usb_bus_new(&xhci->bus, sizeof(xhci->bus), &xhci_bus_ops, dev);
 
     for (i = 0; i < usbports; i++) {
@@ -3411,11 +3424,11 @@ static void usb_xhci_realize(struct PCIDevice *dev, Error **errp)
                               port->name, 0x10);
         memory_region_add_subregion(&xhci->mem, offset, &port->mem);
     }
-
+/*
     pci_register_bar(dev, 0,
                      PCI_BASE_ADDRESS_SPACE_MEMORY|PCI_BASE_ADDRESS_MEM_TYPE_64,
                      &xhci->mem);
-
+*/
     if (pci_bus_is_express(pci_get_bus(dev)) ||
         xhci_get_flag(xhci, XHCI_FLAG_FORCE_PCIE_ENDCAP)) {
         ret = pcie_endpoint_cap_init(dev, 0xa0);

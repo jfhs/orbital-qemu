@@ -758,7 +758,10 @@ static inline AddressSpace *pci_get_address_space(PCIDevice *dev)
 static inline int pci_dma_rw(PCIDevice *dev, dma_addr_t addr,
                              void *buf, dma_addr_t len, DMADirection dir)
 {
-    dma_memory_rw(pci_get_address_space(dev), addr, buf, len, dir);
+    int result = dma_memory_rw(pci_get_address_space(dev), addr, buf, len, dir);
+    if (result) {
+        printf("DMA READ failed, err: %d\n", result);
+    }
     return 0;
 }
 
