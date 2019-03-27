@@ -62,14 +62,14 @@ typedef struct AeoliaXHCIState {
 #define COMMAND_LIMIT   256
 #define TRANSFER_LIMIT  256
 
-#define LEN_CAP         0x40
+#define LEN_CAP         0x20
 #define LEN_OPER        (0x400 + 0x10 * MAXPORTS)
 #define LEN_RUNTIME     ((MAXINTRS + 1) * 0x20)
 #define LEN_DOORBELL    ((MAXSLOTS + 1) * 0x20)
 
 #define OFF_OPER        LEN_CAP
-#define OFF_RUNTIME     0x1000
-#define OFF_DOORBELL    0x2000
+#define OFF_RUNTIME     0x0440
+#define OFF_DOORBELL    0x0480
 #define OFF_MSIX_TABLE  0x3000
 #define OFF_MSIX_PBA    0x3800
 /* must be power of 2 */
@@ -2683,40 +2683,6 @@ static uint64_t xhci_cap_read(void *ptr, hwaddr reg, unsigned size)
     case 0x18: /* RTSOFF */
         ret = OFF_RUNTIME;
         break;
-
-    /* extended capabilities */
-    case 0x20: /* Supported Protocol:00 */
-        ret = 0x02000402; /* USB 2.0 */
-        break;
-    case 0x24: /* Supported Protocol:04 */
-        ret = 0x20425355; /* "USB " */
-        break;
-    case 0x28: /* Supported Protocol:08 */
-        if (xhci_get_flag(xhci, XHCI_FLAG_SS_FIRST)) {
-            ret = (xhci->numports_2<<8) | (xhci->numports_3+1);
-        } else {
-            ret = (xhci->numports_2<<8) | 1;
-        }
-        break;
-    case 0x2c: /* Supported Protocol:0c */
-        ret = 0x00000000; /* reserved */
-        break;
-    case 0x30: /* Supported Protocol:00 */
-        ret = 0x03000002; /* USB 3.0 */
-        break;
-    case 0x34: /* Supported Protocol:04 */
-        ret = 0x20425355; /* "USB " */
-        break;
-    case 0x38: /* Supported Protocol:08 */
-        if (xhci_get_flag(xhci, XHCI_FLAG_SS_FIRST)) {
-            ret = (xhci->numports_3<<8) | 1;
-        } else {
-            ret = (xhci->numports_3<<8) | (xhci->numports_2+1);
-        }
-        break;
-    case 0x3c: /* Supported Protocol:0c */
-        ret = 0x00000000; /* reserved */
-        break;
     default:
         ret = 0;
     }
@@ -3354,9 +3320,11 @@ static void usb_xhci_realize(struct PCIDevice *dev, Error **errp)
         memory_region_add_subregion(&xhci->mem, offset, &port->mem);
     }
 
-    pci_register_bar(dev, 0,
-                     PCI_BASE_ADDRESS_SPACE_MEMORY|PCI_BASE_ADDRESS_MEM_TYPE_64,
-                     &xhci->mem);
+    // TODO: This causes an issue while creating the Aeolia XHCI device
+    //       Ideally, this shouldn't even be a PCI device to begin with.
+    // pci_register_bar(dev, 0,
+    //                  PCI_BASE_ADDRESS_SPACE_MEMORY|PCI_BASE_ADDRESS_MEM_TYPE_64,
+    //                  &xhci->mem);
 
     if (pci_bus_is_express(pci_get_bus(dev)) ||
         xhci_get_flag(xhci, XHCI_FLAG_FORCE_PCIE_ENDCAP)) {

@@ -22,12 +22,12 @@
 
 #include "qemu/osdep.h"
 
-#define MAXPORTS_2 15
-#define MAXPORTS_3 15
+#define MAXPORTS_2 1
+#define MAXPORTS_3 1
 
 #define MAXPORTS (MAXPORTS_2 + MAXPORTS_3)
 #define MAXSLOTS 64
-#define MAXINTRS 16
+#define MAXINTRS 1
 
 /* Very pessimistic, let's hope it's enough for all cases */
 #define EV_QUEUE (((3 * 24) + 16) * MAXSLOTS)

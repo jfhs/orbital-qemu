@@ -114,8 +114,8 @@ static void ps4_aeolia_init(PS4MachineState* s)
         bus, PCI_DEVFN(0x14, 0x05), true, TYPE_AEOLIA_DMAC);
     s->aeolia_mem = pci_create_simple_multifunction(
         bus, PCI_DEVFN(0x14, 0x06), true, TYPE_AEOLIA_MEM);
-    /*s->aeolia_xhci = pci_create_simple_multifunction(
-        bus, PCI_DEVFN(0x14, 0x07), true, TYPE_AEOLIA_XHCI);*/
+    s->aeolia_xhci = pci_create_simple_multifunction(
+        bus, PCI_DEVFN(0x14, 0x07), true, TYPE_AEOLIA_XHCI);
 
     char* icc_data = aeolia_mem_get_icc_data(s->aeolia_mem);
     aeolia_pcie_set_icc_data(s->aeolia_pcie, icc_data);
