@@ -18,7 +18,6 @@
  */
 
 #include "aeolia.h"
-#include "qemu/osdep.h"
 #include "qemu/timer.h"
 #include "qemu/queue.h"
 #include "hw/hw.h"
@@ -26,7 +25,7 @@
 #include "hw/pci/msi.h"
 #include "hw/pci/msix.h"
 #include "hw/usb.h"
-#include "hw/usb/hcd-xhci.h"
+#include "aeolia_xhci.h"
 #include "qapi/error.h"
 
 #include "ui/orbital.h"
@@ -3290,9 +3289,6 @@ static void usb_xhci_realize(struct PCIDevice *dev, Error **errp)
     dev->config[PCI_CACHE_LINE_SIZE] = 0x10;
     dev->config[0x60] = 0x30; /* release number */
 
-    if (strcmp(object_get_typename(OBJECT(dev)), TYPE_NEC_XHCI) == 0) {
-        xhci->nec_quirks = true;
-    }
     if (xhci->numintrs > MAXINTRS) {
         xhci->numintrs = MAXINTRS;
     }
