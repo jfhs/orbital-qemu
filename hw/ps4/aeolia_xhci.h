@@ -22,8 +22,8 @@
 
 #include "qemu/osdep.h"
 
-#define MAXPORTS_2 1
-#define MAXPORTS_3 1
+#define MAXPORTS_2 1 // TODO: Is this correct?
+#define MAXPORTS_3 1 // TODO: Is this correct?
 
 #define MAXPORTS (MAXPORTS_2 + MAXPORTS_3)
 #define MAXSLOTS 64
@@ -32,6 +32,7 @@
 /* Very pessimistic, let's hope it's enough for all cases */
 #define EV_QUEUE (((3 * 24) + 16) * MAXSLOTS)
 
+typedef struct AeoliaXHCIState AeoliaXHCIState;
 typedef struct XHCIState XHCIState;
 typedef struct XHCIStreamContext XHCIStreamContext;
 typedef struct XHCIEPContext XHCIEPContext;
@@ -185,6 +186,9 @@ struct XHCIState {
     MemoryRegion mem_oper;
     MemoryRegion mem_runtime;
     MemoryRegion mem_doorbell;
+    MemoryRegion mem_unk1;
+    MemoryRegion mem_unk2;
+    MemoryRegion mem_unk3;
 
     /* properties */
     uint32_t numports_2;
@@ -219,6 +223,7 @@ struct XHCIState {
     XHCIRing cmd_ring;
 
     bool nec_quirks;
+    struct AeoliaXHCIState *aeolia_xhci;
 };
 
 #endif /* HW_PS4_AEOLIA_XHCI_H */

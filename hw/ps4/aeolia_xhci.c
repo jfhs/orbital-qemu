@@ -66,14 +66,21 @@ typedef struct AeoliaXHCIState {
 #define LEN_OPER        (0x400 + 0x10 * MAXPORTS)
 #define LEN_RUNTIME     ((MAXINTRS + 1) * 0x20)
 #define LEN_DOORBELL    ((MAXSLOTS + 1) * 0x20)
+#define LEN_UNK1        0x200
+#define LEN_UNK2        0x200   // TODO
+#define LEN_UNK3        0x1000  // TODO
 
 #define OFF_OPER        LEN_CAP
 #define OFF_RUNTIME     0x0440
 #define OFF_DOORBELL    0x0480
 #define OFF_MSIX_TABLE  0x3000
 #define OFF_MSIX_PBA    0x3800
+#define OFF_UNK1        0x100000
+#define OFF_UNK2        0x100200
+#define OFF_UNK3        0x101000
+
 /* must be power of 2 */
-#define LEN_REGS        0x4000
+#define LEN_REGS        0x200000
 
 #if (OFF_OPER + LEN_OPER) > OFF_RUNTIME
 #error Increase OFF_RUNTIME
@@ -416,6 +423,29 @@ static const char *ep_state_names[] = {
     [EP_ERROR]    = "error",
 };
 
+// IOMMU helpers
+static inline int pci_iommu_dma_rw(PCIDevice *dev, dma_addr_t addr,
+                                   void *buf, dma_addr_t len, DMADirection dir)
+{
+    dma_memory_rw(pci_device_iommu_address_space(dev), addr, buf, len, dir);
+    return 0;
+}
+
+static inline int xhci_iommu_dma_read(XHCIState *xhci, dma_addr_t addr,
+                                      void *buf, dma_addr_t len)
+{
+    PCIDevice *dev = PCI_DEVICE(xhci->aeolia_xhci);
+    return pci_iommu_dma_rw(dev, addr, buf, len, DMA_DIRECTION_TO_DEVICE);
+}
+
+static inline int xhci_iommu_dma_write(XHCIState *xhci, dma_addr_t addr,
+                                       const void *buf, dma_addr_t len)
+{
+    PCIDevice *dev = PCI_DEVICE(xhci->aeolia_xhci);
+    return pci_iommu_dma_rw(dev, addr, buf, len, DMA_DIRECTION_FROM_DEVICE);
+}
+
+
 static const char *lookup_name(uint32_t index, const char **list, uint32_t llen)
 {
     if (index >= llen || list[index] == NULL) {
@@ -508,7 +538,7 @@ static inline void xhci_dma_read_u32s(XHCIState *xhci, dma_addr_t addr,
 
     assert((len % sizeof(uint32_t)) == 0);
 
-    pci_dma_read(PCI_DEVICE(xhci), addr, buf, len);
+    xhci_iommu_dma_read(xhci, addr, buf, len);
 
     for (i = 0; i < (len / sizeof(uint32_t)); i++) {
         buf[i] = le32_to_cpu(buf[i]);
@@ -528,7 +558,7 @@ static inline void xhci_dma_write_u32s(XHCIState *xhci, dma_addr_t addr,
     for (i = 0; i < n; i++) {
         tmp[i] = cpu_to_le32(buf[i]);
     }
-    pci_dma_write(PCI_DEVICE(xhci), addr, tmp, len);
+    xhci_iommu_dma_write(xhci, addr, tmp, len);
 }
 
 static XHCIPort *xhci_lookup_port(XHCIState *xhci, struct USBPort *uport)
@@ -651,7 +681,6 @@ static void xhci_die(XHCIState *xhci)
 
 static void xhci_write_event(XHCIState *xhci, XHCIEvent *event, int v)
 {
-    PCIDevice *pci_dev = PCI_DEVICE(xhci);
     XHCIInterrupter *intr = &xhci->intr[v];
     XHCITRB ev_trb;
     dma_addr_t addr;
@@ -666,7 +695,7 @@ static void xhci_write_event(XHCIState *xhci, XHCIEvent *event, int v)
     ev_trb.control = cpu_to_le32(ev_trb.control);
 
     addr = intr->er_start + TRB_SIZE*intr->er_ep_idx;
-    pci_dma_write(pci_dev, addr, &ev_trb, TRB_SIZE);
+    xhci_iommu_dma_write(xhci, addr, &ev_trb, TRB_SIZE);
 
     intr->er_ep_idx++;
     if (intr->er_ep_idx >= intr->er_size) {
@@ -723,12 +752,11 @@ static void xhci_ring_init(XHCIState *xhci, XHCIRing *ring,
 static TRBType xhci_ring_fetch(XHCIState *xhci, XHCIRing *ring, XHCITRB *trb,
                                dma_addr_t *addr)
 {
-    PCIDevice *pci_dev = PCI_DEVICE(xhci);
     uint32_t link_cnt = 0;
 
     while (1) {
         TRBType type;
-        pci_dma_read(pci_dev, ring->dequeue, trb, TRB_SIZE);
+        xhci_iommu_dma_read(xhci, ring->dequeue, trb, TRB_SIZE);
         trb->addr = ring->dequeue;
         trb->ccs = ring->ccs;
         le64_to_cpus(&trb->parameter);
@@ -761,7 +789,6 @@ static TRBType xhci_ring_fetch(XHCIState *xhci, XHCIRing *ring, XHCITRB *trb,
 
 static int xhci_ring_chain_length(XHCIState *xhci, const XHCIRing *ring)
 {
-    PCIDevice *pci_dev = PCI_DEVICE(xhci);
     XHCITRB trb;
     int length = 0;
     dma_addr_t dequeue = ring->dequeue;
@@ -772,7 +799,7 @@ static int xhci_ring_chain_length(XHCIState *xhci, const XHCIRing *ring)
 
     while (1) {
         TRBType type;
-        pci_dma_read(pci_dev, dequeue, &trb, TRB_SIZE);
+        xhci_iommu_dma_read(xhci, dequeue, &trb, TRB_SIZE);
         le64_to_cpus(&trb.parameter);
         le32_to_cpus(&trb.status);
         le32_to_cpus(&trb.control);
@@ -827,7 +854,7 @@ static void xhci_er_reset(XHCIState *xhci, int v)
         xhci_die(xhci);
         return;
     }
-    pci_dma_read(PCI_DEVICE(xhci), erstba, &seg, sizeof(seg));
+    xhci_iommu_dma_read(xhci, erstba, &seg, sizeof(seg));
     le32_to_cpus(&seg.addr_low);
     le32_to_cpus(&seg.addr_high);
     le32_to_cpus(&seg.size);
@@ -2372,7 +2399,7 @@ static TRBCCode xhci_get_port_bandwidth(XHCIState *xhci, uint64_t pctx)
     /* TODO: actually implement real values here */
     bw_ctx[0] = 0;
     memset(&bw_ctx[1], 80, xhci->numports); /* 80% */
-    pci_dma_write(PCI_DEVICE(xhci), ctx, bw_ctx, sizeof(bw_ctx));
+    xhci_iommu_dma_write(xhci, ctx, bw_ctx, sizeof(bw_ctx));
 
     return CC_SUCCESS;
 }
@@ -3039,6 +3066,23 @@ static void xhci_cap_write(void *opaque, hwaddr addr, uint64_t val,
     /* nothing */
 }
 
+static uint64_t xhci_unk3_read(void *opaque, hwaddr reg,
+                               unsigned size)
+{
+    switch (reg) {
+    case 0x8:
+        return 0x4000; // Calibration done
+    case 0x8C:
+        return 0x470; // TX-RX ready
+    }
+    return 0;
+}
+
+static void xhci_unk3_write(void *opaque, hwaddr reg,
+                            uint64_t val, unsigned size)
+{
+}
+
 static const MemoryRegionOps xhci_cap_ops = {
     .read = xhci_cap_read,
     .write = xhci_cap_write,
@@ -3076,6 +3120,14 @@ static const MemoryRegionOps xhci_runtime_ops = {
 static const MemoryRegionOps xhci_doorbell_ops = {
     .read = xhci_doorbell_read,
     .write = xhci_doorbell_write,
+    .valid.min_access_size = 4,
+    .valid.max_access_size = 4,
+    .endianness = DEVICE_LITTLE_ENDIAN,
+};
+
+static const MemoryRegionOps xhci_unk3_ops = {
+    .read = xhci_unk3_read,
+    .write = xhci_unk3_write,
     .valid.min_access_size = 4,
     .valid.max_access_size = 4,
     .endianness = DEVICE_LITTLE_ENDIAN,
@@ -3305,11 +3357,14 @@ static void usb_xhci_realize(struct PCIDevice *dev, Error **errp)
                           "runtime", LEN_RUNTIME);
     memory_region_init_io(&xhci->mem_doorbell, OBJECT(xhci), &xhci_doorbell_ops, xhci,
                           "doorbell", LEN_DOORBELL);
+    memory_region_init_io(&xhci->mem_unk3, OBJECT(xhci), &xhci_unk3_ops, xhci,
+                          "unk3", LEN_UNK3);
 
     memory_region_add_subregion(&xhci->mem, 0,            &xhci->mem_cap);
     memory_region_add_subregion(&xhci->mem, OFF_OPER,     &xhci->mem_oper);
     memory_region_add_subregion(&xhci->mem, OFF_RUNTIME,  &xhci->mem_runtime);
     memory_region_add_subregion(&xhci->mem, OFF_DOORBELL, &xhci->mem_doorbell);
+    memory_region_add_subregion(&xhci->mem, OFF_UNK3,     &xhci->mem_unk3);
 
     for (i = 0; i < xhci->numports; i++) {
         XHCIPort *port = &xhci->ports[i];
@@ -3360,6 +3415,7 @@ static void usb_xhci_exit(PCIDevice *dev)
     memory_region_del_subregion(&xhci->mem, &xhci->mem_oper);
     memory_region_del_subregion(&xhci->mem, &xhci->mem_runtime);
     memory_region_del_subregion(&xhci->mem, &xhci->mem_doorbell);
+    memory_region_del_subregion(&xhci->mem, &xhci->mem_unk3);
 
     for (i = 0; i < xhci->numports; i++) {
         XHCIPort *port = &xhci->ports[i];
@@ -3607,6 +3663,7 @@ static const TypeInfo aeolia_xhci_node_info = {
 static void aeolia_xhci_realize(PCIDevice *dev, Error **errp)
 {
     AeoliaXHCIState *s = AEOLIA_XHCI(dev);
+    size_t i;
 
     // PCI Configuration Space
     dev->config[PCI_CLASS_PROG] = 0x07;
@@ -3614,6 +3671,21 @@ static void aeolia_xhci_realize(PCIDevice *dev, Error **errp)
     dev->config[PCI_INTERRUPT_PIN] = 0x00;
     pci_add_capability(dev, PCI_CAP_ID_MSI, 0, PCI_CAP_SIZEOF, errp);
 
+    qdev_set_id(dev, "aeolia_xhci_root");
+    PCIBus* bus = pci_device_root_bus(dev);
+    for (i = 0; i < 3; i++) {
+        DeviceState *xhci = DEVICE(object_new(TYPE_AEOLIA_XHCI_NODE));
+        qdev_set_parent_bus(xhci, bus);
+        gchar* name = g_strdup_printf("aeolia_xhci[%d]", i);
+        qdev_set_id(xhci, name);
+        qdev_init_nofail(xhci);
+
+        s->xhci[i] = AEOLIA_XHCI_NODE(xhci);
+        s->xhci[i]->aeolia_xhci = s;
+
+        printf("Registering bar %d with mem %llx size %llx\n", i*2, s->xhci[i]->mem.addr, memory_region_size(&s->xhci[i]->mem));
+        pci_register_bar(dev, i*2, PCI_BASE_ADDRESS_SPACE_MEMORY, &s->xhci[i]->mem);
+    }
     msi_init(dev, 0x50, 1, true, false, errp);
 }
 
