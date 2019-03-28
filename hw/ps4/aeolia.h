@@ -21,6 +21,7 @@
 #define HW_PS4_AEOLIA_H
 
 #include "qemu/osdep.h"
+#include "aeolia/aeolia_msi.h"
 
 // Forward declaration
 typedef struct PCIDevice PCIDevice;
@@ -65,9 +66,13 @@ typedef struct aeolia_icc_message_t {
 } QEMU_PACKED aeolia_icc_message_t;
 
 /* aeolia_pcie.c */
-void aeolia_pcie_set_icc_data(PCIDevice* dev, char* icc_data);
+void aeolia_pcie_set_icc_data(PCIDevice *dev, char *icc_data);
+apcie_msi_controller_t* aeolia_pcie_get_msic(PCIDevice *dev);
 
 /* aeolia_mem.c */
-char* aeolia_mem_get_icc_data(PCIDevice* dev);
+char* aeolia_mem_get_icc_data(PCIDevice *dev);
+
+/* aeolia_xhci.c */
+void aeolia_xhci_set_msic(PCIDevice *dev, apcie_msi_controller_t *msic);
 
 #endif /* HW_PS4_AEOLIA_H */

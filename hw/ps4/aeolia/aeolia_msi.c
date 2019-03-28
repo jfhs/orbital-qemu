@@ -1,7 +1,7 @@
 /*
  * QEMU model of Aeolia MSI handling on the PCIe glue device.
  *
- * Copyright (c) 2018 Alexandro Sanchez Bach
+ * Copyright (c) 2018-2019. Alexandro Sanchez Bach
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -96,8 +96,8 @@
 #define REG_MSI_FNC3_DATA_LO(sub)       (REG_MSI(0x130) + 4*(sub & 0x03))
 #define REG_MSI_FNC4_DATA_LO(sub)       (REG_MSI(0x140) + 4*(sub & 0x17))
 #define REG_MSI_FNC5_DATA_LO(sub)       (REG_MSI(0x1A0) + 4*(sub & 0x01))
-#define REG_MSI_FNC6_DATA_LO(sub)       (REG_MSI(0x1A8) + 4*(sub & 0x01))
-#define REG_MSI_FNC7_DATA_LO(sub)       (REG_MSI(0x1B0) + 4*(sub & 0x03))
+#define REG_MSI_FNC6_DATA_LO(sub)       (REG_MSI(0x1B0) + 4*(sub & 0x01))
+#define REG_MSI_FNC7_DATA_LO(sub)       (REG_MSI(0x1C0) + 4*(sub & 0x03))
 
 #define CASE_FUNC_R(index, name, variable) \
     case REG_MSI_FNC##index##_##name: \
@@ -224,7 +224,7 @@ void apcie_msi_write(apcie_msi_controller_t *s, uint32_t offs, uint32_t value)
     // Handle irregular function-specific registers
     default:
         data_lo_index = (offs - REG_MSI_FNC0_DATA_LO(0)) >> 2;
-        if (data_lo_index < 48) {
+        if (data_lo_index < 52) {
             s->data_lo[data_lo_index] = value;
         }
     }

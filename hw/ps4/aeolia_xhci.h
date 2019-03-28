@@ -224,6 +224,7 @@ struct XHCIState {
 
     bool nec_quirks;
     struct AeoliaXHCIState *aeolia_xhci;
+    uint32_t aeolia_subfunc;
 };
 
 #endif /* HW_PS4_AEOLIA_XHCI_H */

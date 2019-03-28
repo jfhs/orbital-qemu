@@ -26,6 +26,7 @@
 #include "hw/pci/msix.h"
 #include "hw/usb.h"
 #include "aeolia_xhci.h"
+#include "aeolia/aeolia_msi.h"
 #include "qapi/error.h"
 
 #include "ui/orbital.h"
@@ -41,9 +42,17 @@ typedef struct AeoliaXHCIState {
     PCIDevice parent_obj;
     /*< public >*/
     XHCIState* xhci[3];
+    apcie_msi_controller_t* msic;
 } AeoliaXHCIState;
 
 #define TYPE_AEOLIA_XHCI_NODE "aeolia-xhci-node"
+
+/* helpers */
+void aeolia_xhci_set_msic(PCIDevice *dev, apcie_msi_controller_t *msic)
+{
+    AeoliaXHCIState *s = AEOLIA_XHCI(dev);
+    s->msic = msic;
+}
 
 // XHCI
 
@@ -442,7 +451,14 @@ static inline int xhci_iommu_dma_write(XHCIState *xhci, dma_addr_t addr,
                                        const void *buf, dma_addr_t len)
 {
     PCIDevice *dev = PCI_DEVICE(xhci->aeolia_xhci);
-    return pci_iommu_dma_rw(dev, addr, buf, len, DMA_DIRECTION_FROM_DEVICE);
+    return pci_iommu_dma_rw(dev, addr, (void*)buf, len, DMA_DIRECTION_FROM_DEVICE);
+}
+
+// MSI helpers
+static inline void aeolia_xhci_msi_trigger(XHCIState *xhci)
+{
+    AeoliaXHCIState *s = AEOLIA_XHCI(xhci->aeolia_xhci);
+    apcie_msi_trigger(s->msic, 7, xhci->aeolia_subfunc);
 }
 
 
@@ -662,6 +678,8 @@ static void xhci_intr_raise(XHCIState *xhci, int v)
         msi_notify(pci_dev, v);
         return;
     }
+
+    aeolia_xhci_msi_trigger(xhci);
 
     if (v == 0) {
         pci_irq_assert(pci_dev);
@@ -3682,6 +3700,7 @@ static void aeolia_xhci_realize(PCIDevice *dev, Error **errp)
 
         s->xhci[i] = AEOLIA_XHCI_NODE(xhci);
         s->xhci[i]->aeolia_xhci = s;
+        s->xhci[i]->aeolia_subfunc = i;
 
         printf("Registering bar %d with mem %llx size %llx\n", i*2, s->xhci[i]->mem.addr, memory_region_size(&s->xhci[i]->mem));
         pci_register_bar(dev, i*2, PCI_BASE_ADDRESS_SPACE_MEMORY, &s->xhci[i]->mem);

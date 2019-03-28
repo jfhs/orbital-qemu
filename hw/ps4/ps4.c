@@ -117,8 +117,11 @@ static void ps4_aeolia_init(PS4MachineState* s)
     s->aeolia_xhci = pci_create_simple_multifunction(
         bus, PCI_DEVFN(0x14, 0x07), true, TYPE_AEOLIA_XHCI);
 
-    char* icc_data = aeolia_mem_get_icc_data(s->aeolia_mem);
-    aeolia_pcie_set_icc_data(s->aeolia_pcie, icc_data);
+    // Some Aeolia functions are interdependent
+    aeolia_pcie_set_icc_data(s->aeolia_pcie,
+        aeolia_mem_get_icc_data(s->aeolia_mem));
+    aeolia_xhci_set_msic(s->aeolia_xhci,
+        aeolia_pcie_get_msic(s->aeolia_pcie));
 }
 
 static void ps4_liverpool_init(PS4MachineState* s)

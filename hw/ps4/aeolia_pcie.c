@@ -165,6 +165,12 @@ void aeolia_pcie_set_icc_data(PCIDevice* dev, char* icc_data)
     s->icc_data = icc_data;
 }
 
+apcie_msi_controller_t* aeolia_pcie_get_msic(PCIDevice* dev)
+{
+    AeoliaPCIEState *s = AEOLIA_PCIE(dev);
+    return &s->msic;
+}
+
 /* Aeolia PCIe Unk0 */
 static uint64_t aeolia_pcie_0_read(
     void *opaque, hwaddr addr, unsigned size)

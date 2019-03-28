@@ -1,7 +1,7 @@
 /*
  * QEMU model of Aeolia MSI handling on the PCIe glue device.
  *
- * Copyright (c) 2018 Alexandro Sanchez Bach
+ * Copyright (c) 2018-2019. Alexandro Sanchez Bach
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -22,7 +22,7 @@
 
 #include "qemu/osdep.h"
 
-// List of subfunctions for function #4
+// List of subfunctions for function #4 (PCIe)
 #define APCIE_MSI_FNC4_GLUE      0
 #define APCIE_MSI_FNC4_ICC       3
 #define APCIE_MSI_FNC4_HPET      5
@@ -31,6 +31,11 @@
 #define APCIE_MSI_FNC4_UART0    19
 #define APCIE_MSI_FNC4_UART1    20
 #define APCIE_MSI_FNC4_TWSI     21
+
+// List of subfunctions for function #7 (XHCI)
+#define APCIE_MSI_FNC7_XHCI0     0
+#define APCIE_MSI_FNC7_XHCI1     1
+#define APCIE_MSI_FNC7_XHCI2     2
 
 typedef struct apcie_msi_controller_t {
     uint32_t func_addr[8];
@@ -43,11 +48,11 @@ typedef struct apcie_msi_controller_t {
             uint32_t func2_data_lo[4];
             uint32_t func3_data_lo[4];
             uint32_t func4_data_lo[24];
-            uint32_t func5_data_lo[2];
-            uint32_t func6_data_lo[2];
+            uint32_t func5_data_lo[4];
+            uint32_t func6_data_lo[4];
             uint32_t func7_data_lo[4];
         };
-        uint32_t data_lo[48];
+        uint32_t data_lo[52];
     };
 } apcie_msi_controller_t;
 
