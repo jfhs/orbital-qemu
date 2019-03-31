@@ -223,6 +223,7 @@ struct XHCIState {
     XHCIRing cmd_ring;
 
     bool nec_quirks;
+    AddressSpace *iommu_as;
     struct AeoliaXHCIState *aeolia_xhci;
     uint32_t aeolia_subfunc;
 };

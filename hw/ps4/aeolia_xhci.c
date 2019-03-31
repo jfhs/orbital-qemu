@@ -41,7 +41,7 @@ typedef struct AeoliaXHCIState {
     /*< private >*/
     PCIDevice parent_obj;
     /*< public >*/
-    XHCIState* xhci[3];
+    XHCIState xhci[3];
     apcie_msi_controller_t* msic;
 } AeoliaXHCIState;
 
@@ -452,6 +452,13 @@ static inline int xhci_iommu_dma_write(XHCIState *xhci, dma_addr_t addr,
 {
     PCIDevice *dev = PCI_DEVICE(xhci->aeolia_xhci);
     return pci_iommu_dma_rw(dev, addr, (void*)buf, len, DMA_DIRECTION_FROM_DEVICE);
+}
+
+static inline void xhci_iommu_dma_sglist_init(QEMUSGList *qsg, XHCIState *xhci,
+                                              int alloc_hint)
+{
+    DeviceState *dev = DEVICE(xhci->aeolia_xhci);
+    qemu_sglist_init(qsg, dev, alloc_hint, xhci->iommu_as);
 }
 
 // MSI helpers
@@ -1472,7 +1479,7 @@ static int xhci_xfer_create_sgl(XHCITransfer *xfer, int in_xfer)
     int i;
 
     xfer->int_req = false;
-    pci_dma_sglist_init(&xfer->sgl, PCI_DEVICE(xhci), xfer->trb_count);
+    xhci_iommu_dma_sglist_init(&xfer->sgl, xhci, xfer->trb_count);
     for (i = 0; i < xfer->trb_count; i++) {
         XHCITRB *trb = &xfer->trbs[i];
         dma_addr_t addr;
@@ -2086,7 +2093,7 @@ static TRBCCode xhci_address_slot(XHCIState *xhci, unsigned int slotid,
     assert(slotid >= 1 && slotid <= xhci->numslots);
 
     dcbaap = xhci_addr64(xhci->dcbaap_low, xhci->dcbaap_high);
-    poctx = ldq_le_pci_dma(PCI_DEVICE(xhci), dcbaap + 8 * slotid);
+    poctx = ldq_le_phys(xhci->iommu_as, dcbaap + 8 * slotid);
     ictx = xhci_mask64(pictx);
     octx = xhci_mask64(poctx);
 
@@ -3468,7 +3475,7 @@ static int usb_xhci_post_load(void *opaque, int version_id)
             continue;
         }
         slot->ctx =
-            xhci_mask64(ldq_le_pci_dma(pci_dev, dcbaap + 8 * slotid));
+            xhci_mask64(ldq_le_phys(xhci->iommu_as, dcbaap + 8 * slotid));
         xhci_dma_read_u32s(xhci, slot->ctx, slot_ctx, sizeof(slot_ctx));
         slot->uport = xhci_lookup_uport(xhci, slot_ctx);
         if (!slot->uport) {
@@ -3681,6 +3688,8 @@ static const TypeInfo aeolia_xhci_node_info = {
 static void aeolia_xhci_realize(PCIDevice *dev, Error **errp)
 {
     AeoliaXHCIState *s = AEOLIA_XHCI(dev);
+    DeviceState *xhci_qdev;
+    gchar *xhci_name;
     size_t i;
 
     // PCI Configuration Space
@@ -3692,18 +3701,18 @@ static void aeolia_xhci_realize(PCIDevice *dev, Error **errp)
     qdev_set_id(dev, "aeolia_xhci_root");
     PCIBus* bus = pci_device_root_bus(dev);
     for (i = 0; i < 3; i++) {
-        DeviceState *xhci = DEVICE(object_new(TYPE_AEOLIA_XHCI_NODE));
-        qdev_set_parent_bus(xhci, bus);
-        gchar* name = g_strdup_printf("aeolia_xhci[%d]", i);
-        qdev_set_id(xhci, name);
-        qdev_init_nofail(xhci);
+        object_initialize(&s->xhci[i], sizeof(XHCIState), TYPE_AEOLIA_XHCI_NODE);
+        xhci_qdev = DEVICE(&s->xhci[i]);
+        xhci_name = g_strdup_printf("axhci%zu", i);
+        qdev_set_parent_bus(xhci_qdev, BUS(bus));
+        qdev_set_id(xhci_qdev, xhci_name);
+        qdev_init_nofail(xhci_qdev);
 
-        s->xhci[i] = AEOLIA_XHCI_NODE(xhci);
-        s->xhci[i]->aeolia_xhci = s;
-        s->xhci[i]->aeolia_subfunc = i;
+        s->xhci[i].aeolia_xhci = s;
+        s->xhci[i].aeolia_subfunc = i;
+        s->xhci[i].iommu_as = pci_device_iommu_address_space(dev);
 
-        printf("Registering bar %d with mem %llx size %llx\n", i*2, s->xhci[i]->mem.addr, memory_region_size(&s->xhci[i]->mem));
-        pci_register_bar(dev, i*2, PCI_BASE_ADDRESS_SPACE_MEMORY, &s->xhci[i]->mem);
+        pci_register_bar(dev, i*2, PCI_BASE_ADDRESS_SPACE_MEMORY, &s->xhci[i].mem);
     }
     msi_init(dev, 0x50, 1, true, false, errp);
 }
