@@ -595,7 +595,7 @@ void gfx_shader_update(gfx_shader_t *shader, uint32_t vmid, gfx_state_t *gfx,
     for (i = 0; i < analyzer->res_th_count; i++) {
         VkDescriptorImageInfo imageInfo = {};
         imageInfo.imageView = shader->vk_res_th[i].view;
-        imageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+        imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
         VkWriteDescriptorSet descriptorWrite = {};
         descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
@@ -609,7 +609,7 @@ void gfx_shader_update(gfx_shader_t *shader, uint32_t vmid, gfx_state_t *gfx,
         vkUpdateDescriptorSets(dev, 1, &descriptorWrite, 0, NULL);
         binding += 1;
     }
-    for (i = 0; i < analyzer->res_th_count; i++) {
+    for (i = 0; i < analyzer->res_sh_count; i++) {
         VkDescriptorImageInfo samplerInfo = {};
         samplerInfo.sampler = shader->vk_res_sh[i].sampler;
 

@@ -152,6 +152,63 @@ static vk_attachment_t* create_cb_attachment(gfx_state_t *gfx,
         return NULL;
     }
 
+    // Prepare copy command buffer
+    VkCommandBuffer copyCmdBuf;
+    VkCommandBufferAllocateInfo commandBufferInfo = {};
+    commandBufferInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    commandBufferInfo.commandPool = gfx->vkcmdpool;
+    commandBufferInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    commandBufferInfo.commandBufferCount = 1;
+    assert(VK_SUCCESS == vkAllocateCommandBuffers(dev, &commandBufferInfo, &copyCmdBuf));
+
+    VkCommandBufferBeginInfo cmdBufferBeginInfo = {};
+    cmdBufferBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    cmdBufferBeginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    assert(VK_SUCCESS == vkBeginCommandBuffer(copyCmdBuf, &cmdBufferBeginInfo));
+
+    {
+        VkImageMemoryBarrier barrier = {
+            .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+            .image = att->image,
+            .srcAccessMask = 0,
+            .dstAccessMask = 0,
+            .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+            .newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+            .subresourceRange.baseMipLevel = 0,
+            .subresourceRange.levelCount = 1,
+            .subresourceRange.baseArrayLayer = 0,
+            .subresourceRange.layerCount = 1,
+        };
+        vkCmdPipelineBarrier(copyCmdBuf,
+            VK_PIPELINE_STAGE_HOST_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
+            0, NULL, 0, NULL, 1, &barrier);
+    }
+
+    // Finish command buffer
+    assert(VK_SUCCESS == vkEndCommandBuffer(copyCmdBuf));
+
+    // Synchronously submit commands
+    VkFence fence;
+    VkFenceCreateInfo fenceInfo = {};
+    fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+    assert(VK_SUCCESS == vkCreateFence(dev, &fenceInfo, NULL, &fence));
+
+    VkSubmitInfo submitInfo = {};
+    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submitInfo.commandBufferCount = 1;
+    submitInfo.pCommandBuffers = &copyCmdBuf;
+    qemu_mutex_lock(&gfx->vk->queue_mutex);
+    assert(VK_SUCCESS == vkQueueSubmit(gfx->vk->queue, 1, &submitInfo, fence));
+    assert(VK_SUCCESS == vkWaitForFences(dev, 1, &fence, VK_TRUE, UINT64_MAX));
+    qemu_mutex_unlock(&gfx->vk->queue_mutex);
+
+    // Free resources
+    vkDestroyFence(dev, fence, NULL);
+    vkFreeCommandBuffers(dev, gfx->vkcmdpool, 1, &copyCmdBuf);
+
     // Save cache
     size_t index = gfx->att_cache_size;
     assert(index < 16);
