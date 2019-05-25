@@ -812,7 +812,7 @@ static TRBType xhci_ring_fetch(XHCIState *xhci, XHCIRing *ring, XHCITRB *trb,
     }
 }
 
-static int xhci_ring_chain_length(XHCIState *xhci, const XHCIRing *ring)
+static int xhci_ring_chain_length(XHCIState *xhci, const XHCIRing *ring, bool *onlyLink)
 {
     XHCITRB trb;
     int length = 0;
@@ -821,6 +821,7 @@ static int xhci_ring_chain_length(XHCIState *xhci, const XHCIRing *ring)
     /* hack to bundle together the two/three TDs that make a setup transfer */
     bool control_td_set = 0;
     uint32_t link_cnt = 0;
+    *onlyLink = true;
 
     while (1) {
         TRBType type;
@@ -830,7 +831,7 @@ static int xhci_ring_chain_length(XHCIState *xhci, const XHCIRing *ring)
         le32_to_cpus(&trb.control);
 
         if ((trb.control & TRB_C) != ccs) {
-            return -length;
+            return length;
         }
 
         type = TRB_TYPE(trb);
@@ -843,11 +844,15 @@ static int xhci_ring_chain_length(XHCIState *xhci, const XHCIRing *ring)
             if (trb.control & TRB_LK_TC) {
                 ccs = !ccs;
             }
-            continue;
+            if (!(trb.control & TRB_TR_IOC))
+                continue;
+        }
+        else {
+            *onlyLink = false;
+            dequeue += TRB_SIZE;
         }
 
         length += 1;
-        dequeue += TRB_SIZE;
 
         if (type == TR_SETUP) {
             control_td_set = 1;
@@ -1574,10 +1579,13 @@ static void xhci_xfer_report(XHCITransfer *xfer)
                           (xfer->status != CC_SUCCESS && left == 0))) {
             event.slotid = xfer->epctx->slotid;
             event.epid = xfer->epctx->epid;
-            event.length = (trb->status & 0x1ffff) - chunk;
+            if (xfer->status == CC_SUCCESS)
+                event.length = 0;
+            else
+                event.length = (trb->status & 0x1ffff) - chunk;
             event.flags = 0;
             event.ptr = trb->addr;
-            if (xfer->status == CC_SUCCESS) {
+            if (xfer->status == CC_SUCCESS || TRB_TYPE(*trb) == TR_LINK) {
                 event.ccode = shortpkt ? CC_SHORT_PACKET : CC_SUCCESS;
             } else {
                 event.ccode = xfer->status;
@@ -1601,8 +1609,11 @@ static void xhci_xfer_report(XHCITransfer *xfer)
             reported = 0;
             shortpkt = 0;
             break;
+        case TR_LINK:
+            reported = 0;
+            shortpkt = 0;
+            break;
         }
-
     }
 }
 
@@ -1719,8 +1730,15 @@ static int xhci_fire_ctl_transfer(XHCIState *xhci, XHCITransfer *xfer)
         trb_status--;
     }
 
+    if (TRB_TYPE(*trb_setup) == TR_STATUS && xfer->trb_count == 1) {
+        xfer->complete = true;
+        xfer->status = CC_SUCCESS;
+        xhci_xfer_report(xfer);
+        return;
+    }
+
     /* do some sanity checks */
-    if (TRB_TYPE(*trb_setup) != TR_SETUP) {
+    /*if (TRB_TYPE(*trb_setup) != TR_SETUP) {
         DPRINTF("xhci: ep0 first TD not SETUP: %d\n",
                 TRB_TYPE(*trb_setup));
         return -1;
@@ -1738,7 +1756,7 @@ static int xhci_fire_ctl_transfer(XHCIState *xhci, XHCITransfer *xfer)
         DPRINTF("xhci: Setup TRB has bad length (%d)\n",
                 (trb_setup->status & 0x1ffff));
         return -1;
-    }
+    }*/
 
     bmRequestType = trb_setup->parameter;
 
@@ -1972,7 +1990,8 @@ static void xhci_kick_epctx(XHCIEPContext *epctx, unsigned int streamid)
 
     epctx->kick_active++;
     while (1) {
-        length = xhci_ring_chain_length(xhci, ring);
+        bool onlyLink;
+        length = xhci_ring_chain_length(xhci, ring, &onlyLink);
         if (length <= 0) {
             break;
         }
@@ -1984,11 +2003,16 @@ static void xhci_kick_epctx(XHCIEPContext *epctx, unsigned int streamid)
         for (i = 0; i < length; i++) {
             TRBType type;
             type = xhci_ring_fetch(xhci, ring, &xfer->trbs[i], NULL);
-            assert(type);
+            //assert(type);
         }
         xfer->streamid = streamid;
 
-        if (epctx->epid == 1) {
+        if (onlyLink) {
+            xfer->complete = true;
+            xfer->status = CC_SUCCESS;
+            xhci_xfer_report(xfer);
+        }
+        else if (epctx->epid == 1) {
             xhci_fire_ctl_transfer(xhci, xfer);
         } else {
             xhci_fire_transfer(xhci, xfer, epctx);
@@ -2102,7 +2126,7 @@ static TRBCCode xhci_address_slot(XHCIState *xhci, unsigned int slotid,
 
     xhci_dma_read_u32s(xhci, ictx, ictl_ctx, sizeof(ictl_ctx));
 
-    if (ictl_ctx[0] != 0x0 || ictl_ctx[1] != 0x3) {
+    if (ictl_ctx[0] != 0x0) {
         DPRINTF("xhci: invalid input context control %08x %08x\n",
                 ictl_ctx[0], ictl_ctx[1]);
         return CC_TRB_ERROR;
@@ -2217,7 +2241,7 @@ static TRBCCode xhci_configure_slot(XHCIState *xhci, unsigned int slotid,
 
     xhci_dma_read_u32s(xhci, ictx, ictl_ctx, sizeof(ictl_ctx));
 
-    if ((ictl_ctx[0] & 0x3) != 0x0 || (ictl_ctx[1] & 0x3) != 0x1) {
+    if ((ictl_ctx[0] & 0x3) != 0x0) {
         DPRINTF("xhci: invalid input context control %08x %08x\n",
                 ictl_ctx[0], ictl_ctx[1]);
         return CC_TRB_ERROR;
@@ -2298,7 +2322,7 @@ static TRBCCode xhci_evaluate_slot(XHCIState *xhci, unsigned int slotid,
 
     xhci_dma_read_u32s(xhci, ictx, ictl_ctx, sizeof(ictl_ctx));
 
-    if (ictl_ctx[0] != 0x0 || ictl_ctx[1] & ~0x3) {
+    if (ictl_ctx[0] != 0x0) {
         DPRINTF("xhci: invalid input context control %08x %08x\n",
                 ictl_ctx[0], ictl_ctx[1]);
         return CC_TRB_ERROR;
@@ -3189,7 +3213,7 @@ static void xhci_wakeup(USBPort *usbport)
 
 static void xhci_complete(USBPort *port, USBPacket *packet)
 {
-    XHCITransfer *xfer = container_of(packet, XHCITransfer, packet);
+    /*XHCITransfer *xfer = container_of(packet, XHCITransfer, packet);
 
     if (packet->status == USB_RET_REMOVE_FROM_QUEUE) {
         xhci_ep_nuke_one_xfer(xfer, 0);
@@ -3199,7 +3223,7 @@ static void xhci_complete(USBPort *port, USBPacket *packet)
     xhci_kick_epctx(xfer->epctx, xfer->streamid);
     if (xfer->complete) {
         xhci_ep_free_xfer(xfer);
-    }
+    }*/
 }
 
 static void xhci_child_detach(USBPort *uport, USBDevice *child)
