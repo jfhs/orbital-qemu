@@ -155,7 +155,7 @@ void sbl_authmgr_verify_header(
     ctxt->auth_id = self_header_ex->auth_id;
 
     address_space_unmap(&address_space_memory, self_header,
-        query->header_addr, mapped_header_size, false);
+        mapped_header_size, false, mapped_header_size);
 }
 
 void sbl_authmgr_load_self_segment(
@@ -188,10 +188,10 @@ void sbl_authmgr_load_self_segment(
         liverpool_gc_samu_fakedecrypt(segment_data,
             segment_data, chunk_entry->data_size);
         address_space_unmap(&address_space_memory, segment_data,
-            chunk_entry->data_addr, mapped_segment_size, true);
+            mapped_segment_size, true, mapped_segment_size);
     }
     address_space_unmap(&address_space_memory, chunk_table,
-        query->chunk_table_addr, mapped_table_size, false);
+        mapped_table_size, false, mapped_table_size);
 }
 
 void sbl_authmgr_load_self_block(
@@ -244,9 +244,9 @@ void sbl_authmgr_load_self_block(
         free(input);
 
         address_space_unmap(&address_space_memory, input_page1,
-            query->data_input1_addr, input1_mapsize, false);
+            input1_mapsize, false, input1_mapsize);
         address_space_unmap(&address_space_memory, input_page2,
-            query->data_input2_addr, input2_mapsize, false);
+            input2_mapsize, false, input2_mapsize);
     }
     else {
         input_page1 = address_space_map(&address_space_memory,
@@ -256,11 +256,11 @@ void sbl_authmgr_load_self_block(
         liverpool_gc_samu_fakedecrypt(output, input, query->data_size);
 
         address_space_unmap(&address_space_memory, input_page1,
-            query->data_input1_addr, input1_mapsize, false);
+            input1_mapsize, false, input1_mapsize);
     }
 
     address_space_unmap(&address_space_memory, output,
-        query->output_addr, output_mapsize, false);
+        output_mapsize, false, output_mapsize);
 }
 
 void sbl_authmgr_invoke_check(
@@ -288,7 +288,7 @@ void sbl_authmgr_is_loadable(
     auth_info_new->auth_id = ctxt->auth_id;
 
     address_space_unmap(&address_space_memory, auth_info_old,
-        query->auth_info_old_addr, auth_info_old_mapsize, false);
+        auth_info_old_mapsize, false, auth_info_old_mapsize);
     address_space_unmap(&address_space_memory, auth_info_new,
-        query->auth_info_new_addr, auth_info_new_mapsize, true);
+        auth_info_new_mapsize, true, auth_info_new_mapsize);
 }

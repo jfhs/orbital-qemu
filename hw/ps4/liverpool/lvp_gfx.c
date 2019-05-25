@@ -216,7 +216,7 @@ static void cp_handle_pm4_it_event_write_eop(
         mapped_size = size;
         mapped_addr = address_space_map(gart->as[vmid], addr, &mapped_size, true);
         memcpy(mapped_addr, &data, size);
-        address_space_unmap(gart->as[vmid], mapped_addr, addr, mapped_size, true);
+        address_space_unmap(gart->as[vmid], mapped_addr, mapped_size, true, mapped_size);
     }
 
     // Interrupt action for the end-of-pipe event
@@ -257,7 +257,7 @@ static void cp_handle_pm4_it_indirect_buffer(
     while (i < ib_size) {
         i += cp_handle_pm4(s, ib_vmid, &mapped_ib[i]);
     }
-    address_space_unmap(gart->as[ib_vmid], mapped_ib, ib_base, mapped_size, true);
+    address_space_unmap(gart->as[ib_vmid], mapped_ib, mapped_size, true, mapped_size);
 }
 
 static void cp_handle_pm4_it_indirect_buffer_const(
@@ -283,7 +283,7 @@ static void cp_handle_pm4_it_indirect_buffer_const(
     while (i < ib_size) {
         i += cp_handle_pm4(s, ib_vmid, &mapped_ib[i]);
     }
-    address_space_unmap(gart->as[ib_vmid], mapped_ib, ib_base, mapped_size, true);
+    address_space_unmap(gart->as[ib_vmid], mapped_ib, mapped_size, true, mapped_size);
 }
 
 static void cp_handle_pm4_it_num_instances(

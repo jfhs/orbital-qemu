@@ -254,7 +254,7 @@ static void sflash_read(AeoliaPCIEState *s, uint32_t value)
     dma_data = address_space_map(s->iommu_as, dma_addr, &map_size, true);
     fseek(s->sflash, s->sflash_offset, SEEK_SET);
     fread(dma_data, 1, dma_size, s->sflash);
-    address_space_unmap(s->iommu_as, dma_data, dma_addr, map_size, true);
+    address_space_unmap(s->iommu_as, dma_data, map_size, true, map_size);
 }
 
 static void sflash_doorbell(AeoliaPCIEState *s, uint32_t value)
