@@ -46,8 +46,8 @@ void liverpool_gc_gfx_cp_set_ring_location(gfx_state_t *s,
 
     if (s->cp_rb[index].mapped_base) {
         address_space_unmap(gart->as[0],
-            s->cp_rb[index].mapped_base, s->cp_rb[index].base,
-            s->cp_rb[index].mapped_size, true);
+            s->cp_rb[index].mapped_base, s->cp_rb[index].mapped_size,
+            true, s->cp_rb[index].mapped_size);
     }
     s->cp_rb[index].base = base;
     s->cp_rb[index].size = size;
@@ -501,6 +501,10 @@ static uint32_t cp_handle_pm4_type3(
         cp_handle_pm4_it_wait_reg_mem(s, vmid, packet);
         break;
     }
+    // todo: This is a bit hacky for sending idle, but it at least takes care of letting orbis
+    // know for now, there also *should* be some mmio register checks that 'enable' this
+    // but until the emu progresses farther its tough to tell what is needed
+    liverpool_gc_ih_push_iv(s->ih, 0, IV_SRCID_UNK3_GUI_IDLE, 0);
     return count + 1;
 }
 

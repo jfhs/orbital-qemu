@@ -357,6 +357,8 @@ static uint64_t liverpool_gc_mmio_read(
         grbm_status ^= REG_SET_FIELD(grbm_status, GRBM_STATUS, GUI_ACTIVE, 1);
         return grbm_status; // TODO
     }
+    case mmGRBM_STATUS2:
+        return 0;
     case mmCP_RB0_RPTR:
         return s->gfx.cp_rb[0].rptr;
     case mmCP_RB1_RPTR:
