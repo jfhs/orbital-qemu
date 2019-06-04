@@ -174,9 +174,9 @@ static void samu_packet_ccp_aes(samu_state_t *s,
     // TODO/HACK: We don't have keys, so use hardcoded blobs instead
     liverpool_gc_samu_fakedecrypt(out_data, in_data, data_size);
 
-    address_space_unmap(&address_space_memory, in_data, in_addr, in_size, true);
+    address_space_unmap(&address_space_memory, in_data, in_size, true, in_size);
     if (!(query_ccp->opcode & CCP_FLAG_SLOT_OUT)) {
-        address_space_unmap(&address_space_memory, out_data, out_addr, out_size, true);
+        address_space_unmap(&address_space_memory, out_data, out_size, true, out_size);
     }
 }
 
@@ -284,9 +284,9 @@ static void samu_packet_ccp_zlib(samu_state_t *s,
 
 error:
     address_space_unmap(&address_space_memory, in_data,
-        query_ccp->zlib.in_addr, in_mapsize, false);
+        in_mapsize, false, in_mapsize);
     address_space_unmap(&address_space_memory, out_data,
-        query_ccp->zlib.out_addr, out_mapsize, true);
+        out_mapsize, true, out_mapsize);
 }
 
 static void samu_packet_ccp_trng(samu_state_t *s,
@@ -471,8 +471,8 @@ void liverpool_gc_samu_packet(samu_state_t *s,
     default:
         printf("Unknown SAMU command %d\n", query->command);
     }
-    address_space_unmap(&address_space_memory, query, query_addr, query_len, true);
-    address_space_unmap(&address_space_memory, reply, reply_addr, reply_len, true);
+    address_space_unmap(&address_space_memory, query, query_len, true, query_len);
+    address_space_unmap(&address_space_memory, reply, reply_len, true, reply_len);
 }
 
 void liverpool_gc_samu_init(samu_state_t *s, uint64_t addr)
@@ -489,7 +489,7 @@ void liverpool_gc_samu_init(samu_state_t *s, uint64_t addr)
     memset(packet, 0, length);
     samu_packet_io_write(s, packet, SAMU_CMD_IO_WRITE_FD_STDOUT,
         (char*)secure_kernel_build, strlen(secure_kernel_build));
-    address_space_unmap(&address_space_memory, packet, addr, length, true);
+    address_space_unmap(&address_space_memory, packet, length, true, length);
 
     blobs_zip = zip_open(blobs_filename, ZIP_RDONLY, &err);
     if (!blobs_zip) {

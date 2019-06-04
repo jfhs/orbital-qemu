@@ -42,6 +42,21 @@ VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
     return VK_FALSE;
 }
 
+static 
+VKAPI_ATTR VkBool32 VKAPI_CALL debugReportCallback(
+    VkDebugReportFlagsEXT                       flags,
+    VkDebugReportObjectTypeEXT                  objectType,
+    uint64_t                                    object,
+    size_t                                      location,
+    int32_t                                     messageCode,
+    const char*                                 pLayerPrefix,
+    const char*                                 pMessage,
+    void*                                       pUSerData) {
+
+        fprintf(stderr, "VKDebugReportCallback : 0x%x, 0x%x, 0x%llx, 0x%llx, 0x%x, %s, %s\n", flags, objectType, object, location, messageCode, pLayerPrefix, pMessage);
+        return VK_FALSE;
+}
+
 /* extensions */
 static
 VkResult CreateDebugUtilsMessengerEXT(
@@ -51,6 +66,21 @@ VkResult CreateDebugUtilsMessengerEXT(
         VkDebugUtilsMessengerEXT* pDebugMessenger)
 {
     PFN_vkCreateDebugUtilsMessengerEXT func = (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT");
+    if (func != NULL) {
+        return func(instance, pCreateInfo, pAllocator, pDebugMessenger);
+    } else {
+        return VK_ERROR_EXTENSION_NOT_PRESENT;
+    }
+}
+
+static
+VkResult CreateDebugReportCallbackEXT(
+        VkInstance instance,
+        const VkDebugReportCallbackCreateInfoEXT* pCreateInfo,
+        const VkAllocationCallbacks* pAllocator,
+        VkDebugReportCallbackEXT* pDebugMessenger)
+{
+    PFN_vkCreateDebugReportCallbackEXT func = (PFN_vkCreateDebugReportCallbackEXT)vkGetInstanceProcAddr(instance, "vkCreateDebugReportCallbackEXT");
     if (func != NULL) {
         return func(instance, pCreateInfo, pAllocator, pDebugMessenger);
     } else {
@@ -105,6 +135,20 @@ void setup_debug_messages(VulkanState* s)
     res = CreateDebugUtilsMessengerEXT(s->instance, &createInfo, NULL, &s->debug_messenger);
     if (res != VK_SUCCESS) {
         error_report("setup_debug_messages: Failed to setup debug messenger\n");
+        return;
+    }
+    VkDebugReportCallbackEXT cb1;
+    VkDebugReportCallbackCreateInfoEXT callback1 = {
+            VK_STRUCTURE_TYPE_DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT,    // sType
+            NULL,                                                       // pNext
+            VK_DEBUG_REPORT_ERROR_BIT_EXT |                             // flags
+            VK_DEBUG_REPORT_WARNING_BIT_EXT,
+            debugReportCallback,                                        // pfnCallback
+            NULL                                                        // pUserData
+    };
+    res = CreateDebugReportCallbackEXT(s->instance, &callback1, NULL, &cb1);
+    if (res != VK_SUCCESS){
+        error_report("setup_debug_messages: Failed to setup debug messenger2\n");
         return;
     }
 }
@@ -179,7 +223,7 @@ void vk_init_instance(VulkanState* s, uint32_t extCount, const char **extNames)
         enabledExtensionCount = extCount;
     } else {
         enabledLayerCount = 0;
-        enabledExtensionCount = extCount - 1; // HACK: Last extension is debug-related
+        enabledExtensionCount = extCount - 2; // HACK: Last extension is debug-related
     }
     assert(check_validation_layers(enabledLayerCount, instanceLayerNames));
 

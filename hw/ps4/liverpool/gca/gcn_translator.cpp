@@ -129,6 +129,7 @@ static void gcn_translator_init_ps(gcn_translator_t *ctxt)
             snprintf(name, sizeof(name), "attr%zd", i);
             ctxt->var_attr[i] = b.createVariable(spv::StorageClass::StorageClassInput,
                 ctxt->type_f32_x4, name);
+            b.addDecoration(ctxt->var_attr[i], spv::Decoration::DecorationLocation, i);                
             ctxt->entry_main->addIdOperand(ctxt->var_attr[i]);
         }
     }
@@ -202,6 +203,7 @@ static void gcn_translator_init_vs(gcn_translator_t *ctxt)
             snprintf(name, sizeof(name), "param%zd", i);
             ctxt->var_exp_param[i] = b.createVariable(spv::StorageClass::StorageClassOutput,
                 ctxt->type_f32_x4, name);
+            b.addDecoration(ctxt->var_exp_param[i], spv::Decoration::DecorationLocation, i);
             ctxt->entry_main->addIdOperand(ctxt->var_exp_param[i]);
         }
     }
@@ -278,8 +280,10 @@ static void gcn_translator_init(gcn_translator_t *ctxt,
     if (analyzer->res_vh_count) {
         if (ctxt->type_u32 == 0)
             ctxt->type_u32 = b.makeUintType(32);
-        if (ctxt->type_u32_xN == 0)
+        if (ctxt->type_u32_xN == 0) {
             ctxt->type_u32_xN = b.makeRuntimeArray(ctxt->type_u32);
+            b.addDecoration(ctxt->type_u32_xN, spv::Decoration::DecorationArrayStride, 4);
+        }
         if (ctxt->type_vh == 0) {
             ctxt->type_vh = b.makeStructType({ ctxt->type_u32_xN }, "type_vh");
             b.addDecoration(ctxt->type_vh, spv::Decoration::DecorationBufferBlock);
