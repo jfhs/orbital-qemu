@@ -445,7 +445,11 @@ static void orbital_display_draw(OrbitalUI *ui)
     if (igBeginMenu("File", true)) {
         if (igMenuItemBool("Open kernel...", NULL, false, false)) { /* TODO */ }
         igSeparator();
-        if (igMenuItemBool("Exit", NULL, false, true)) { /* TODO */ }
+        if (igMenuItemBool("Exit", NULL, false, true)) {
+            SDL_Event quit;
+            quit.type = SDL_QUIT;
+            SDL_PushEvent(&quit);
+        }
         igEndMenu();
     }
     if (igBeginMenu("Machine", true)) {
@@ -662,12 +666,18 @@ static void* orbital_display_main(void* arg)
             if (event.type == SDL_WINDOWEVENT ||
                 event.window.windowID == SDL_GetWindowID(ui.sdl_window)) {
                 switch (event.window.event) {
-                case SDL_WINDOWEVENT_RESIZED:
                 case SDL_WINDOWEVENT_MINIMIZED:
+                    // TODO: disable all rendering while minimized (is this necessary?)
+                    break;
+                case SDL_WINDOWEVENT_MAXIMIZED:
+                case SDL_WINDOWEVENT_RESIZED:
                 case SDL_WINDOWEVENT_EXPOSED:
                     ImGui_ImplVulkanH_CreateWindowDataSwapChainAndFramebuffer(
                         vks->gpu, vks->device, wd, NULL,
                         (int)event.window.data1, (int)event.window.data2);
+                    break;
+                case SDL_WINDOWEVENT_CLOSE:
+                    quit = true;
                     break;
                 }
             }
