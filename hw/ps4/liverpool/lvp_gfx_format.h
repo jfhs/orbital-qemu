@@ -24,7 +24,9 @@
 
 #include <vulkan/vulkan.h>
 
+VkComponentMapping getVkCompMapping_byGcnMapping(uint8_t x, uint8_t y, uint8_t z, uint8_t w);
 VkFormat getVkFormat_byColorFormat(ColorFormat format);
 VkFormat getVkFormat_byImgDataNumFormat(IMG_DATA_FORMAT dfmt, IMG_NUM_FORMAT nfmt);
+size_t getTexelSize_fromImgFormat(IMG_DATA_FORMAT dfmt);
 
 #endif /* HW_PS4_LIVERPOOL_GC_GFX_FORMAT_H */

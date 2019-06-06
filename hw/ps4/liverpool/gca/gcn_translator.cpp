@@ -790,19 +790,19 @@ static void translate_encoding_mimg(gcn_translator_t *ctxt,
         dst = b.createOp(spv::Op::OpImageSampleImplicitLod, ctxt->type_f32_x4, { sampler, coords });
         if ((insn->mimg.dmask >> 0) & 1) {
             b.createStore(b.createUnaryOp(spv::Op::OpBitcast, ctxt->type_u32,
-                b.createCompositeExtract(dst, ctxt->type_f32, 3)), ctxt->var_vgpr[insn->mimg.vdata + index++]);
+                b.createCompositeExtract(dst, ctxt->type_f32, 0)), ctxt->var_vgpr[insn->mimg.vdata + index++]);
         }
         if ((insn->mimg.dmask >> 1) & 1) {
             b.createStore(b.createUnaryOp(spv::Op::OpBitcast, ctxt->type_u32,
-                b.createCompositeExtract(dst, ctxt->type_f32, 2)), ctxt->var_vgpr[insn->mimg.vdata + index++]);
+                b.createCompositeExtract(dst, ctxt->type_f32, 1)), ctxt->var_vgpr[insn->mimg.vdata + index++]);
         }
         if ((insn->mimg.dmask >> 2) & 1) {
             b.createStore(b.createUnaryOp(spv::Op::OpBitcast, ctxt->type_u32,
-                b.createCompositeExtract(dst, ctxt->type_f32, 1)), ctxt->var_vgpr[insn->mimg.vdata + index++]);
+                b.createCompositeExtract(dst, ctxt->type_f32, 2)), ctxt->var_vgpr[insn->mimg.vdata + index++]);
         }
         if ((insn->mimg.dmask >> 3) & 1) {
             b.createStore(b.createUnaryOp(spv::Op::OpBitcast, ctxt->type_u32,
-                b.createCompositeExtract(dst, ctxt->type_f32, 0)), ctxt->var_vgpr[insn->mimg.vdata + index++]);
+                b.createCompositeExtract(dst, ctxt->type_f32, 3)), ctxt->var_vgpr[insn->mimg.vdata + index++]);
         }
         break;
     default:

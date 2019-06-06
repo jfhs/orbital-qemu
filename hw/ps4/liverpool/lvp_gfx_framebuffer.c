@@ -212,6 +212,11 @@ static vk_attachment_t* create_cb_attachment(gfx_state_t *gfx,
     // Save cache
     size_t index = gfx->att_cache_size;
     assert(index < 16);
+    if (gfx->att_cache[index] != NULL) {
+        vkDestroyImage(dev, gfx->att_cache[index]->image, NULL);
+        vkDestroyImageView(dev, gfx->att_cache[index]->view, NULL);
+        vkFreeMemory(dev, gfx->att_cache[index]->mem, NULL);
+    }
     gfx->att_cache[index] = att;
     gfx->att_cache_size++;
     return att;

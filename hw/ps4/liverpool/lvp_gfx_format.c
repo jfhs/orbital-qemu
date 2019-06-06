@@ -19,6 +19,27 @@
 
 #include "lvp_gfx_format.h"
 
+static VkComponentSwizzle gcnMapToCompSwizzle(uint8_t c) {
+    switch(c) {
+        case 0: return VK_COMPONENT_SWIZZLE_ZERO;
+        case 1: return VK_COMPONENT_SWIZZLE_ONE;
+        case 4: return VK_COMPONENT_SWIZZLE_R;
+        case 5: return VK_COMPONENT_SWIZZLE_G;
+        case 6: return VK_COMPONENT_SWIZZLE_B;
+        case 7: return VK_COMPONENT_SWIZZLE_A;
+    }
+}
+
+VkComponentMapping getVkCompMapping_byGcnMapping(uint8_t x, uint8_t y, uint8_t z, uint8_t w) {
+    VkComponentMapping mapping = {
+        .r = gcnMapToCompSwizzle(x),
+        .g = gcnMapToCompSwizzle(y),
+        .b = gcnMapToCompSwizzle(z),
+        .a = gcnMapToCompSwizzle(w)
+    };
+    return mapping;
+}
+
 VkFormat getVkFormat_byColorFormat(ColorFormat format)
 {
     switch (format) {
@@ -304,4 +325,26 @@ VkFormat getVkFormat_byImgDataNumFormat(IMG_DATA_FORMAT dfmt, IMG_NUM_FORMAT nfm
         break;
     }
     return VK_FORMAT_UNDEFINED;
+}
+
+size_t getTexelSize_fromImgFormat(IMG_DATA_FORMAT dfmt) {
+    switch (dfmt) {
+    case IMG_DATA_FORMAT_8: return 1;
+    case IMG_DATA_FORMAT_16:
+    case IMG_DATA_FORMAT_8_8: return 2;
+    case IMG_DATA_FORMAT_32:
+    case IMG_DATA_FORMAT_16_16:
+    case IMG_DATA_FORMAT_10_11_11:
+    case IMG_DATA_FORMAT_11_11_10:
+    case IMG_DATA_FORMAT_10_10_10_2: 
+    case IMG_DATA_FORMAT_2_10_10_10: 
+    case IMG_DATA_FORMAT_8_8_8_8: return 4;
+    case IMG_DATA_FORMAT_32_32:
+    case IMG_DATA_FORMAT_16_16_16_16: return 8;
+    case IMG_DATA_FORMAT_32_32_32: return 12;
+    case IMG_DATA_FORMAT_32_32_32_32: return 16;
+    default:
+        break;
+    }
+    return 4;
 }

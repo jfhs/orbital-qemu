@@ -66,6 +66,16 @@ static void gfx_draw_common_begin(
     gfx_pipeline_t *pipeline;
     VkResult res;
     
+    if (s->pipeline != NULL) {
+        vkDestroyShaderModule(s->vk->device, s->pipeline->shader_ps.module, NULL);
+        vkDestroyShaderModule(s->vk->device, s->pipeline->shader_vs.module, NULL);
+        vkDestroyFramebuffer(s->vk->device, s->pipeline->framebuffer.vkfb, NULL);
+        vkDestroyDescriptorPool(s->vk->device, s->pipeline->vkdp, NULL);
+        vkDestroyPipelineLayout(s->vk->device, s->pipeline->vkpl, NULL);
+        vkDestroyPipeline(s->vk->device, s->pipeline->vkp, NULL);
+        free(s->pipeline);
+    }
+
     pipeline = gfx_pipeline_translate(s, vmid);
     gfx_pipeline_update(pipeline, s, vmid);
     s->pipeline = pipeline;

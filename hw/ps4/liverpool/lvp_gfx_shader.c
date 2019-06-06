@@ -333,6 +333,7 @@ static void gfx_shader_update_th(gfx_shader_t *shader, uint32_t vmid, gfx_state_
     imgView.subresourceRange.baseArrayLayer = 0;
     imgView.subresourceRange.layerCount = 1;
     imgView.image = vkres->image;
+    imgView.components = getVkCompMapping_byGcnMapping(th->dst_sel_x, th->dst_sel_y, th->dst_sel_z, th->dst_sel_w);
 
     res = vkCreateImageView(dev, &imgView, NULL, &vkres->view);
     if (res != VK_SUCCESS) {
@@ -381,7 +382,22 @@ static void gfx_shader_update_th(gfx_shader_t *shader, uint32_t vmid, gfx_state_
     addr_src = th->base256 << 8;
     data_src = address_space_map(gart->as[vmid], addr_src, &size_src, false);
 
-    memcpy(data_dst, data_src, (size_t)stagingBufInfo.size);
+    uint32_t img_pitch = th->ext.pitch;
+    if (img_pitch != 0) {
+        void* tmpSrc = data_src;
+        void* tmpDst = data_dst;
+        img_pitch++;
+        size_t texelSize = getTexelSize_fromImgFormat(th->dfmt);
+        size_t srcPitch = texelSize * img_pitch;
+        size_t dstPitch = texelSize * (th->width+1);
+        for(int i = 0; i < (th->height + 1); ++i) {
+            memcpy(tmpDst, tmpSrc, dstPitch);
+            tmpSrc += srcPitch;
+            tmpDst += dstPitch;
+        }
+    }
+    else
+        memcpy(data_dst, data_src, (size_t)stagingBufInfo.size);
     address_space_unmap(gart->as[vmid], data_src, size_src, false, size_src);
     vkUnmapMemory(dev, vkres->stagingMem);
 
