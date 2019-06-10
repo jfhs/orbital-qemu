@@ -144,8 +144,9 @@ typedef struct AeoliaPCIEState {
     // Decrypted kernel interface for GRUB
     MemoryRegion grub_channel;
     size_t decrypted_kernel_size;
-    size_t decrypted_kernel_addr;
+    size_t decrypted_kernel_offset;
     uint8_t* decrypted_kernel_data;
+    hwaddr decrypted_kernel_output_buffer;
 
     // Peripherals
     FILE *sflash;
@@ -252,11 +253,10 @@ static uint64_t grub_channel_read(
         assert(size == 4);
         return s->decrypted_kernel_size;
     case 4:
-        assert(size == 4);
-        return s->decrypted_kernel_addr;
     case 8:
-        assert(size == 1);
-        return s->decrypted_kernel_data[s->decrypted_kernel_addr++];
+    case 12:
+        assert(0);
+        return 0;
     }
 
     return 0;
@@ -268,13 +268,20 @@ static void grub_channel_write(
     AeoliaPCIEState *s = opaque;
 
     switch (addr) {
+    case 0:
+        assert(0);
+        return;
     case 4:
         assert(size == 4);
-        s->decrypted_kernel_addr = value;
+        s->decrypted_kernel_offset = value;
         return;
-    case 0:
     case 8:
-        assert(0);
+        assert(size == 4);
+        s->decrypted_kernel_output_buffer = (hwaddr)value;
+        return;
+    case 12:
+        assert(size == 4);
+        address_space_write(&address_space_memory, s->decrypted_kernel_output_buffer, MEMTXATTRS_UNSPECIFIED, s->decrypted_kernel_data + s->decrypted_kernel_offset, value);
         return;
     }
 }
@@ -660,18 +667,17 @@ static void aeolia_pcie_realize(PCIDevice *dev, Error **errp)
 
     // Decrypted kernel IOs for GRUB
     memory_region_init_io(&s->grub_channel, OBJECT(s),
-        &grub_channel_ops, s, "grub-channel", 9);
+        &grub_channel_ops, s, "grub-channel", 16);
     memory_region_add_subregion(get_system_io(), 0x1330, &s->grub_channel);
 
     FILE* f = fopen("sflash/orbisys-500", "rb");
     fseek(f, 0, SEEK_END);
     s->decrypted_kernel_size = ftell(f);
-    printf(" ORB: decrypted_kernel_size: %lld\n", s->decrypted_kernel_size);
     fseek(f, 0, SEEK_SET);
     s->decrypted_kernel_data = malloc(s->decrypted_kernel_size);
     fread(s->decrypted_kernel_data, 1, s->decrypted_kernel_size, f);
     fclose(f);
-    s->decrypted_kernel_addr = 0;
+    s->decrypted_kernel_offset = 0;
 
     /* sflash */
     s->sflash = fopen("sflash.bin", "r+");
