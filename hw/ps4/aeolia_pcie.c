@@ -141,6 +141,13 @@ typedef struct AeoliaPCIEState {
     SysBusDevice* hpet;
     AddressSpace* iommu_as;
 
+    // Decrypted kernel interface for GRUB
+    MemoryRegion grub_channel;
+    size_t decrypted_kernel_size;
+    size_t decrypted_kernel_offset;
+    uint8_t* decrypted_kernel_data;
+    hwaddr decrypted_kernel_output_buffer;
+
     // Peripherals
     FILE *sflash;
     uint32_t sflash_offset;
@@ -233,6 +240,55 @@ static void aeolia_pcie_1_write
 static const MemoryRegionOps aeolia_pcie_1_ops = {
     .read = aeolia_pcie_1_read,
     .write = aeolia_pcie_1_write,
+    .endianness = DEVICE_LITTLE_ENDIAN,
+};
+
+static uint64_t grub_channel_read(
+    void *opaque, hwaddr addr, unsigned size)
+{
+    AeoliaPCIEState *s = opaque;
+
+    switch (addr) {
+    case 0:
+        assert(size == 4);
+        return s->decrypted_kernel_size;
+    case 4:
+    case 8:
+    case 12:
+        assert(0);
+        return 0;
+    }
+
+    return 0;
+}
+
+static void grub_channel_write(
+    void *opaque, hwaddr addr, uint64_t value, unsigned size)
+{
+    AeoliaPCIEState *s = opaque;
+
+    switch (addr) {
+    case 0:
+        assert(0);
+        return;
+    case 4:
+        assert(size == 4);
+        s->decrypted_kernel_offset = value;
+        return;
+    case 8:
+        assert(size == 4);
+        s->decrypted_kernel_output_buffer = (hwaddr)value;
+        return;
+    case 12:
+        assert(size == 4);
+        address_space_write(&address_space_memory, s->decrypted_kernel_output_buffer, MEMTXATTRS_UNSPECIFIED, s->decrypted_kernel_data + s->decrypted_kernel_offset, value);
+        return;
+    }
+}
+
+static const MemoryRegionOps grub_channel_ops = {
+    .read = grub_channel_read,
+    .write = grub_channel_write,
     .endianness = DEVICE_LITTLE_ENDIAN,
 };
 
@@ -608,6 +664,20 @@ static void aeolia_pcie_realize(PCIDevice *dev, Error **errp)
     qdev_prop_set_uint8(DEVICE(s->hpet), "timers", 4);
     qdev_prop_set_uint32(DEVICE(s->hpet), HPET_INTCAP, 0x10);
     qdev_init_nofail(DEVICE(s->hpet));
+
+    // Decrypted kernel IOs for GRUB
+    memory_region_init_io(&s->grub_channel, OBJECT(s),
+        &grub_channel_ops, s, "grub-channel", 16);
+    memory_region_add_subregion(get_system_io(), 0x1330, &s->grub_channel);
+
+    FILE* f = fopen("sflash/orbisys-500", "rb");
+    fseek(f, 0, SEEK_END);
+    s->decrypted_kernel_size = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    s->decrypted_kernel_data = malloc(s->decrypted_kernel_size);
+    fread(s->decrypted_kernel_data, 1, s->decrypted_kernel_size, f);
+    fclose(f);
+    s->decrypted_kernel_offset = 0;
 
     /* sflash */
     s->sflash = fopen("sflash.bin", "r+");
