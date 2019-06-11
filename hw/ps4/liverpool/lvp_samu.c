@@ -127,13 +127,16 @@ static void samu_packet_spawn(samu_state_t *s,
     const
     samu_command_service_spawn_t *query_spawn = &query->data.service_spawn;
     samu_command_service_spawn_t *reply_spawn = &reply->data.service_spawn;
-    uint64_t module_id; // TODO: The module ID is just an increasing number starting from 0, not an authentication ID
+    uint64_t module_id = 0; // TODO: The module ID is just an increasing number starting from 0, not an authentication ID
 
     if (!strncmp(query_spawn->name, MODULE_AUTH_MGR, 8)) {
         module_id = AUTHID_AUTH_MGR;
     }
     if (!strncmp(query_spawn->name, MODULE_KEY_MGR, 8)) {
         module_id = AUTHID_KEY_MGR;
+    }
+    if (!module_id) {
+        printf("%s: Unknown module: %s\n", __FUNCTION__, query_spawn->name);
     }
     reply_spawn->args[0] = (uint32_t)(module_id >> 32);
     reply_spawn->args[1] = (uint32_t)(module_id);

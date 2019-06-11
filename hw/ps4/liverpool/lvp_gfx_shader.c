@@ -72,14 +72,12 @@ static void gfx_shader_translate_common(
 static void gfx_shader_translate_ps(
     gfx_shader_t *shader, gfx_state_t *gfx, uint8_t *pgm)
 {
-    printf("%s: Translating shader...\n", __FUNCTION__);
     gfx_shader_translate_common(shader, gfx, pgm, GCN_STAGE_PS);
 }
 
 static void gfx_shader_translate_vs(
     gfx_shader_t *shader, gfx_state_t *gfx, uint8_t *pgm)
 {
-    printf("%s: Translating shader...\n", __FUNCTION__);
     gfx_shader_translate_common(shader, gfx, pgm, GCN_STAGE_VS);
 }
 

@@ -228,7 +228,7 @@ void liverpool_gc_dce_page_flip(dce_state_t *s, int crtc_id)
 {
     dce_crtc_state_t *crtc;
 
-    printf("%s(%d)\n", __FUNCTION__, crtc_id);
+    //printf("%s(%d)\n", __FUNCTION__, crtc_id);
     assert(crtc_id < MAX_PIPES_USED);
     crtc = &s->crtc[crtc_id];
     crtc->flip_pending = true;
