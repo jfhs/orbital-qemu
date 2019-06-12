@@ -54,10 +54,19 @@ typedef struct bls_header_t {
 } bls_header_t;
 
 typedef struct pupmgr_state_t {
+    bool spawned;
 } pupmgr_state_t;
 
 /* globals */
 static struct pupmgr_state_t g_state = {};
+
+void sbl_pupmgr_spawn() {
+    g_state.spawned = true;
+}
+
+bool sbl_pupmgr_spawned() {
+    return g_state.spawned;
+}
 
 uint32_t sbl_pupmgr_verify_header(
     const pupmgr_verify_header_t *query, pupmgr_verify_header_t *reply)
@@ -82,8 +91,6 @@ uint32_t sbl_pupmgr_verify_header(
 uint32_t sbl_pupmgr_exit(
     const pupmgr_exit_t *query, pupmgr_exit_t *reply)
 {
-    printf("%s\n", __FUNCTION__);
-    qemu_hexdump(query, stdout, "", 0x100);
-
+    g_state.spawned = false;
     return MODULE_ERR_OK;
 }

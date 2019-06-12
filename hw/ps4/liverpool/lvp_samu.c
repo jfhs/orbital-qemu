@@ -116,7 +116,7 @@ static void samu_packet_io_write(samu_state_t *s,
     memcpy(&reply->data.io_write.data, buffer, size);
 }
 
-static void samu_packet_spawn(samu_state_t *s,
+static uint32_t samu_packet_spawn(samu_state_t *s,
     const samu_packet_t *query, samu_packet_t *reply)
 {
     const
@@ -126,6 +126,7 @@ static void samu_packet_spawn(samu_state_t *s,
 
     if (!strncmp(query_spawn->name, MODULE_PUP_MGR, 8)) {
         module_id = AUTHID_PUP_MGR;
+        sbl_pupmgr_spawn();
     }
     if (!strncmp(query_spawn->name, MODULE_AUTH_MGR, 8)) {
         module_id = AUTHID_AUTH_MGR;
@@ -138,6 +139,7 @@ static void samu_packet_spawn(samu_state_t *s,
     }
     reply_spawn->args[0] = (uint32_t)(module_id >> 32);
     reply_spawn->args[1] = (uint32_t)(module_id);
+    return 0;
 }
 
 /* samu ccp */
@@ -308,7 +310,7 @@ static void samu_packet_ccp_snvs(samu_state_t *s,
     DPRINTF("unimplemented");
 }
 
-static void samu_packet_ccp(samu_state_t *s,
+static uint32_t samu_packet_ccp(samu_state_t *s,
     const samu_packet_t *query, samu_packet_t *reply)
 {
     const
@@ -356,9 +358,10 @@ static void samu_packet_ccp(samu_state_t *s,
         DPRINTF("Unknown SAMU CCP opcode: %d", ccp_op);
         assert(0);
     }
+    return 0;
 }
 
-static void samu_packet_mailbox(samu_state_t *s,
+static uint32_t samu_packet_mailbox(samu_state_t *s,
     const samu_packet_t *query, samu_packet_t *reply)
 {
     const
@@ -372,6 +375,9 @@ static void samu_packet_mailbox(samu_state_t *s,
 
     switch (query_mb->module_id) {
     case AUTHID_PUP_MGR:
+        if (!sbl_pupmgr_spawned()) {
+            return -3; // TODO: Maybe this is just -ESRCH
+        }
         switch (query_mb->function_id) {
         case PUPMGR_SM_VERIFY_HEADER:
             ret = sbl_pupmgr_verify_header(
@@ -434,9 +440,10 @@ static void samu_packet_mailbox(samu_state_t *s,
         DPRINTF("Unknown Module ID: 0x%llX", query_mb->module_id);
     }
     reply_mb->retval = ret;
+    return 0;
 }
 
-static void samu_packet_rand(samu_state_t *s,
+static uint32_t samu_packet_rand(samu_state_t *s,
     const samu_packet_t *query, samu_packet_t *reply)
 {
     const
@@ -444,6 +451,7 @@ static void samu_packet_rand(samu_state_t *s,
     samu_command_service_rand_t *reply_rand = &query->data.service_rand; // TODO: Why is the same address reused?
 
     qcrypto_random_bytes(reply_rand->data, 0x10, &error_fatal);
+    return 0;
 }
 
 void liverpool_gc_samu_packet(samu_state_t *s,
@@ -453,6 +461,7 @@ void liverpool_gc_samu_packet(samu_state_t *s,
     samu_packet_t *query, *reply;
     hwaddr query_len = packet_length;
     hwaddr reply_len = packet_length;
+    uint32_t status = 0;
 
     reply_addr = query_addr & 0xFFF00000; // TODO: Where does this address come from?
     query = (samu_packet_t*)address_space_map(
@@ -463,26 +472,27 @@ void liverpool_gc_samu_packet(samu_state_t *s,
 
     memset(reply, 0, packet_length);
     reply->command = query->command;
-    reply->status = 0;
     reply->message_id = query->message_id;
     reply->extended_msgs = query->extended_msgs;
 
     switch (query->command) {
     case SAMU_CMD_SERVICE_SPAWN:
-        samu_packet_spawn(s, query, reply);
+        status = samu_packet_spawn(s, query, reply);
         break;
     case SAMU_CMD_SERVICE_CCP:
-        samu_packet_ccp(s, query, reply);
+        status = samu_packet_ccp(s, query, reply);
         break;
     case SAMU_CMD_SERVICE_MAILBOX:
-        samu_packet_mailbox(s, query, reply);
+        status = samu_packet_mailbox(s, query, reply);
         break;
     case SAMU_CMD_SERVICE_RAND:
-        samu_packet_rand(s, query, reply);
+        status = samu_packet_rand(s, query, reply);
         break;
     default:
         printf("Unknown SAMU command %d\n", query->command);
     }
+    reply->status = status;
+
     address_space_unmap(&address_space_memory, query, query_len, true, query_len);
     address_space_unmap(&address_space_memory, reply, reply_len, true, reply_len);
 }

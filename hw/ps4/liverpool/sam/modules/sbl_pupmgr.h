@@ -46,9 +46,9 @@
 typedef struct pupmgr_verify_header_t {
     /* <input> */
     uint64_t header_addr;
-    uint64_t header_size;
+    uint64_t header_size;  // TODO: Is this really size?
+    uint64_t header_flags; // TODO: Is this really flags?
     /* <output> */
-    // TODO
 } pupmgr_verify_header_t;
 
 typedef struct pupmgr_exit_t {
@@ -60,6 +60,9 @@ typedef struct pupmgr_exit_t {
 } pupmgr_exit_t;
 
 /* functions */
+void sbl_pupmgr_spawn();
+bool sbl_pupmgr_spawned();
+
 uint32_t sbl_pupmgr_verify_header(
     const pupmgr_verify_header_t *query, pupmgr_verify_header_t *reply);
 uint32_t sbl_pupmgr_exit(
