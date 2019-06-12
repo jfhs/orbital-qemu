@@ -25,7 +25,7 @@
 #include "qemu/osdep.h"
 
 /* functions */
-#define PUPMGR_SM_VERIFY_BLS_HEADER           0xF
+#define PUPMGR_SM_VERIFY_HEADER               0xF
 #define PUPMGR_SM_EXIT                     0xFFFF
 
 /* constants */
@@ -43,13 +43,13 @@
 #define PUPMGR_PATH_RDIAG               11
 
 /* structures */
-typedef struct pupmgr_verify_bls_header_t {
-    uint8_t buf[0x100];
+typedef struct pupmgr_verify_header_t {
     /* <input> */
-    // TODO
+    uint64_t header_addr;
+    uint64_t header_size;
     /* <output> */
     // TODO
-} pupmgr_verify_bls_header_t;
+} pupmgr_verify_header_t;
 
 typedef struct pupmgr_exit_t {
     uint8_t buf[0x100];
@@ -60,8 +60,8 @@ typedef struct pupmgr_exit_t {
 } pupmgr_exit_t;
 
 /* functions */
-void sbl_pupmgr_verify_bls_header(
-    const pupmgr_verify_bls_header_t *query, pupmgr_verify_bls_header_t *reply);
+void sbl_pupmgr_verify_header(
+    const pupmgr_verify_header_t *query, pupmgr_verify_header_t *reply);
 void sbl_pupmgr_exit(
     const pupmgr_exit_t *query, pupmgr_exit_t *reply);
 

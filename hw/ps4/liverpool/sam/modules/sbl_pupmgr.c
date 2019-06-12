@@ -35,17 +35,46 @@ do { \
     } \
 } while (0)
 
+/* internals */
+typedef struct bls_entry_t {
+    uint32_t block_offset;
+    uint32_t file_size;
+    uint32_t reserved[2];
+    uint8_t  file_name[0x20];
+} bls_entry_t;
+
+typedef struct bls_header_t {
+    uint32_t magic;
+    uint32_t version;
+    uint32_t flags;
+    uint32_t entry_count;
+    uint32_t block_count;
+    uint32_t reserved[3];
+    bls_entry_t entries[0];
+} bls_header_t;
+
 typedef struct pupmgr_state_t {
 } pupmgr_state_t;
 
 /* globals */
 static struct pupmgr_state_t g_state = {};
 
-void sbl_pupmgr_verify_bls_header(
-    const pupmgr_verify_bls_header_t *query, pupmgr_verify_bls_header_t *reply)
+void sbl_pupmgr_verify_header(
+    const pupmgr_verify_header_t *query, pupmgr_verify_header_t *reply)
 {
     printf("%s\n", __FUNCTION__);
     qemu_hexdump(query, stdout, "", 0x100);
+
+    bls_header_t *header;
+    hwaddr header_mapsize = query->header_size;
+    header = address_space_map(&address_space_memory,
+        query->header_addr, &header_mapsize, false);
+
+    printf("query->header\n");
+    qemu_hexdump(header, stdout, "", query->header_size);
+
+    address_space_unmap(&address_space_memory, header,
+        header_mapsize, false, header_mapsize);
 }
 
 void sbl_pupmgr_exit(

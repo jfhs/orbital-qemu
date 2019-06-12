@@ -378,10 +378,10 @@ static void samu_packet_mailbox(samu_state_t *s,
     switch (query_mb->module_id) {
     case AUTHID_PUP_MGR:
         switch (query_mb->function_id) {
-        case PUPMGR_SM_VERIFY_BLS_HEADER:
-            sbl_pupmgr_verify_bls_header(
-                (pupmgr_verify_bls_header_t*)&query_mb->data,
-                (pupmgr_verify_bls_header_t*)&reply_mb->data);
+        case PUPMGR_SM_VERIFY_HEADER:
+            sbl_pupmgr_verify_header(
+                (pupmgr_verify_header_t*)&query_mb->data,
+                (pupmgr_verify_header_t*)&reply_mb->data);
             break;
         case PUPMGR_SM_EXIT:
             sbl_pupmgr_exit(
