@@ -41,7 +41,7 @@ do { \
 } while (0)
 
 /* SAMU Secure Kernel emulation (based on 5.00) */
-#include "sam/modules/sbl_acmgr.h"
+#include "sam/modules/sbl_pupmgr.h"
 #include "sam/modules/sbl_authmgr.h"
 
 #define MODULE_ERR_OK        0x0
@@ -49,12 +49,12 @@ do { \
 #define MODULE_ERR_FFFFFFDC  0xFFFFFFDC
 #define MODULE_ERR_FFFFFFEA  0xFFFFFFEA
 
-#define MODULE_AC_MGR     "80010006"
+#define MODULE_PUP_MGR    "80010006"
 #define MODULE_AUTH_MGR   "80010008"
 #define MODULE_IDATA_MGR  "80010009"
 #define MODULE_KEY_MGR    "8001000B"
 
-#define AUTHID_AC_MGR     0x3E00000000000003ULL
+#define AUTHID_PUP_MGR    0x3E00000000000003ULL
 #define AUTHID_AUTH_MGR   0x3E00000000000005ULL
 #define AUTHID_IDATA_MGR  0x3E00000000000006ULL
 #define AUTHID_KEY_MGR    0x3E00000000000007ULL
@@ -129,6 +129,9 @@ static void samu_packet_spawn(samu_state_t *s,
     samu_command_service_spawn_t *reply_spawn = &reply->data.service_spawn;
     uint64_t module_id = 0; // TODO: The module ID is just an increasing number starting from 0, not an authentication ID
 
+    if (!strncmp(query_spawn->name, MODULE_PUP_MGR, 8)) {
+        module_id = AUTHID_PUP_MGR;
+    }
     if (!strncmp(query_spawn->name, MODULE_AUTH_MGR, 8)) {
         module_id = AUTHID_AUTH_MGR;
     }
@@ -373,6 +376,22 @@ static void samu_packet_mailbox(samu_state_t *s,
     reply_mb->retval = MODULE_ERR_OK;
 
     switch (query_mb->module_id) {
+    case AUTHID_PUP_MGR:
+        switch (query_mb->function_id) {
+        case PUPMGR_SM_VERIFY_BLS_HEADER:
+            sbl_pupmgr_verify_bls_header(
+                (pupmgr_verify_bls_header_t*)&query_mb->data,
+                (pupmgr_verify_bls_header_t*)&reply_mb->data);
+            break;
+        case PUPMGR_SM_EXIT:
+            sbl_pupmgr_exit(
+                (pupmgr_exit_t*)&query_mb->data,
+                (pupmgr_exit_t*)&reply_mb->data);
+            break;
+        default:
+            DPRINTF("Unknown Function ID: 0x%X", query_mb->function_id);
+        }
+        break;
     case AUTHID_AUTH_MGR:
         switch (query_mb->function_id) {
         case AUTHMGR_SM_VERIFY_HEADER:
@@ -400,12 +419,6 @@ static void samu_packet_mailbox(samu_state_t *s,
                 (authmgr_is_loadable_t*)&query_mb->data,
                 (authmgr_is_loadable_t*)&reply_mb->data);
             break;
-        default:
-            DPRINTF("Unknown Function ID: 0x%X", query_mb->function_id);
-        }
-        break;
-    case AUTHID_AC_MGR:
-        switch (query_mb->function_id) {
         default:
             DPRINTF("Unknown Function ID: 0x%X", query_mb->function_id);
         }

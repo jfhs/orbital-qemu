@@ -1,1 +1,2 @@
 obj-y += sbl_authmgr.o
+obj-y += sbl_pupmgr.o

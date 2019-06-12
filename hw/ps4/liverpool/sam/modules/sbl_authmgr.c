@@ -122,7 +122,7 @@ typedef struct authmgr_state_t {
 } authmgr_state_t;
 
 /* globals */
-struct authmgr_state_t g_state = {};
+static struct authmgr_state_t g_state = {};
 
 /* functions */
 void sbl_authmgr_verify_header(

@@ -24,6 +24,7 @@
 
 #include "qemu/osdep.h"
 
+/* functions */
 #define AUTHMGR_SM_VERIFY_HEADER              0x1
 #define AUTHMGR_SM_LOAD_SELF_SEGMENT          0x2
 #define AUTHMGR_SM_FINALIZE                   0x5
