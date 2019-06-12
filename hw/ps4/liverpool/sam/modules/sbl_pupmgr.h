@@ -60,9 +60,9 @@ typedef struct pupmgr_exit_t {
 } pupmgr_exit_t;
 
 /* functions */
-void sbl_pupmgr_verify_header(
+uint32_t sbl_pupmgr_verify_header(
     const pupmgr_verify_header_t *query, pupmgr_verify_header_t *reply);
-void sbl_pupmgr_exit(
+uint32_t sbl_pupmgr_exit(
     const pupmgr_exit_t *query, pupmgr_exit_t *reply);
 
 #endif /* HW_PS4_LIVERPOOL_SAM_MODULES_SBL_PUPMGR_H */

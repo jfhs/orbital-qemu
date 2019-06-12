@@ -48,6 +48,11 @@ typedef struct samu_state_t {
 } samu_state_t;
 
 /* SAMU Commands */
+#define MODULE_ERR_OK        0x0
+#define MODULE_ERR_FFFFFFDA  0xFFFFFFDA
+#define MODULE_ERR_FFFFFFDC  0xFFFFFFDC
+#define MODULE_ERR_FFFFFFEA  0xFFFFFFEA
+
 typedef struct samu_command_service_mailbox_t {
     uint64_t unk_00;
     uint64_t module_id;

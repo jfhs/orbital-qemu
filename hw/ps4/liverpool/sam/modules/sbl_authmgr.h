@@ -151,15 +151,15 @@ typedef struct authmgr_is_loadable_t {
 } authmgr_is_loadable_t;
 
 /* functions */
-void sbl_authmgr_verify_header(
+uint32_t sbl_authmgr_verify_header(
     const authmgr_verify_header_t *query, authmgr_verify_header_t *reply);
-void sbl_authmgr_load_self_segment(
+uint32_t sbl_authmgr_load_self_segment(
     const authmgr_load_self_segment_t *query, authmgr_load_self_segment_t *reply);
-void sbl_authmgr_load_self_block(
+uint32_t sbl_authmgr_load_self_block(
     const authmgr_load_self_block_t *query, authmgr_load_self_block_t *reply);
-void sbl_authmgr_invoke_check(
+uint32_t sbl_authmgr_invoke_check(
     const authmgr_invoke_check_t *query, authmgr_invoke_check_t *reply);
-void sbl_authmgr_is_loadable(
+uint32_t sbl_authmgr_is_loadable(
     const authmgr_is_loadable_t *query, authmgr_is_loadable_t *reply);
 
 #endif /* HW_PS4_LIVERPOOL_SAM_MODULES_SBL_AUTHMGR_H */

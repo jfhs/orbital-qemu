@@ -125,7 +125,7 @@ typedef struct authmgr_state_t {
 static struct authmgr_state_t g_state = {};
 
 /* functions */
-void sbl_authmgr_verify_header(
+uint32_t sbl_authmgr_verify_header(
     const authmgr_verify_header_t *query, authmgr_verify_header_t *reply)
 {
     struct authmgr_context_t *ctxt;
@@ -156,9 +156,11 @@ void sbl_authmgr_verify_header(
 
     address_space_unmap(&address_space_memory, self_header,
         mapped_header_size, false, mapped_header_size);
+
+    return MODULE_ERR_OK;
 }
 
-void sbl_authmgr_load_self_segment(
+uint32_t sbl_authmgr_load_self_segment(
     const authmgr_load_self_segment_t *query, authmgr_load_self_segment_t *reply)
 {
     size_t i;
@@ -192,9 +194,11 @@ void sbl_authmgr_load_self_segment(
     }
     address_space_unmap(&address_space_memory, chunk_table,
         mapped_table_size, false, mapped_table_size);
+
+    return MODULE_ERR_OK;
 }
 
-void sbl_authmgr_load_self_block(
+uint32_t sbl_authmgr_load_self_block(
     const authmgr_load_self_block_t *query, authmgr_load_self_block_t *reply)
 {
     bool straddled;
@@ -261,15 +265,18 @@ void sbl_authmgr_load_self_block(
 
     address_space_unmap(&address_space_memory, output,
         output_mapsize, false, output_mapsize);
+
+    return MODULE_ERR_OK;
 }
 
-void sbl_authmgr_invoke_check(
+uint32_t sbl_authmgr_invoke_check(
     const authmgr_invoke_check_t *query, authmgr_invoke_check_t *reply)
 {
     DPRINTF("unimplemented");
+    return MODULE_ERR_OK;
 }
 
-void sbl_authmgr_is_loadable(
+uint32_t sbl_authmgr_is_loadable(
     const authmgr_is_loadable_t *query, authmgr_is_loadable_t *reply)
 {
     struct authmgr_context_t *ctxt;
@@ -291,4 +298,6 @@ void sbl_authmgr_is_loadable(
         auth_info_old_mapsize, false, auth_info_old_mapsize);
     address_space_unmap(&address_space_memory, auth_info_new,
         auth_info_new_mapsize, true, auth_info_new_mapsize);
+
+    return MODULE_ERR_OK;
 }

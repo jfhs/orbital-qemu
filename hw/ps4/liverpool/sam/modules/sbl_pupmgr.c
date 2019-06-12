@@ -59,7 +59,7 @@ typedef struct pupmgr_state_t {
 /* globals */
 static struct pupmgr_state_t g_state = {};
 
-void sbl_pupmgr_verify_header(
+uint32_t sbl_pupmgr_verify_header(
     const pupmgr_verify_header_t *query, pupmgr_verify_header_t *reply)
 {
     printf("%s\n", __FUNCTION__);
@@ -75,11 +75,15 @@ void sbl_pupmgr_verify_header(
 
     address_space_unmap(&address_space_memory, header,
         header_mapsize, false, header_mapsize);
+
+    return MODULE_ERR_OK;        
 }
 
-void sbl_pupmgr_exit(
+uint32_t sbl_pupmgr_exit(
     const pupmgr_exit_t *query, pupmgr_exit_t *reply)
 {
     printf("%s\n", __FUNCTION__);
     qemu_hexdump(query, stdout, "", 0x100);
+
+    return MODULE_ERR_OK;
 }

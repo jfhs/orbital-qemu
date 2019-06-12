@@ -44,11 +44,6 @@ do { \
 #include "sam/modules/sbl_pupmgr.h"
 #include "sam/modules/sbl_authmgr.h"
 
-#define MODULE_ERR_OK        0x0
-#define MODULE_ERR_FFFFFFDA  0xFFFFFFDA
-#define MODULE_ERR_FFFFFFDC  0xFFFFFFDC
-#define MODULE_ERR_FFFFFFEA  0xFFFFFFEA
-
 #define MODULE_PUP_MGR    "80010006"
 #define MODULE_AUTH_MGR   "80010008"
 #define MODULE_IDATA_MGR  "80010009"
@@ -369,22 +364,22 @@ static void samu_packet_mailbox(samu_state_t *s,
     const
     samu_command_service_mailbox_t *query_mb = &query->data.service_mailbox;
     samu_command_service_mailbox_t *reply_mb = &reply->data.service_mailbox;
+    uint32_t ret = MODULE_ERR_OK;
 
     reply_mb->unk_00 = query_mb->unk_00;
     reply_mb->module_id = query_mb->module_id;
     reply_mb->function_id = query_mb->function_id;
-    reply_mb->retval = MODULE_ERR_OK;
 
     switch (query_mb->module_id) {
     case AUTHID_PUP_MGR:
         switch (query_mb->function_id) {
         case PUPMGR_SM_VERIFY_HEADER:
-            sbl_pupmgr_verify_header(
+            ret = sbl_pupmgr_verify_header(
                 (pupmgr_verify_header_t*)&query_mb->data,
                 (pupmgr_verify_header_t*)&reply_mb->data);
             break;
         case PUPMGR_SM_EXIT:
-            sbl_pupmgr_exit(
+            ret = sbl_pupmgr_exit(
                 (pupmgr_exit_t*)&query_mb->data,
                 (pupmgr_exit_t*)&reply_mb->data);
             break;
@@ -395,27 +390,27 @@ static void samu_packet_mailbox(samu_state_t *s,
     case AUTHID_AUTH_MGR:
         switch (query_mb->function_id) {
         case AUTHMGR_SM_VERIFY_HEADER:
-            sbl_authmgr_verify_header(
+            ret = sbl_authmgr_verify_header(
                 (authmgr_verify_header_t*)&query_mb->data,
                 (authmgr_verify_header_t*)&reply_mb->data);
             break;
         case AUTHMGR_SM_LOAD_SELF_SEGMENT:
-            sbl_authmgr_load_self_segment(
+            ret = sbl_authmgr_load_self_segment(
                 (authmgr_load_self_segment_t*)&query_mb->data,
                 (authmgr_load_self_segment_t*)&reply_mb->data);
             break;
         case AUTHMGR_SM_LOAD_SELF_BLOCK:
-            sbl_authmgr_load_self_block(
+            ret = sbl_authmgr_load_self_block(
                 (authmgr_load_self_block_t*)&query_mb->data,
                 (authmgr_load_self_block_t*)&reply_mb->data);
             break;
         case AUTHMGR_SM_INVOKE_CHECK:
-            sbl_authmgr_invoke_check(
+            ret = sbl_authmgr_invoke_check(
                 (authmgr_invoke_check_t*)&query_mb->data,
                 (authmgr_invoke_check_t*)&reply_mb->data);
             break;
         case AUTHMGR_SM_IS_LOADABLE:
-            sbl_authmgr_is_loadable(
+            ret = sbl_authmgr_is_loadable(
                 (authmgr_is_loadable_t*)&query_mb->data,
                 (authmgr_is_loadable_t*)&reply_mb->data);
             break;
@@ -438,6 +433,7 @@ static void samu_packet_mailbox(samu_state_t *s,
     default:
         DPRINTF("Unknown Module ID: 0x%llX", query_mb->module_id);
     }
+    reply_mb->retval = ret;
 }
 
 static void samu_packet_rand(samu_state_t *s,
