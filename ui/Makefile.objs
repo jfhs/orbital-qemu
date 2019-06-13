@@ -13,6 +13,7 @@ common-obj-y += orbital-stats.o
 common-obj-y += orbital-debug-gpu.o
 common-obj-y += orbital-procs.o
 common-obj-y += orbital-procs-list.o
+common-obj-y += orbital-style.o
 common-obj-y += keymaps.o console.o cursor.o qemu-pixman.o
 common-obj-y += input.o input-keymap.o input-legacy.o
 common-obj-$(CONFIG_LINUX) += input-linux.o
