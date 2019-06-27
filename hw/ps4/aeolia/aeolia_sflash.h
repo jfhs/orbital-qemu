@@ -31,7 +31,7 @@
 #define SFLASH_UNKC2028                 0xC2028
 #define SFLASH_CMD                      0xC202C
 #define SFLASH_UNKC2030                 0xC2030
-#define SFLASH_UNKC2038                 0xC2038
+#define SFLASH_STATUS_WR                0xC2038
 #define SFLASH_STATUS                   0xC203C
 #define SFLASH_STATUS2                  0xC2040
 #define SFLASH_DMA_ADDR                 0xC2044

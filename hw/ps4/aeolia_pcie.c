@@ -157,6 +157,7 @@ typedef struct AeoliaPCIEState {
     uint32_t sflash_dma_addr;
     uint32_t sflash_dma_size;
     uint32_t sflash_unkC3000;
+    uint32_t sflash_status2;
 
     uint32_t icc_doorbell;
     uint32_t icc_status;
@@ -549,6 +550,9 @@ static uint64_t aeolia_pcie_peripherals_read(
     case SFLASH_STATUS:
         value = s->sflash_status;
         break;
+    case SFLASH_STATUS2:
+        value = s->sflash_status2;
+        break;
     case SFLASH_UNKC3000_STATUS:
         value = s->sflash_unkC3000;
         break;
@@ -604,6 +608,9 @@ static void aeolia_pcie_peripherals_write(
         break;
     case SFLASH_STATUS:
         s->sflash_status = value;
+        break;
+    case SFLASH_STATUS_WR:
+        s->sflash_status2 = value;
         break;
     case SFLASH_DMA_ADDR:
         s->sflash_dma_addr = value;
