@@ -396,6 +396,11 @@ static uint32_t samu_packet_mailbox(samu_state_t *s,
             return -3; // TODO: Maybe this is just -ESRCH
         }
         switch (query_mb->function_id) {
+        case PUPMGR_SM_DECRYPT_HEADER:
+            ret = sbl_pupmgr_decrypt_header(s,
+                (pupmgr_decrypt_header_t*)&query_mb->data,
+                (pupmgr_decrypt_header_t*)&reply_mb->data);
+            break;
         case PUPMGR_SM_VERIFY_HEADER:
             ret = sbl_pupmgr_verify_header(s,
                 (pupmgr_verify_header_t*)&query_mb->data,
