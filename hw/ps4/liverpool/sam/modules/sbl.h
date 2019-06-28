@@ -24,6 +24,8 @@
 
 #include "qemu/osdep.h"
 
+#define SBL_CHUNK_TABLE_MAX_SIZE 0x4000
+
 /* structures */
 typedef struct sbl_chunk_entry_t {
     uint64_t data_addr;

@@ -28,7 +28,7 @@
 #include <sys/stat.h>
 
 /* debugging */
-#define DEBUG_PUPMGR 0
+#define DEBUG_PUPMGR 1
 
 #define DPRINTF(...) \
 do { \
@@ -181,8 +181,49 @@ uint32_t sbl_pupmgr_decrypt_header(samu_state_t *s,
     samu_unmap(s, bls_header, bls_header_mapsize, false,
         bls_header_mapsize);
 
-    printf("%s: done!\n", __FUNCTION__);
     return MODULE_ERR_OK;        
+}
+
+uint32_t sbl_pupmgr_decrypt_segment(samu_state_t *s,
+    const pupmgr_decrypt_segment_t *query, pupmgr_decrypt_segment_t *reply)
+{
+    size_t i;
+    sbl_chunk_table_t *chunk_table;
+    sbl_chunk_entry_t *chunk_entry;
+    uint8_t *segment_data;
+    hwaddr mapped_table_size;
+    hwaddr mapped_segment_size;
+
+    printf("sbl_pupmgr_decrypt_segment\n");
+    qemu_hexdump(query, stdout, "", 0x100);
+
+    DPRINTF("Handling table @ %llX", query->chunk_table_addr);
+    mapped_table_size = SBL_CHUNK_TABLE_MAX_SIZE;
+    chunk_table = samu_map(s,
+        query->chunk_table_addr, &mapped_table_size, false);
+
+    DPRINTF("Processing table:");
+    DPRINTF(" - data_addr: %llX", chunk_table->data_addr);
+    DPRINTF(" - data_size: %llX", chunk_table->data_size);
+    DPRINTF(" - num_entries: %lld", chunk_table->num_entries);
+
+    for (i = 0; i < chunk_table->num_entries; i++) {
+        chunk_entry = &chunk_table->entries[i];
+        DPRINTF("Decrypting segment @ %llX (0x%llX bytes)",
+            chunk_entry->data_addr, chunk_entry->data_size);
+        mapped_segment_size = chunk_entry->data_size;
+        segment_data = samu_map(s,
+            chunk_entry->data_addr, &mapped_segment_size, true);
+        liverpool_gc_samu_fakedecrypt(segment_data,
+            segment_data, chunk_entry->data_size);
+        samu_unmap(s, segment_data,
+            mapped_segment_size, true, mapped_segment_size);
+    }
+    samu_unmap(s, chunk_table,
+        mapped_table_size, false, mapped_table_size);
+
+    return MODULE_ERR_OK;
+    return MODULE_ERR_OK;     
 }
 
 uint32_t sbl_pupmgr_verify_header(samu_state_t *s,

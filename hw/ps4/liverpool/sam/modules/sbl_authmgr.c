@@ -23,8 +23,6 @@
 #include "hw/ps4/liverpool/lvp_samu.h"
 #include "exec/address-spaces.h"
 
-#define CHUNK_TABLE_MAX_SIZE 0x4000
-
 /* debugging */
 #define DEBUG_AUTHMGR 0
 
@@ -171,7 +169,7 @@ uint32_t sbl_authmgr_load_self_segment(samu_state_t *s,
     hwaddr mapped_segment_size;
 
     DPRINTF("Handling table @ %llX", query->chunk_table_addr);
-    mapped_table_size = CHUNK_TABLE_MAX_SIZE;
+    mapped_table_size = SBL_CHUNK_TABLE_MAX_SIZE;
     chunk_table = samu_map(s,
         query->chunk_table_addr, &mapped_table_size, false);
 

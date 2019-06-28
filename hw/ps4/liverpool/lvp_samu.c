@@ -401,6 +401,11 @@ static uint32_t samu_packet_mailbox(samu_state_t *s,
                 (pupmgr_decrypt_header_t*)&query_mb->data,
                 (pupmgr_decrypt_header_t*)&reply_mb->data);
             break;
+        case PUPMGR_SM_DECRYPT_SEGMENT:
+            ret = sbl_pupmgr_decrypt_segment(s,
+                (pupmgr_decrypt_segment_t*)&query_mb->data,
+                (pupmgr_decrypt_segment_t*)&reply_mb->data);
+            break;
         case PUPMGR_SM_VERIFY_HEADER:
             ret = sbl_pupmgr_verify_header(s,
                 (pupmgr_verify_header_t*)&query_mb->data,

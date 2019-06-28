@@ -22,13 +22,14 @@
 #ifndef HW_PS4_LIVERPOOL_SAM_MODULES_SBL_PUPMGR_H
 #define HW_PS4_LIVERPOOL_SAM_MODULES_SBL_PUPMGR_H
 
-#include "qemu/osdep.h"
+#include "sbl.h"
 
 /* declarations */
 typedef struct samu_state_t samu_state_t;
 
 /* functions */
 #define PUPMGR_SM_DECRYPT_HEADER              0x1
+#define PUPMGR_SM_DECRYPT_SEGMENT             0x4
 #define PUPMGR_SM_VERIFY_HEADER               0xF
 #define PUPMGR_SM_EXIT                     0xFFFF
 
@@ -52,13 +53,23 @@ typedef struct pupmgr_decrypt_header_t {
     uint64_t pup_header_addr;
     uint64_t pup_header_size;
     uint64_t bls_header_addr;
-    uint64_t unk18; // zero
-    uint64_t unk20; // zero
+    uint64_t unk_18; // zero
+    uint64_t unk_20; // zero
     uint32_t pup_header_type;
     uint32_t soc_id; // 0x60000000
     /* <output> */
     // TODO
 } pupmgr_decrypt_header_t;
+
+typedef struct pupmgr_decrypt_segment_t {
+    /* <input> */
+    uint64_t chunk_table_addr;
+    uint16_t segment_index;
+    uint16_t unk_0A; // zero
+    uint32_t unk_0C; // zero
+    /* <output> */
+    // TODO
+} pupmgr_decrypt_segment_t;
 
 typedef struct pupmgr_verify_header_t {
     /* <input> */
@@ -82,6 +93,8 @@ bool sbl_pupmgr_spawned();
 
 uint32_t sbl_pupmgr_decrypt_header(samu_state_t *s,
     const pupmgr_decrypt_header_t *query, pupmgr_decrypt_header_t *reply);
+uint32_t sbl_pupmgr_decrypt_segment(samu_state_t *s,
+    const pupmgr_decrypt_segment_t *query, pupmgr_decrypt_segment_t *reply);
 uint32_t sbl_pupmgr_verify_header(samu_state_t *s,
     const pupmgr_verify_header_t *query, pupmgr_verify_header_t *reply);
 uint32_t sbl_pupmgr_exit(
