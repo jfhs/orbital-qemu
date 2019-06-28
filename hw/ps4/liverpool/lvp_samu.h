@@ -21,6 +21,7 @@
 #define HW_PS4_LIVERPOOL_GC_SAMU_H
 
 #include "qemu/osdep.h"
+#include "exec/hwaddr.h"
 #include "lvp_samu_.h"
 
 #define SAMU_SLOT_SIZE   0x10
@@ -42,9 +43,13 @@
 #define SAMU_CMD_IO_WRITE_FD_STDOUT           0
 #define SAMU_CMD_IO_WRITE_FD_STDERR           2
 
+// Forward declarations
+typedef struct gart_state_t gart_state_t;
+
 /* SAMU State */
 typedef struct samu_state_t {
     uint8_t slots[SAMU_SLOT_COUNT][SAMU_SLOT_SIZE];
+    gart_state_t *gart;
 } samu_state_t;
 
 /* SAMU Commands */
@@ -83,6 +88,12 @@ typedef struct samu_packet_t {
 
 /* debugging */
 void trace_samu_packet(const samu_packet_t* packet);
+
+/* memory */
+void* samu_map(samu_state_t *s,
+    hwaddr addr, hwaddr *plen, bool is_write);
+void samu_unmap(samu_state_t *s,
+    void *buffer, hwaddr len, bool is_write, hwaddr access_len);
 
 /* crypto */
 void liverpool_gc_samu_fakedecrypt(uint8_t *out_buffer,

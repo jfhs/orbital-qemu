@@ -125,7 +125,7 @@ typedef struct authmgr_state_t {
 static struct authmgr_state_t g_state = {};
 
 /* functions */
-uint32_t sbl_authmgr_verify_header(
+uint32_t sbl_authmgr_verify_header(samu_state_t *s,
     const authmgr_verify_header_t *query, authmgr_verify_header_t *reply)
 {
     struct authmgr_context_t *ctxt;
@@ -142,7 +142,7 @@ uint32_t sbl_authmgr_verify_header(
     g_state.context_idx %= 16;
 
     mapped_header_size = query->header_size;
-    self_header = address_space_map(&address_space_memory,
+    self_header = samu_map(s,
         query->header_addr, &mapped_header_size, false);
 
     // Get pointers to headers
@@ -154,13 +154,13 @@ uint32_t sbl_authmgr_verify_header(
     // Store information from header
     ctxt->auth_id = self_header_ex->auth_id;
 
-    address_space_unmap(&address_space_memory, self_header,
+    samu_unmap(s, self_header,
         mapped_header_size, false, mapped_header_size);
 
     return MODULE_ERR_OK;
 }
 
-uint32_t sbl_authmgr_load_self_segment(
+uint32_t sbl_authmgr_load_self_segment(samu_state_t *s,
     const authmgr_load_self_segment_t *query, authmgr_load_self_segment_t *reply)
 {
     size_t i;
@@ -172,7 +172,7 @@ uint32_t sbl_authmgr_load_self_segment(
 
     DPRINTF("Handling table @ %llX", query->chunk_table_addr);
     mapped_table_size = CHUNK_TABLE_MAX_SIZE;
-    chunk_table = address_space_map(&address_space_memory,
+    chunk_table = samu_map(s,
         query->chunk_table_addr, &mapped_table_size, false);
 
     DPRINTF("Processing table:");
@@ -185,20 +185,20 @@ uint32_t sbl_authmgr_load_self_segment(
         DPRINTF("Decrypting segment @ %llX (0x%llX bytes)",
             chunk_entry->data_addr, chunk_entry->data_size);
         mapped_segment_size = chunk_entry->data_size;
-        segment_data = address_space_map(&address_space_memory,
+        segment_data = samu_map(s,
             chunk_entry->data_addr, &mapped_segment_size, true);
         liverpool_gc_samu_fakedecrypt(segment_data,
             segment_data, chunk_entry->data_size);
-        address_space_unmap(&address_space_memory, segment_data,
+        samu_unmap(s, segment_data,
             mapped_segment_size, true, mapped_segment_size);
     }
-    address_space_unmap(&address_space_memory, chunk_table,
+    samu_unmap(s, chunk_table,
         mapped_table_size, false, mapped_table_size);
 
     return MODULE_ERR_OK;
 }
 
-uint32_t sbl_authmgr_load_self_block(
+uint32_t sbl_authmgr_load_self_block(samu_state_t *s,
     const authmgr_load_self_block_t *query, authmgr_load_self_block_t *reply)
 {
     bool straddled;
@@ -225,14 +225,14 @@ uint32_t sbl_authmgr_load_self_block(
     DPRINTF(" - data_input2_addr: 0x%llX", query->data_input2_addr);
 
     output_mapsize = query->data_size;
-    output = address_space_map(&address_space_memory,
+    output = samu_map(s,
         query->output_addr, &output_mapsize, true);
 
     straddled = (query->data_offset + query->data_size > page_size);
     if (straddled) {
-        input_page1 = address_space_map(&address_space_memory,
+        input_page1 = samu_map(s,
             query->data_input1_addr, &input1_mapsize, false);
-        input_page2 = address_space_map(&address_space_memory,
+        input_page2 = samu_map(s,
             query->data_input2_addr, &input2_mapsize, false);
 
         // TODO:
@@ -247,36 +247,36 @@ uint32_t sbl_authmgr_load_self_block(
         liverpool_gc_samu_fakedecrypt(output, input, query->data_size);
         free(input);
 
-        address_space_unmap(&address_space_memory, input_page1,
+        samu_unmap(s, input_page1,
             input1_mapsize, false, input1_mapsize);
-        address_space_unmap(&address_space_memory, input_page2,
+        samu_unmap(s, input_page2,
             input2_mapsize, false, input2_mapsize);
     }
     else {
-        input_page1 = address_space_map(&address_space_memory,
+        input_page1 = samu_map(s,
             query->data_input1_addr, &input1_mapsize, false);
 
         input = &input_page1[query->data_offset];
         liverpool_gc_samu_fakedecrypt(output, input, query->data_size);
 
-        address_space_unmap(&address_space_memory, input_page1,
+        samu_unmap(s, input_page1,
             input1_mapsize, false, input1_mapsize);
     }
 
-    address_space_unmap(&address_space_memory, output,
+    samu_unmap(s, output,
         output_mapsize, false, output_mapsize);
 
     return MODULE_ERR_OK;
 }
 
-uint32_t sbl_authmgr_invoke_check(
+uint32_t sbl_authmgr_invoke_check(samu_state_t *s,
     const authmgr_invoke_check_t *query, authmgr_invoke_check_t *reply)
 {
     DPRINTF("unimplemented");
     return MODULE_ERR_OK;
 }
 
-uint32_t sbl_authmgr_is_loadable(
+uint32_t sbl_authmgr_is_loadable(samu_state_t *s,
     const authmgr_is_loadable_t *query, authmgr_is_loadable_t *reply)
 {
     struct authmgr_context_t *ctxt;
@@ -286,17 +286,17 @@ uint32_t sbl_authmgr_is_loadable(
     hwaddr auth_info_new_mapsize = sizeof(self_auth_info_t);
 
     ctxt = &g_state.context[query->context_id];
-    auth_info_old = address_space_map(&address_space_memory,
+    auth_info_old = samu_map(s,
         query->auth_info_old_addr, &auth_info_old_mapsize, false);
-    auth_info_new = address_space_map(&address_space_memory,
+    auth_info_new = samu_map(s,
         query->auth_info_new_addr, &auth_info_new_mapsize, true);
 
     memcpy(auth_info_new, auth_info_old, sizeof(self_auth_info_t));
     auth_info_new->auth_id = ctxt->auth_id;
 
-    address_space_unmap(&address_space_memory, auth_info_old,
+    samu_unmap(s, auth_info_old,
         auth_info_old_mapsize, false, auth_info_old_mapsize);
-    address_space_unmap(&address_space_memory, auth_info_new,
+    samu_unmap(s, auth_info_new,
         auth_info_new_mapsize, true, auth_info_new_mapsize);
 
     return MODULE_ERR_OK;

@@ -24,6 +24,9 @@
 
 #include "qemu/osdep.h"
 
+/* declarations */
+typedef struct samu_state_t samu_state_t;
+
 /* functions */
 #define AUTHMGR_SM_VERIFY_HEADER              0x1
 #define AUTHMGR_SM_LOAD_SELF_SEGMENT          0x2
@@ -151,15 +154,15 @@ typedef struct authmgr_is_loadable_t {
 } authmgr_is_loadable_t;
 
 /* functions */
-uint32_t sbl_authmgr_verify_header(
+uint32_t sbl_authmgr_verify_header(samu_state_t *s,
     const authmgr_verify_header_t *query, authmgr_verify_header_t *reply);
-uint32_t sbl_authmgr_load_self_segment(
+uint32_t sbl_authmgr_load_self_segment(samu_state_t *s,
     const authmgr_load_self_segment_t *query, authmgr_load_self_segment_t *reply);
-uint32_t sbl_authmgr_load_self_block(
+uint32_t sbl_authmgr_load_self_block(samu_state_t *s,
     const authmgr_load_self_block_t *query, authmgr_load_self_block_t *reply);
-uint32_t sbl_authmgr_invoke_check(
+uint32_t sbl_authmgr_invoke_check(samu_state_t *s,
     const authmgr_invoke_check_t *query, authmgr_invoke_check_t *reply);
-uint32_t sbl_authmgr_is_loadable(
+uint32_t sbl_authmgr_is_loadable(samu_state_t *s,
     const authmgr_is_loadable_t *query, authmgr_is_loadable_t *reply);
 
 #endif /* HW_PS4_LIVERPOOL_SAM_MODULES_SBL_AUTHMGR_H */

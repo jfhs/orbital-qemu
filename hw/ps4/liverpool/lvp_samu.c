@@ -18,6 +18,7 @@
  */
 
 #include "lvp_samu.h"
+#include "lvp_gart.h"
 #include "qapi/error.h"
 #include "crypto/hash.h"
 #include "crypto/random.h"
@@ -53,6 +54,8 @@ do { \
 #define AUTHID_AUTH_MGR   0x3E00000000000005ULL
 #define AUTHID_IDATA_MGR  0x3E00000000000006ULL
 #define AUTHID_KEY_MGR    0x3E00000000000007ULL
+
+#define SAMU_VMID  15
 
 static zip_t *blobs_zip = NULL;
 
@@ -104,6 +107,20 @@ void liverpool_gc_samu_fakedecrypt(uint8_t *out_buffer,
     zip_fclose(file);
 }
 
+/* memory */
+void* samu_map(samu_state_t *s,
+    hwaddr addr, hwaddr *plen, bool is_write)
+{
+    gart_state_t* gart = s->gart;
+    return address_space_map(gart->as[SAMU_VMID], addr, plen, is_write);
+}
+
+void samu_unmap(samu_state_t *s,
+    void *buffer, hwaddr len, bool is_write, hwaddr access_len)
+{
+    gart_state_t* gart = s->gart;
+    address_space_unmap(gart->as[SAMU_VMID], buffer, len, is_write, access_len);
+}
 
 /* SAMU emulation */
 static void samu_packet_io_write(samu_state_t *s,
@@ -380,7 +397,7 @@ static uint32_t samu_packet_mailbox(samu_state_t *s,
         }
         switch (query_mb->function_id) {
         case PUPMGR_SM_VERIFY_HEADER:
-            ret = sbl_pupmgr_verify_header(
+            ret = sbl_pupmgr_verify_header(s,
                 (pupmgr_verify_header_t*)&query_mb->data,
                 (pupmgr_verify_header_t*)&reply_mb->data);
             break;
@@ -396,27 +413,27 @@ static uint32_t samu_packet_mailbox(samu_state_t *s,
     case AUTHID_AUTH_MGR:
         switch (query_mb->function_id) {
         case AUTHMGR_SM_VERIFY_HEADER:
-            ret = sbl_authmgr_verify_header(
+            ret = sbl_authmgr_verify_header(s,
                 (authmgr_verify_header_t*)&query_mb->data,
                 (authmgr_verify_header_t*)&reply_mb->data);
             break;
         case AUTHMGR_SM_LOAD_SELF_SEGMENT:
-            ret = sbl_authmgr_load_self_segment(
+            ret = sbl_authmgr_load_self_segment(s,
                 (authmgr_load_self_segment_t*)&query_mb->data,
                 (authmgr_load_self_segment_t*)&reply_mb->data);
             break;
         case AUTHMGR_SM_LOAD_SELF_BLOCK:
-            ret = sbl_authmgr_load_self_block(
+            ret = sbl_authmgr_load_self_block(s,
                 (authmgr_load_self_block_t*)&query_mb->data,
                 (authmgr_load_self_block_t*)&reply_mb->data);
             break;
         case AUTHMGR_SM_INVOKE_CHECK:
-            ret = sbl_authmgr_invoke_check(
+            ret = sbl_authmgr_invoke_check(s,
                 (authmgr_invoke_check_t*)&query_mb->data,
                 (authmgr_invoke_check_t*)&reply_mb->data);
             break;
         case AUTHMGR_SM_IS_LOADABLE:
-            ret = sbl_authmgr_is_loadable(
+            ret = sbl_authmgr_is_loadable(s,
                 (authmgr_is_loadable_t*)&query_mb->data,
                 (authmgr_is_loadable_t*)&reply_mb->data);
             break;

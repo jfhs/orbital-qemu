@@ -68,7 +68,7 @@ bool sbl_pupmgr_spawned() {
     return g_state.spawned;
 }
 
-uint32_t sbl_pupmgr_verify_header(
+uint32_t sbl_pupmgr_verify_header(samu_state_t *s,
     const pupmgr_verify_header_t *query, pupmgr_verify_header_t *reply)
 {
     printf("%s\n", __FUNCTION__);
