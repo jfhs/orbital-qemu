@@ -22,7 +22,7 @@
 #ifndef HW_PS4_LIVERPOOL_SAM_MODULES_SBL_AUTHMGR_H
 #define HW_PS4_LIVERPOOL_SAM_MODULES_SBL_AUTHMGR_H
 
-#include "qemu/osdep.h"
+#include "sbl.h"
 
 /* declarations */
 typedef struct samu_state_t samu_state_t;
@@ -65,19 +65,6 @@ typedef struct samu_state_t samu_state_t;
 #define AUTHMGR_SM_CHECKUP_CHECK            0x301
 
 /* structures */
-typedef struct authmgr_chunk_entry_t {
-    uint64_t data_addr;
-    uint64_t data_size;
-} authmgr_chunk_entry_t;
-
-typedef struct authmgr_chunk_table_t {
-    uint64_t data_addr;
-    uint64_t data_size;
-    uint64_t num_entries;
-    uint64_t reserved;
-    authmgr_chunk_entry_t entries[0];
-} authmgr_chunk_table_t;
-
 typedef struct self_auth_info_t {
     uint64_t auth_id;
     uint64_t caps[4];

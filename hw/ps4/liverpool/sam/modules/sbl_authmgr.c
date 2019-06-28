@@ -164,8 +164,8 @@ uint32_t sbl_authmgr_load_self_segment(samu_state_t *s,
     const authmgr_load_self_segment_t *query, authmgr_load_self_segment_t *reply)
 {
     size_t i;
-    authmgr_chunk_table_t *chunk_table;
-    authmgr_chunk_entry_t *chunk_entry;
+    sbl_chunk_table_t *chunk_table;
+    sbl_chunk_entry_t *chunk_entry;
     uint8_t *segment_data;
     hwaddr mapped_table_size;
     hwaddr mapped_segment_size;
