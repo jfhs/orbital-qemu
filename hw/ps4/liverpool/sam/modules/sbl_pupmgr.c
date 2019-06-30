@@ -95,66 +95,6 @@ typedef struct pupmgr_state_t {
 /* globals */
 static struct pupmgr_state_t g_state = {};
 
-/* helpers */
-static void pupmgr_fakedecrypt_header(pup_header_t *pup_header, size_t size)
-{
-    size_t rsize;
-    bool found = false;
-    char *temp;
-    char path[256];
-    const char basedir[] = "crypto/pup";
-    struct dirent *ent;
-    struct stat entstat;
-    FILE *file;
-    DIR *dir;
-
-    dir = opendir(basedir);
-    if (!dir) {
-        printf("Could not find folder with decrypted PUPs: %s\n", basedir);
-        assert(0);
-        return;
-    }
-
-    temp = malloc(size);
-    if (!temp) {
-        printf("Could not allocate memory\n");
-        assert(0);
-        return;
-    }
-
-    while (true) {
-        ent = readdir(dir);
-        if (!ent)
-            break;
-
-        snprintf(path, sizeof(path), "%s/%s", basedir, ent->d_name);
-        stat(path, &entstat);
-        if (!S_ISREG(entstat.st_mode))
-            continue;
-
-        file = fopen(path, "rb");
-        rsize = fread(temp, 1, size, file);
-        fclose(file);
-
-        if (rsize < size)
-            continue;
-        found = !memcmp(temp, pup_header, sizeof(pup_header_t));
-        if (found) {
-            printf("pupmgr_fakedecrypt_header: Found match in %s!\n", path);
-            break;
-        }
-    }
-    closedir(dir);
-
-    if (found) {
-        memcpy(pup_header, temp, size);
-    } else {
-        printf("Could not decrypted PUP for this header:\n");
-        qemu_hexdump(pup_header, stdout, "", sizeof(pup_header_t));
-    }
-    free(temp);
-}
-
 /* functions */
 void sbl_pupmgr_spawn() {
     g_state.spawned = true;
@@ -167,6 +107,7 @@ bool sbl_pupmgr_spawned() {
 uint32_t sbl_pupmgr_decrypt_header(samu_state_t *s,
     const pupmgr_decrypt_header_t *query, pupmgr_decrypt_header_t *reply)
 {
+    pup_header_ex_t* pup_header_ex;
     pup_header_t *pup_header;
     bls_header_t *bls_header;
     hwaddr pup_header_mapsize = query->pup_header_size;
@@ -174,7 +115,9 @@ uint32_t sbl_pupmgr_decrypt_header(samu_state_t *s,
     pup_header = samu_map(s, query->pup_header_addr, &pup_header_mapsize, true);
     bls_header = samu_map(s, query->bls_header_addr, &bls_header_mapsize, false);
 
-    pupmgr_fakedecrypt_header(pup_header, query->pup_header_size);
+    pup_header_ex = &pup_header[1];
+    liverpool_gc_samu_fakedecrypt(pup_header_ex,
+        pup_header_ex, pup_header->unk_0C_size - sizeof(pup_header_t));
 
     samu_unmap(s, pup_header, pup_header_mapsize, true,
         pup_header_mapsize);
@@ -193,9 +136,6 @@ uint32_t sbl_pupmgr_decrypt_segment(samu_state_t *s,
     uint8_t *segment_data;
     hwaddr mapped_table_size;
     hwaddr mapped_segment_size;
-
-    printf("sbl_pupmgr_decrypt_segment\n");
-    qemu_hexdump(query, stdout, "", 0x100);
 
     DPRINTF("Handling table @ %llX", query->chunk_table_addr);
     mapped_table_size = SBL_CHUNK_TABLE_MAX_SIZE;
@@ -223,7 +163,6 @@ uint32_t sbl_pupmgr_decrypt_segment(samu_state_t *s,
         mapped_table_size, false, mapped_table_size);
 
     return MODULE_ERR_OK;
-    return MODULE_ERR_OK;     
 }
 
 uint32_t sbl_pupmgr_verify_header(samu_state_t *s,
